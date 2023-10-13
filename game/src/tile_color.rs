@@ -1,4 +1,3 @@
-
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TileColor {
@@ -50,7 +49,7 @@ impl TileColor {
         };
         let start = format!("\x1b[{}m", color_code);
         let end = "\x1b[0m".to_string();
-        (start, end) 
+        (start, end)
     }
 }
 

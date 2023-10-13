@@ -1,4 +1,3 @@
-
 use super::NUM_PLAYERS;
 
 pub struct Player(u8);

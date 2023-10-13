@@ -1,6 +1,5 @@
 use game::*;
 
-
 // Given a square index (0-24) and an occupancy board, this will return the count of neighbors.
 
 // fn pick_row(bitboard: u32, pos: u8) -> u32 {
@@ -57,22 +56,29 @@ use game::*;
 // }
 
 fn main() {
-    let mut game_state = GameState::default();
-    game_state.fill_factories();
-    game_state.walls[0][0] = 0b00_0_10000_0_01000_0_00100_0_00010_0_00001;
-    game_state.wall_occupancy[0] = 0b00_0_10000_0_01000_0_00100_0_00010_0_00001;
-    println!("{}", game_state);
+    let board = 0b00_0_11111_0_01000_0_00100_0_00010_0_00001;
+    // print_32_bit_bitboard(board);
+    // println!("{}", check_complete_row_exists(board));
 
+    print_32_bit_bitboard(PATTERN_MASKS[4]);
 
-    let pattern = 0b11111_1111_111_11_1;
-    let patterns: [u32; 5] = [
-        0b1,
-        0b11_0,
-        0b111_00_0,
-        0b1111_000_00_0,
-        0b11111_0000_000_00_0,
-    ];
+    println!("{}", is_pattern_full(PATTERN_MASKS[3], 3));
 
+    println!("{}", remaining_space(0b0011_0_000_0_00_0_0, 3));
+    // let mut game_state = GameState::default();
+    // game_state.fill_factories();
+    // game_state.walls[0][0] = 0b00_0_10000_0_01000_0_00100_0_00010_0_00001;
+    // game_state.wall_occupancy[0] = 0b00_0_10000_0_01000_0_00100_0_00010_0_00001;
+    // println!("{}", game_state);
+
+    // let pattern = 0b11111_1111_111_11_1;
+    // let patterns: [u32; 5] = [
+    //     0b1,
+    //     0b11_0,
+    //     0b111_00_0,
+    //     0b1111_000_00_0,
+    //     0b11111_0000_000_00_0,
+    // ];
 
     // println!("{}", NUM_PLAYERS);
     // println!("{}", NUM_FACTORIES);
@@ -87,7 +93,6 @@ fn main() {
 
     // let neighbours = count_row_neighbors(bitboard, new_tile_pos);
     // print_bitboard(neighbours);
-
 
     // let col = count_column_neighbors(bitboard, new_tile_pos);
     // let row = count_row_neighbors(bitboard, new_tile_pos);
