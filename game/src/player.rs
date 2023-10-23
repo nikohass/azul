@@ -13,18 +13,6 @@ impl Player {
     }
 }
 
-impl Into<Player> for u8 {
-    fn into(self) -> Player {
-        Player(self)
-    }
-}
-
-impl Into<Player> for usize {
-    fn into(self) -> Player {
-        Player(self as u8)
-    }
-}
-
 impl Into<u8> for Player {
     fn into(self) -> u8 {
         self.0

@@ -8,9 +8,11 @@ const LEFTOVER_PENALTY: [u8; 7] = [1, 2, 4, 6, 8, 11, 14];
 
 pub struct GameState {
     pub bag: [u8; NUM_TILE_COLORS], // For each color, how many tiles are left in the bag
+    pub out_of_bag: [u8; NUM_TILE_COLORS],
+    //pub tiles_released_after_round: [u8; NUM_TILE_COLORS],
     pub factories: [[u8; NUM_TILE_COLORS]; NUM_FACTORIES], // For each factory, how many tiles of each color are in it (including the center)
 
-    pub scores: [u16; NUM_PLAYERS], // For each player, how many points they have
+    pub scores: [i16; NUM_PLAYERS], // For each player, how many points they have
     pub floor_line_progress: [u8; NUM_PLAYERS], // For each player, how many tiles they have in their penalty
 
     pub walls: [[u32; NUM_TILE_COLORS]; NUM_PLAYERS], // For each player, and each color, the locations of the tiles on their wall
@@ -23,6 +25,84 @@ pub struct GameState {
 }
 
 impl GameState {
+    pub fn evaluate_round(&mut self) -> bool {
+        let mut is_game_over = false;
+        for player_index in 0..NUM_PLAYERS {
+            let mut score: i16 = 0;
+            // Find completed pattern lines
+            for (pattern_line_index, no_tiles_in_pattern_line) in self.pattern_lines_occupancy
+                [player_index]
+                .iter_mut()
+                .enumerate()
+            {
+                if *no_tiles_in_pattern_line as usize != pattern_line_index + 1 {
+                    continue;
+                }
+                let row_mask = wall::get_row_mask(pattern_line_index);
+                let pattern_line_color =
+                    self.pattern_lines_colors[player_index][pattern_line_index].unwrap(); // Must be Some because the pattern line is full
+                let color_mask = wall::WALL_COLOR_MASKS[pattern_line_color as usize];
+                let new_tile = row_mask & color_mask;
+                let new_tile_pos = new_tile.trailing_zeros() as u8;
+                let score_for_tile =
+                    wall::get_placed_tile_score(self.wall_occupancy[player_index], new_tile_pos);
+                // println!(
+                //     "Player {} has completed pattern line {} and gets {} points",
+                //     player_index, pattern_line_index, score_for_tile
+                // );
+                score += score_for_tile as i16;
+
+                // Add the tile to the wall
+                self.walls[player_index][pattern_line_color as usize] |= new_tile;
+                self.wall_occupancy[player_index] |= new_tile;
+
+                // Remove the tile from the pattern line
+                //self.pattern_lines_occupancy[player_index][pattern_line_index] = 0;
+                self.out_of_bag[pattern_line_color as usize] += *no_tiles_in_pattern_line - 1; // -1 because one is placed on the board
+                                                                                               // println!(
+                                                                                               //     "Putting out of bag: {} (pattern line size {})",
+                                                                                               //     *no_tiles_in_pattern_line - 1,
+                                                                                               //     no_tiles_in_pattern_line
+                                                                                               // );
+                *no_tiles_in_pattern_line = 0;
+
+                // Remove the color from the pattern line
+                self.pattern_lines_colors[player_index][pattern_line_index] = None;
+            }
+
+            // Penalize the player for the tiles in the floor line
+            let floor_line_progress = self.floor_line_progress[player_index].min(6) as usize;
+            let penalty = LEFTOVER_PENALTY[floor_line_progress];
+            // println!(
+            //     "Player {} has {} tiles in the floor line. Penalty: {} points",
+            //     player_index, floor_line_progress, penalty
+            // );
+            score -= penalty as i16;
+
+            self.scores[player_index] += score;
+
+            // Reset
+            self.floor_line_progress[player_index] = 0;
+
+            // Check if the row is complete
+            let complete_row_exists = check_complete_row_exists(self.wall_occupancy[player_index]);
+            if complete_row_exists {
+                println!(
+                    "Player {} has a complete row. The game will end after this evaluation.",
+                    player_index
+                );
+                is_game_over = true;
+            }
+        }
+
+        // Release tiles
+        /*for (color, tiles_released) in self.tiles_released_after_round.iter().enumerate() {
+            self.out_of_bag[color] += tiles_released;
+        }*/
+
+        is_game_over
+    }
+
     pub fn do_move(&mut self, mov: Move) {
         // Step 1. Take the tiles from the factory or center
 
@@ -60,18 +140,6 @@ impl GameState {
         let current_player_index: usize = self.current_player.into();
 
         // Place the tiles in the pattern lines
-        // debug_assert!(
-        //     self.pattern_lines_occupancy[current_player_index] & mov.pattern == 0,
-        //     "Pattern lines already (partially) occupied"
-        // );
-        // for (pattern_index, pattern_mask) in PATTERN_MASKS.iter().enumerate() {
-        //     if !pattern_mask & mov.pattern > 0 {
-        //         continue;
-        //     }
-        //     debug_assert!(self.pattern_lines_colors[current_player_index][pattern_index].is_none(),);
-        //     self.pattern_lines_colors[current_player_index][pattern_index] = Some(mov.color);
-        // }
-        //self.pattern_lines_occupancy[current_player_index] |= mov.pattern;
         for i in 0..5 {
             if mov.pattern[i] > 0 {
                 debug_assert!({
@@ -87,56 +155,17 @@ impl GameState {
             }
             self.pattern_lines_occupancy[current_player_index][i] += mov.pattern[i];
         }
-
+        self.floor_line_progress[current_player_index] += mov.pattern[5]; // Add the tiles to the floor line
+        self.out_of_bag[color] += mov.pattern[5];
+        //self.bag[mov.color as usize] -= mov.pattern[5]; // Remove the tiles from the bag
+        //self.tiles_released_after_round[mov.color as usize] += mov.pattern[5]; // Add the tiles to the tiles released after round
+        /*println!(
+            "self.tiles_released_after_round {:?}",
+            self.tiles_released_after_round
+        );*/
         // Advance the player
         self.current_player = self.current_player.next();
     }
-
-    // pub fn get_possible_moves(&self) -> Vec<Move> {
-    //     let mut moves: Vec<Move> = Vec::with_capacity(100);
-    //     let current_player: usize = self.current_player.into();
-    //     // Iterate over every factory
-    //     for (factory_index, factory) in self.factories.iter().enumerate() {
-    //         // Itterate over every color in the factory
-    //         for (color, number) in factory.iter().enumerate() {
-    //             if *number == 0 {
-    //                 // If we can't take any tiles of this color, skip it
-    //                 continue;
-    //             }
-    //             for pattern_line_index in 0..5 {
-    //                 // Get the current color of the pattern line
-    //                 let pattern_line_color =
-    //                     self.pattern_lines_colors[current_player][pattern_line_index];
-
-    //                 // If the pattern line has a asigned color and it's not the same as the color we are taking, skip it, we can't place the tiles there
-    //                 if let Some(pattern_line_color) = pattern_line_color {
-    //                     if pattern_line_color != TileColor::from(color as u8) {
-    //                         continue;
-    //                     }
-    //                 }
-
-    //                 // If the pattern is full, skip it
-    //                 if self.pattern_lines_occupancy[current_player][pattern_line_index]
-    //                     == (pattern_line_index as u8) + 1
-    //                 {
-    //                     continue;
-    //                 }
-
-    //                 // Set the pattern line to the color we are taking. TODO: All combinations should be appended to the list and the sum fo the pattern array must be equal to number
-    //                 let mut pattern: [u8; 5] = [0; 5];
-    //                 pattern[pattern_line_index] = 1;
-    //                 moves.push(Move {
-    //                     take_from_factory_index: factory_index as u8,
-    //                     color: TileColor::from(color as u8),
-    //                     number_of_tiles_taken: *number,
-    //                     pattern,
-    //                 });
-    //             }
-    //         }
-    //     }
-
-    //     moves
-    // }
 
     pub fn get_possible_moves(&self) -> Vec<Move> {
         let mut moves: Vec<Move> = Vec::with_capacity(100);
@@ -231,7 +260,7 @@ impl GameState {
     }
 
     pub fn fill_factories(&mut self) {
-        factories::fill_factories(&mut self.factories, &mut self.bag);
+        factories::fill_factories(&mut self.factories, &mut self.bag, &mut self.out_of_bag);
     }
 
     pub fn check_integrity(&self) {
@@ -279,6 +308,94 @@ impl GameState {
                 occupancy |= bitboard;
             }
         }
+
+        // Check pattern line color assignment / occupancy match
+        for player in 0..NUM_PLAYERS {
+            for pattern_line in 0..5 {
+                let color = self.pattern_lines_colors[player][pattern_line];
+                match color {
+                    None => {
+                        if self.pattern_lines_occupancy[player][pattern_line] != 0 {
+                            println!("There are tiles in pattern line {} of player {} but they don't have a color", pattern_line, player);
+                            is_valid = false;
+                        }
+                    }
+                    Some(color) => {
+                        if self.pattern_lines_occupancy[player][pattern_line] == 0 {
+                            println!("There are no tiles in pattern line {} of player {} but the line has a color {}", pattern_line, player, color);
+                            is_valid = false;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Count the entire number of tiles in the game
+        let mut tile_count = self.bag;
+        println!("Tile count bag:             {:?}", tile_count);
+        for factory in self.factories.iter() {
+            for (color, number) in factory.iter().enumerate() {
+                tile_count[color] += number;
+            }
+        }
+        println!("Tile count + factories:     {:?}", tile_count);
+
+        for (color, num) in self.out_of_bag.iter().enumerate() {
+            tile_count[color] += num;
+        }
+        println!("Tile count + out of bag:    {:?}", tile_count);
+
+        for player in 0..NUM_PLAYERS {
+            for pattern_line_index in 0..5 {
+                let color = self.pattern_lines_colors[player][pattern_line_index];
+                /*println!(
+                    "pattern line index {} color: {:?}",
+                    pattern_line_index, color
+                );*/
+                if let Some(color) = color {
+                    let color = color as usize;
+                    /*println!(
+                        "self.pattern_lines_occupancy[player][color]: {:?}",
+                        self.pattern_lines_occupancy[player][pattern_line_index]
+                    );*/
+                    tile_count[color] += self.pattern_lines_occupancy[player][pattern_line_index];
+                }
+            }
+        }
+        println!("Tile count + pattern lines: {:?}", tile_count);
+
+        for player in 0..NUM_PLAYERS {
+            for color in 0..NUM_TILE_COLORS {
+                tile_count[color] += self.walls[player][color].count_ones() as u8;
+                //(self.wall_occupancy[player] & PATTERN_MASKS[color]).count_ones() as u8;
+            }
+        }
+        println!("Tile count + wall:          {:?}", tile_count);
+
+        // Make sure the total number of tiles is 20 for each
+        //let sum_floor_line_progress: u8 = self.floor_line_progress.iter().sum();
+        let sum_tiles_in_game: u8 = tile_count.iter().sum();
+        //let sum_tiles_in_game = sum_tiles_in_game + sum_floor_line_progress;
+        if sum_tiles_in_game != 100 {
+            println!(
+                "The sum of the tiles does not add up to 100. {:?} = {}",
+                tile_count,
+                tile_count.iter().sum::<u8>(),
+                //sum_floor_line_progress
+            );
+            is_valid = false;
+        }
+        for (color, number) in tile_count.iter().enumerate() {
+            if *number > 20 {
+                is_valid = false;
+                println!(
+                    "There are {} tiles of color {} in the game",
+                    number,
+                    TileColor::from(color as u8)
+                );
+            }
+        }
+
         if !is_valid {
             println!("{}", self);
             panic!("Game state is invalid");
@@ -290,6 +407,8 @@ impl Default for GameState {
     fn default() -> Self {
         Self {
             bag: [20, 20, 20, 20, 20],
+            out_of_bag: [0; NUM_TILE_COLORS],
+            //tiles_released_after_round: [0; NUM_TILE_COLORS],
             factories: [[0; NUM_TILE_COLORS]; NUM_FACTORIES],
             scores: [0; NUM_PLAYERS],
             floor_line_progress: [0; NUM_PLAYERS],
@@ -363,7 +482,7 @@ fn player_wall_to_string(game_state: &GameState, player_index: usize) -> String 
             }
 
             if !found && game_state.wall_occupancy[player_index] & bit == 0 {
-                for (color, wall_color) in WALL_COLOR.iter().enumerate() {
+                for (color, wall_color) in WALL_COLOR_MASKS.iter().enumerate() {
                     if wall_color & bit > 0 {
                         let (start, end) = TileColor::from(color).get_color_string();
                         write!(string, "{}.{}", start, end).unwrap();
@@ -465,7 +584,7 @@ impl std::fmt::Display for GameState {
             string.push_str(&merge_pattern_and_wall(&pattern_string, &wall_string));
 
             string.push_str(
-                format!("Floor line: {}/14", self.floor_line_progress[player_index]).as_str(),
+                format!("Floor line: {}", self.floor_line_progress[player_index]).as_str(),
             );
 
             string.push('\n');

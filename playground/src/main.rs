@@ -58,20 +58,36 @@ use rand::{rngs::SmallRng, Rng, SeedableRng};
 
 fn main() {
     let mut game_state = GameState::default();
-    game_state.fill_factories();
+    //game_state.fill_factories();
     game_state.check_integrity();
 
     let mut rng: SmallRng = SeedableRng::seed_from_u64(0);
 
     println!("{}", game_state);
-    for _ in 0..80 {
-        let possible_moves = game_state.get_possible_moves();
-        let move_ = possible_moves[rng.gen_range(0..possible_moves.len())];
+    for round in 0..10 {
+        println!("Round: {}", round);
+        game_state.fill_factories();
+        println!("{}", game_state);
 
-        println!("{}", move_);
-        println!("Number of possible moves: {}", possible_moves.len());
+        game_state.check_integrity();
 
-        game_state.do_move(move_);
+        for _ in 0..80 {
+            let possible_moves = game_state.get_possible_moves();
+            if possible_moves.is_empty() {
+                break;
+            }
+            let move_ = possible_moves[rng.gen_range(0..possible_moves.len())];
+
+            println!("Number of possible moves: {}", possible_moves.len());
+            println!("Selected move: {}", move_);
+
+            game_state.do_move(move_);
+            println!("{}", game_state);
+            game_state.check_integrity();
+        }
+        println!("Round finished");
+        println!("{}", game_state);
+        game_state.evaluate_round();
         println!("{}", game_state);
     }
     // println!("Possible moves: {:#?}", possible_moves);

@@ -10,9 +10,11 @@ use crate::NUM_TILE_COLORS;
 */
 
 // Bitboard of all possible tile locations
+#[allow(clippy::unusual_byte_groupings)]
 pub const VALID_WALL_TILES: u32 = 0b00_0_11111_0_11111_0_11111_0_11111_0_11111;
 // Bitboards of the background color of the wall
-pub const WALL_COLOR: [u32; NUM_TILE_COLORS] = [
+#[allow(clippy::unusual_byte_groupings)]
+pub const WALL_COLOR_MASKS: [u32; NUM_TILE_COLORS] = [
     0b00_0_10000_0_01000_0_00100_0_00010_0_00001, // BLUE
     0b00_0_00001_0_10000_0_01000_0_00100_0_00010, // Yellow
     0b00_0_00010_0_00001_0_10000_0_01000_0_00100, // RED
@@ -20,9 +22,21 @@ pub const WALL_COLOR: [u32; NUM_TILE_COLORS] = [
     0b00_0_01000_0_00100_0_00010_0_00001_0_10000, // White
 ];
 
+pub const ROW_MASK: u32 = 0b11111;
+
+pub fn get_row_mask(row_index: usize) -> u32 {
+    ROW_MASK << (row_index * 6)
+}
+
 // Given a occupancy bitboard and a position of a new tile, calculate the number of points that tile would score
 pub fn get_placed_tile_score(occupancy: u32, new_tile_pos: u8) -> u32 {
-    count_column_neighbors(occupancy, new_tile_pos) + count_row_neighbors(occupancy, new_tile_pos)
+    let col = count_column_neighbors(occupancy, new_tile_pos) - 1;
+    let row = count_row_neighbors(occupancy, new_tile_pos) - 1;
+    if col > 0 && row > 0 {
+        col + row + 2 // We count the tile itself as a point in both directions
+    } else {
+        col + row + 1 // We count the tile itself as a point in one direction
+    }
 }
 
 fn count_row_neighbors(mut occupancy: u32, new_tile_pos: u8) -> u32 {
@@ -87,7 +101,7 @@ pub fn print_32_bit_bitboard(bitboard: u32) {
                 string.push_str("\u{001b}[0m");
             }
         }
-        string.push_str("\n");
+        string.push('\n');
     }
     println!("{}", string);
 }

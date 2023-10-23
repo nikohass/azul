@@ -12,7 +12,7 @@ mod move_;
 pub use move_::Move;
 
 mod wall;
-use wall::{get_placed_tile_score, VALID_WALL_TILES, WALL_COLOR};
+use wall::{get_placed_tile_score, VALID_WALL_TILES, WALL_COLOR_MASKS};
 
 mod factories;
 use factories::{fill_factories, NUM_FACTORIES};
