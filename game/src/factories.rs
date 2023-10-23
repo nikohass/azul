@@ -5,8 +5,7 @@ use rand::{Rng, SeedableRng};
 // Map the number of players to the number of factories (+1 for the center factory at the last index)
 const PLAYERS_TO_FACTORIES: [usize; 3] = [6, 8, 10];
 pub const NUM_FACTORIES: usize = PLAYERS_TO_FACTORIES[NUM_PLAYERS - 2];
-pub const CENTER_INDEX: usize = NUM_FACTORIES - 1;
-pub const NON_CENTER_FACTORIES: usize = NUM_FACTORIES - 1;
+pub const CENTER_FACTORY_INDEX: usize = NUM_FACTORIES - 1;
 
 pub fn fill_factories(
     factories: &mut [[u8; NUM_TILE_COLORS]; NUM_FACTORIES],
@@ -21,7 +20,7 @@ pub fn fill_factories(
     // Fill the bag
     bag.copy_from_slice(&[20, 20, 20, 20, 20]);
 
-    for factory in factories.iter_mut().take(NON_CENTER_FACTORIES) {
+    for factory in factories.iter_mut().take(CENTER_FACTORY_INDEX) {
         // Make sure the factory is empty
         for color in factory.iter_mut() {
             assert!(*color == 0);

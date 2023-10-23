@@ -1,4 +1,5 @@
 use game::*;
+use rand::{rngs::SmallRng, Rng, SeedableRng};
 
 // Given a square index (0-24) and an occupancy board, this will return the count of neighbors.
 
@@ -56,15 +57,48 @@ use game::*;
 // }
 
 fn main() {
-    let board = 0b00_0_11111_0_01000_0_00100_0_00010_0_00001;
-    // print_32_bit_bitboard(board);
-    // println!("{}", check_complete_row_exists(board));
+    let mut game_state = GameState::default();
+    game_state.fill_factories();
+    game_state.check_integrity();
 
-    print_32_bit_bitboard(PATTERN_MASKS[4]);
+    let mut rng: SmallRng = SeedableRng::seed_from_u64(0);
 
-    println!("{}", is_pattern_full(PATTERN_MASKS[3], 3));
+    println!("{}", game_state);
+    for _ in 0..80 {
+        let possible_moves = game_state.get_possible_moves();
+        let move_ = possible_moves[rng.gen_range(0..possible_moves.len())];
 
-    println!("{}", remaining_space(0b0011_0_000_0_00_0_0, 3));
+        println!("{}", move_);
+        println!("Number of possible moves: {}", possible_moves.len());
+
+        game_state.do_move(move_);
+        println!("{}", game_state);
+    }
+    // println!("Possible moves: {:#?}", possible_moves);
+    // let mut mv = Move {
+    //     take: 1,
+    //     color: TileColor::Red,
+    //     pattern: 0b110_0_00_0_0,
+    // };
+    // println!("{}", mv);
+
+    // game_state.check_integrity();
+    // println!("Fill factories");
+    //game_state.walls[0][0] = 0b00_0_10000_0_01000_0_00100_0_00010_0_00001;
+
+    // println!("{}", game_state);
+    // game_state.do_move(mv);
+    // println!("{}", game_state);
+
+    // let board = 0b00_0_11111_0_01000_0_00100_0_00010_0_00001;
+    // // print_32_bit_bitboard(board);
+    // // println!("{}", check_complete_row_exists(board));
+
+    // print_32_bit_bitboard(PATTERN_MASKS[4]);
+
+    // println!("{}", is_pattern_full(PATTERN_MASKS[3], 3));
+
+    // println!("{}", remaining_space(0b0011_0_000_0_00_0_0, 3));
     // let mut game_state = GameState::default();
     // game_state.fill_factories();
     // game_state.walls[0][0] = 0b00_0_10000_0_01000_0_00100_0_00010_0_00001;

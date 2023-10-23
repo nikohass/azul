@@ -1,8 +1,39 @@
+use crate::factories::CENTER_FACTORY_INDEX;
+
 use super::*;
 
-pub enum Move {
-    TakeFactory(u8, TileColor), // Take all tiles of a color from a factory u8: index of factory, TileColor: color of tiles to take
-    TakeCenter(TileColor), // Take all tiles of a color from the center. Penalty if the player is the first to do so.
-    PlacePattern(u8),      // Place a tile on a row in the Pattern lines. u8: index of row
-    PlaceFloor(TileColor),
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Move {
+    pub take_from_factory_index: u8, // Index of the factory to take from. (0..CENTER_INDEX) for factories, CENTER_INDEX for center
+
+    pub color: TileColor, // Color of the tiles to take
+
+    // Where to place the tiles in the pattern lines.
+    // Multiple bits might be set if the player has multiple tiles of the same color.
+    pub pattern: [u8; 6],
 }
+
+impl std::fmt::Display for Move {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let factory = if self.take_from_factory_index == CENTER_FACTORY_INDEX as u8 {
+            "center".to_string()
+        } else {
+            format!("factory {}", self.take_from_factory_index + 1)
+        };
+        let taken_tile_count = self.pattern.iter().sum::<u8>();
+        let discards = self.pattern[5];
+        let mut color_string = String::new();
+        for _ in 0..taken_tile_count {
+            color_string.push_str(&self.color.to_string());
+        }
+        write!(
+            f,
+            "Take {} from {} discarding {}",
+            color_string, factory, discards
+        )
+    }
+}
+
+// In a game with 2 players, there are 5 factories and 1 center factory
+// 6 take * 5 color = up to 30 different combinations of picking colors from factories
+// might be less if there are no tiles of a certain color in a factory or if factories are empty / duplicated
