@@ -1,4 +1,4 @@
-use crate::NUM_TILE_COLORS;
+use crate::tile_color::NUM_TILE_COLORS;
 
 // A wall is a 5x5 grid of tiles. Each tile can be one of 5 colors.
 /*
@@ -12,6 +12,7 @@ use crate::NUM_TILE_COLORS;
 // Bitboard of all possible tile locations
 #[allow(clippy::unusual_byte_groupings)]
 // pub const VALID_WALL_TILES: u32 = 0b00_0_11111_0_11111_0_11111_0_11111_0_11111;
+
 // Bitboards of the background color of the wall
 #[allow(clippy::unusual_byte_groupings)]
 pub const WALL_COLOR_MASKS: [u32; NUM_TILE_COLORS] = [
@@ -24,11 +25,13 @@ pub const WALL_COLOR_MASKS: [u32; NUM_TILE_COLORS] = [
 
 pub const ROW_MASK: u32 = 0b11111;
 
+#[inline]
 pub fn get_row_mask(row_index: usize) -> u32 {
     ROW_MASK << (row_index * 6)
 }
 
 // Given a occupancy bitboard and a position of a new tile, calculate the number of points that tile would score
+#[inline]
 pub fn get_placed_tile_score(occupancy: u32, new_tile_pos: u8) -> u32 {
     let col = count_column_neighbors(occupancy, new_tile_pos) - 1;
     let row = count_row_neighbors(occupancy, new_tile_pos) - 1;
@@ -39,16 +42,21 @@ pub fn get_placed_tile_score(occupancy: u32, new_tile_pos: u8) -> u32 {
     }
 }
 
+#[inline]
 fn count_row_neighbors(mut occupancy: u32, new_tile_pos: u8) -> u32 {
-    let new_tile: u32 = 1 << new_tile_pos; // Create a bitboard with the new tile on it
-    occupancy |= new_tile; // Add the new tile to the occupancy
-    let mut neighbors = 0b0; // Create empty bitboard to store neighbors and tile (the tile also counts as a point)
-                             // For each bit in the row, add it to the neighbors bitboard
+    // Create a bitboard with the new tile on it
+    let new_tile: u32 = 1 << new_tile_pos;
+    // Add the new tile to the occupancy
+    occupancy |= new_tile;
+    // Create empty bitboard to store neighbors and tile (the tile also counts as a point)
+    let mut neighbors = 0b0;
+    // For each bit in the row, add it to the neighbors bitboard
     let mut bit = new_tile;
     while bit & occupancy > 0 {
         neighbors |= bit;
         bit <<= 1;
     }
+    // The same for the column
     bit = new_tile;
     while bit & occupancy > 0 {
         neighbors |= bit;
@@ -58,16 +66,21 @@ fn count_row_neighbors(mut occupancy: u32, new_tile_pos: u8) -> u32 {
     neighbors.count_ones()
 }
 
+#[inline]
 fn count_column_neighbors(mut occupancy: u32, new_tile_pos: u8) -> u32 {
-    let new_tile: u32 = 1 << new_tile_pos; // Create a bitboard with the new tile on it
-    occupancy |= new_tile; // Add the new tile to the occupancy
-    let mut neighbors = 0b0; // Create empty bitboard to store neighbors and tile (the tile also counts as a point)
-                             // For each bit in the column, add it to the neighbors bitboard
+    // Create a bitboard with the new tile on it
+    let new_tile: u32 = 1 << new_tile_pos;
+    // Add the new tile to the occupancy
+    occupancy |= new_tile;
+    // Create empty bitboard to store neighbors and tile (the tile also counts as a point)
+    let mut neighbors = 0b0;
+    // For each bit in the column, add it to the neighbors bitboard
     let mut bit = new_tile;
     while bit & occupancy > 0 {
         neighbors |= bit;
         bit <<= 6;
     }
+    // The same for the row
     bit = new_tile;
     while bit & occupancy > 0 {
         neighbors |= bit;
@@ -106,7 +119,7 @@ fn count_column_neighbors(mut occupancy: u32, new_tile_pos: u8) -> u32 {
 //     println!("{}", string);
 // }
 
-#[inline(always)]
+#[inline]
 pub fn check_complete_row_exists(mut occupancy: u32) -> bool {
     occupancy &= occupancy >> 1;
     occupancy &= occupancy >> 2;
@@ -114,7 +127,7 @@ pub fn check_complete_row_exists(mut occupancy: u32) -> bool {
     occupancy > 0
 }
 
-// #[inline(always)]
+// #[inline]
 // pub fn count_complete_rows(mut occupancy: u32) -> u32 {
 //     occupancy &= occupancy >> 1;
 //     occupancy &= occupancy >> 2;
@@ -122,7 +135,7 @@ pub fn check_complete_row_exists(mut occupancy: u32) -> bool {
 //     occupancy.count_ones()
 // }
 
-// #[inline(always)]
+// #[inline]
 // pub fn count_complete_columns(mut occupancy: u32) -> u32 {
 //     occupancy &= occupancy >> 6;
 //     occupancy &= occupancy >> 12;

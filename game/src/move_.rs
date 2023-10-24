@@ -1,15 +1,10 @@
 use crate::factories::CENTER_FACTORY_INDEX;
-
-use super::*;
+use crate::tile_color::TileColor;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Move {
-    pub take_from_factory_index: u8, // Index of the factory to take from. (0..CENTER_INDEX) for factories, CENTER_INDEX for center
-
-    pub color: TileColor, // Color of the tiles to take
-
-    // Where to place the tiles in the pattern lines.
-    // Multiple bits might be set if the player has multiple tiles of the same color.
+    pub take_from_factory_index: u8,
+    pub color: TileColor,
     pub pattern: [u8; 6],
 }
 

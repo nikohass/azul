@@ -1,29 +1,47 @@
-use crate::factories::CENTER_FACTORY_INDEX;
-
-use super::*;
+use crate::factories::{self, CENTER_FACTORY_INDEX, NUM_FACTORIES};
+use crate::move_::Move;
+use crate::player::Player;
+use crate::tile_color::{TileColor, NUM_TILE_COLORS};
+use crate::wall::{self, WALL_COLOR_MASKS};
+use rand::SeedableRng;
 use std::fmt::Write;
 
 pub const NUM_PLAYERS: usize = 2;
 const LEFTOVER_PENALTY: [u8; 7] = [1, 2, 4, 6, 8, 11, 14];
 
 pub struct GameState {
-    pub bag: [u8; NUM_TILE_COLORS], // For each color, how many tiles are left in the bag
-    pub out_of_bag: [u8; NUM_TILE_COLORS],
-    pub factories: [[u8; NUM_TILE_COLORS]; NUM_FACTORIES], // For each factory, how many tiles of each color are in it (including the center)
+    bag: [u8; NUM_TILE_COLORS], // For each color, how many tiles are left in the bag
+    out_of_bag: [u8; NUM_TILE_COLORS],
+    factories: [[u8; NUM_TILE_COLORS]; NUM_FACTORIES], // For each factory, how many tiles of each color are in it (including the center)
+    rng: rand::rngs::SmallRng,
 
-    pub scores: [i16; NUM_PLAYERS], // For each player, how many points they have
-    pub floor_line_progress: [u8; NUM_PLAYERS], // For each player, how many tiles they have in their penalty
+    scores: [i16; NUM_PLAYERS], // For each player, how many points they have
+    floor_line_progress: [u8; NUM_PLAYERS], // For each player, how many tiles they have in their penalty
 
-    pub walls: [[u32; NUM_TILE_COLORS]; NUM_PLAYERS], // For each player, and each color, the locations of the tiles on their wall
-    pub wall_occupancy: [u32; NUM_PLAYERS], // For each player, the occupancy of their wall
+    walls: [[u32; NUM_TILE_COLORS]; NUM_PLAYERS], // For each player, and each color, the locations of the tiles on their wall
+    wall_occupancy: [u32; NUM_PLAYERS],           // For each player, the occupancy of their wall
 
-    pub pattern_lines_occupancy: [[u8; 5]; NUM_PLAYERS], // For each player, the occupancy of their pattern lines
-    pub pattern_lines_colors: [[Option<TileColor>; 5]; NUM_PLAYERS], // For each player, the color of their pattern lines. If the pattern line is empty, the color is 255
+    pattern_lines_occupancy: [[u8; 5]; NUM_PLAYERS], // For each player, the occupancy of their pattern lines
+    pattern_lines_colors: [[Option<TileColor>; 5]; NUM_PLAYERS], // For each player, the color of their pattern lines. If the pattern line is empty, the color is 255
 
-    pub current_player: Player,
+    current_player: Player,
 }
 
 impl GameState {
+    pub fn with_seed(seed: u64) -> Self {
+        Self {
+            rng: rand::rngs::SmallRng::seed_from_u64(seed),
+            ..Default::default()
+        }
+    }
+
+    pub fn with_rng(rng: rand::rngs::SmallRng) -> Self {
+        Self {
+            rng,
+            ..Default::default()
+        }
+    }
+
     pub fn evaluate_round(&mut self) -> bool {
         let mut is_game_over = false;
         for player_index in 0..NUM_PLAYERS {
@@ -45,10 +63,6 @@ impl GameState {
                 let new_tile_pos = new_tile.trailing_zeros() as u8;
                 let score_for_tile =
                     wall::get_placed_tile_score(self.wall_occupancy[player_index], new_tile_pos);
-                // println!(
-                //     "Player {} has completed pattern line {} and gets {} points",
-                //     player_index, pattern_line_index, score_for_tile
-                // );
                 score += score_for_tile as i16;
 
                 // Add the tile to the wall
@@ -56,13 +70,7 @@ impl GameState {
                 self.wall_occupancy[player_index] |= new_tile;
 
                 // Remove the tile from the pattern line
-                //self.pattern_lines_occupancy[player_index][pattern_line_index] = 0;
                 self.out_of_bag[pattern_line_color as usize] += *no_tiles_in_pattern_line - 1; // -1 because one is placed on the board
-                                                                                               // println!(
-                                                                                               //     "Putting out of bag: {} (pattern line size {})",
-                                                                                               //     *no_tiles_in_pattern_line - 1,
-                                                                                               //     no_tiles_in_pattern_line
-                                                                                               // );
                 *no_tiles_in_pattern_line = 0;
 
                 // Remove the color from the pattern line
@@ -72,10 +80,6 @@ impl GameState {
             // Penalize the player for the tiles in the floor line
             let floor_line_progress = self.floor_line_progress[player_index].min(6) as usize;
             let penalty = LEFTOVER_PENALTY[floor_line_progress];
-            // println!(
-            //     "Player {} has {} tiles in the floor line. Penalty: {} points",
-            //     player_index, floor_line_progress, penalty
-            // );
             score -= penalty as i16;
 
             self.scores[player_index] += score;
@@ -87,10 +91,6 @@ impl GameState {
             let complete_row_exists =
                 wall::check_complete_row_exists(self.wall_occupancy[player_index]);
             if complete_row_exists {
-                println!(
-                    "Player {} has a complete row. The game will end after this evaluation.",
-                    player_index
-                );
                 is_game_over = true;
             }
         }
@@ -99,56 +99,58 @@ impl GameState {
     }
 
     pub fn do_move(&mut self, mov: Move) {
-        // Step 1. Take the tiles from the factory or center
+        // Step 1: Put the remaining tiles in the center
+
         let take_from_factory_index = mov.take_from_factory_index as usize;
         let color = mov.color as usize;
         let factory_content: [u8; 5] = self.factories[take_from_factory_index];
-
-        // Put the remaining tiles in the center
-        for (color_index, factory_content) in factory_content.iter().enumerate() {
-            if color_index != color && take_from_factory_index != CENTER_FACTORY_INDEX {
-                // Don't put the color we are taking into the center
-                // Don't put the tiles into the center if we are taking from the center
-                self.factories[CENTER_FACTORY_INDEX][color_index] += factory_content;
-            }
-        }
-        // Empty the factory
-        if take_from_factory_index != CENTER_FACTORY_INDEX {
-            self.factories[take_from_factory_index] = [0; NUM_TILE_COLORS];
-        } else {
-            // only empty the color we took from the center
+        if take_from_factory_index == CENTER_FACTORY_INDEX {
+            // If we took tiles from the center, we only remove the color we took
             self.factories[take_from_factory_index][color] = 0;
+        } else {
+            // Only put the tiles in the center if we are not taking from the center
+
+            for (color_index, factory_content) in factory_content.iter().enumerate() {
+                // For each tile color in the factory, put the tiles into the center if they are not the color we took
+                if color_index != color {
+                    self.factories[CENTER_FACTORY_INDEX][color_index] += factory_content;
+                }
+            }
+
+            // If we took tiles from a factory, we empty it completely
+            self.factories[take_from_factory_index] = [0; NUM_TILE_COLORS];
         }
 
-        // Step 2. Place the tiles in the pattern lines. For that we need to know which player is playing
-        let current_player_index: usize = self.current_player.into();
-
-        // Place the tiles in the pattern lines
-        for i in 0..5 {
-            if mov.pattern[i] > 0 {
+        // Step 2. Place the tiles in the pattern lines or discard them
+        let current_player: usize = self.current_player.into();
+        for pattern_line_index in 0..5 {
+            // Update / Check color of pattern line
+            if mov.pattern[pattern_line_index] > 0 {
                 debug_assert!({
                     if let Some(pattern_line_color) =
-                        self.pattern_lines_colors[current_player_index][i]
+                        self.pattern_lines_colors[current_player][pattern_line_index]
                     {
                         pattern_line_color == mov.color
                     } else {
                         true
                     }
                 });
-                self.pattern_lines_colors[current_player_index][i] = Some(mov.color);
+                // Set the color of the pattern line
+                self.pattern_lines_colors[current_player][pattern_line_index] = Some(mov.color);
             }
-            self.pattern_lines_occupancy[current_player_index][i] += mov.pattern[i];
+            // Add the new tile to the pattern line of the player
+            self.pattern_lines_occupancy[current_player][pattern_line_index] +=
+                mov.pattern[pattern_line_index];
         }
-        self.floor_line_progress[current_player_index] += mov.pattern[5]; // Add the tiles to the floor line
-        self.out_of_bag[color] += mov.pattern[5];
-        //self.bag[mov.color as usize] -= mov.pattern[5]; // Remove the tiles from the bag
-        //self.tiles_released_after_round[mov.color as usize] += mov.pattern[5]; // Add the tiles to the tiles released after round
-        /*println!(
-            "self.tiles_released_after_round {:?}",
-            self.tiles_released_after_round
-        );*/
+        // Advance the floor line if the move discards tiles
+        self.floor_line_progress[current_player] += mov.pattern[5];
+        self.out_of_bag[color] += mov.pattern[5]; // Discarded patterns are added to the out_of_bag. They will be put bag into the bag at the end of the round
+
         // Advance the player
         self.current_player = self.current_player.next();
+
+        #[cfg(debug_assertions)]
+        self.check_integrity();
     }
 
     pub fn get_possible_moves(&self) -> Vec<Move> {
@@ -253,7 +255,12 @@ impl GameState {
     }
 
     pub fn fill_factories(&mut self) {
-        factories::fill_factories(&mut self.factories, &mut self.bag, &mut self.out_of_bag);
+        factories::fill_factories(
+            &mut self.factories,
+            &mut self.bag,
+            &mut self.out_of_bag,
+            &mut self.rng,
+        );
     }
 
     pub fn check_integrity(&self) {
@@ -400,7 +407,6 @@ impl Default for GameState {
         Self {
             bag: [20, 20, 20, 20, 20],
             out_of_bag: [0; NUM_TILE_COLORS],
-            //tiles_released_after_round: [0; NUM_TILE_COLORS],
             factories: [[0; NUM_TILE_COLORS]; NUM_FACTORIES],
             scores: [0; NUM_PLAYERS],
             floor_line_progress: [0; NUM_PLAYERS],
@@ -409,6 +415,7 @@ impl Default for GameState {
             current_player: Player::new(0),
             pattern_lines_occupancy: [[0; 5]; NUM_PLAYERS],
             pattern_lines_colors: [[None; 5]; NUM_PLAYERS],
+            rng: rand::rngs::SmallRng::from_entropy(),
         }
     }
 }
@@ -457,8 +464,6 @@ fn factories_to_string(game_state: &GameState) -> String {
 
 fn player_wall_to_string(game_state: &GameState, player_index: usize) -> String {
     let mut string = String::new();
-
-    //writeln!(string, "PLAYER {}  ", player_index).unwrap();
 
     for y in 0..5 {
         for x in 0..5 {
@@ -519,7 +524,6 @@ fn player_pattern_board_to_string(game_state: &GameState, player_index: usize) -
             } else {
                 string.push_str("X ");
             }
-            //string.push(' ')
         }
         string.push_str(&color.1);
         string.push('\n');
@@ -529,7 +533,7 @@ fn player_pattern_board_to_string(game_state: &GameState, player_index: usize) -
 }
 
 fn merge_pattern_and_wall(pattern: &str, wall: &str) -> String {
-    let delimiter = " ->  "; // 3 spaces delimiter, adjust as needed
+    let delimiter = " ->  ";
     let mut result = String::new();
 
     let mut pattern_lines = pattern.lines();
@@ -559,11 +563,9 @@ fn merge_pattern_and_wall(pattern: &str, wall: &str) -> String {
     result
 }
 
-// Using the merge function in your fmt or wherever you are aggregating the
-
 impl std::fmt::Display for GameState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut string = String::with_capacity(1024); // Assuming enough capacity
+        let mut string = String::with_capacity(1024);
         string.push_str(&bag_to_string(self));
         string.push_str(&factories_to_string(self));
         for player_index in 0..NUM_PLAYERS {
@@ -578,9 +580,6 @@ impl std::fmt::Display for GameState {
             );
 
             string.push('\n');
-            /*for _ in 0..self.floor_line_progress[player_index] {
-                string.push_str("X");
-            }*/
         }
 
         write!(f, "{}", string)

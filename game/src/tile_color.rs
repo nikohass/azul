@@ -1,3 +1,5 @@
+pub const NUM_TILE_COLORS: usize = 5;
+
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TileColor {
@@ -7,22 +9,6 @@ pub enum TileColor {
     Black,
     White,
 }
-
-pub const NUM_TILE_COLORS: usize = 5;
-
-// impl std::fmt::Display for TileColor {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         let string = match self {
-//             Self::Blue => "Blue",
-//             Self::Yellow => "Yellow",
-//             Self::Red => "Red",
-//             Self::Black => "Black",
-//             Self::White => "White",
-//         };
-
-//         write!(f, "{}", string)
-//     }
-// }
 
 impl std::fmt::Display for TileColor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
