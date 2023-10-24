@@ -6,9 +6,10 @@ use crate::wall::{self, WALL_COLOR_MASKS};
 use rand::SeedableRng;
 use std::fmt::Write;
 
-pub const NUM_PLAYERS: usize = 3;
-const LEFTOVER_PENALTY: [u8; 7] = [1, 2, 4, 6, 8, 11, 14];
+pub const NUM_PLAYERS: usize = 4;
+const LEFTOVER_PENALTY: [u8; 8] = [0, 1, 2, 4, 6, 8, 11, 14];
 
+#[derive(Clone)]
 pub struct GameState {
     bag: [u8; NUM_TILE_COLORS], // For each color, how many tiles are left in the bag
     out_of_bag: [u8; NUM_TILE_COLORS],
@@ -25,6 +26,8 @@ pub struct GameState {
     pattern_lines_colors: [[Option<TileColor>; 5]; NUM_PLAYERS], // For each player, the color of their pattern lines. If the pattern line is empty, the color is 255
 
     current_player: Player,
+
+    next_round_starting_player: Option<Player>,
 }
 
 impl GameState {
@@ -40,6 +43,10 @@ impl GameState {
             rng,
             ..Default::default()
         }
+    }
+
+    pub fn get_current_player(&self) -> Player {
+        self.current_player
     }
 
     pub fn evaluate_round(&mut self) -> bool {
@@ -64,6 +71,7 @@ impl GameState {
                 let score_for_tile =
                     wall::get_placed_tile_score(self.wall_occupancy[player_index], new_tile_pos);
                 score += score_for_tile as i16;
+                println!("Evaluate round: Player {} score: {} for tile at position {} in pattern line {}", player_index, score_for_tile, new_tile_pos, pattern_line_index);
 
                 // Add the tile to the wall
                 self.walls[player_index][pattern_line_color as usize] |= new_tile;
@@ -78,8 +86,14 @@ impl GameState {
             }
 
             // Penalize the player for the tiles in the floor line
-            let floor_line_progress = self.floor_line_progress[player_index].min(6) as usize;
+            let floor_line_progress = self.floor_line_progress[player_index]
+                .min(LEFTOVER_PENALTY.len() as u8 - 1)
+                as usize;
             let penalty = LEFTOVER_PENALTY[floor_line_progress];
+            println!(
+                "Evaluate round: Player {} penalty: {} floor line progress: {}",
+                player_index, penalty, self.floor_line_progress[player_index]
+            );
             score -= penalty as i16;
 
             self.scores[player_index] += score;
@@ -95,11 +109,31 @@ impl GameState {
             }
         }
 
+        self.current_player = self.next_round_starting_player.unwrap(); // Must be Some because the round is over
+        self.next_round_starting_player = None;
+
+        if is_game_over {
+            self.evaluate_end_of_game();
+        }
+
         is_game_over
+    }
+
+    fn evaluate_end_of_game(&mut self) {
+        for (player, wall_occupancy) in self.wall_occupancy.iter().enumerate() {
+            let complete_rows = wall::count_complete_rows(*wall_occupancy);
+            let complete_colums = wall::count_complete_columns(*wall_occupancy);
+            let complete_colors = wall::count_full_colors(*wall_occupancy);
+            let score =
+                complete_rows as i16 * 2 + complete_colums as i16 * 7 + complete_colors as i16 * 10;
+            println!("Player {} complete rows: {} complete columns: {} complete colors: {} additional score {}", player, complete_rows, complete_colums, complete_colors, score);
+            self.scores[player] += score;
+        }
     }
 
     pub fn do_move(&mut self, mov: Move) {
         // Step 1: Put the remaining tiles in the center
+        let current_player: usize = self.current_player.into();
 
         let take_from_factory_index = mov.take_from_factory_index as usize;
         let color = mov.color as usize;
@@ -107,6 +141,12 @@ impl GameState {
         if take_from_factory_index == CENTER_FACTORY_INDEX {
             // If we took tiles from the center, we only remove the color we took
             self.factories[take_from_factory_index][color] = 0;
+            // If we are the first player to take tiles from the center in this round, we become the starting player for the next round
+            if self.next_round_starting_player.is_none() {
+                self.next_round_starting_player = Some(self.current_player);
+                // Floor line progress + 1
+                self.floor_line_progress[current_player] += 1;
+            }
         } else {
             // Only put the tiles in the center if we are not taking from the center
 
@@ -122,7 +162,6 @@ impl GameState {
         }
 
         // Step 2. Place the tiles in the pattern lines or discard them
-        let current_player: usize = self.current_player.into();
         for pattern_line_index in 0..5 {
             // Update / Check color of pattern line
             if mov.pattern[pattern_line_index] > 0 {
@@ -416,6 +455,7 @@ impl Default for GameState {
             pattern_lines_occupancy: [[0; 5]; NUM_PLAYERS],
             pattern_lines_colors: [[None; 5]; NUM_PLAYERS],
             rng: rand::rngs::SmallRng::from_entropy(),
+            next_round_starting_player: None,
         }
     }
 }

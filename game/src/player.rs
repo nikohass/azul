@@ -1,3 +1,5 @@
+use crate::{move_::Move, GameState};
+
 use super::NUM_PLAYERS;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -23,4 +25,9 @@ impl From<Player> for usize {
     fn from(val: Player) -> Self {
         val.0 as usize
     }
+}
+
+pub trait PlayerTrait {
+    fn name(&self) -> String;
+    fn get_move(&self, game_state: GameState) -> Move;
 }

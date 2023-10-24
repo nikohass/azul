@@ -7,3 +7,4 @@ mod wall;
 
 pub use game_state::GameState;
 pub use game_state::NUM_PLAYERS;
+pub use player::PlayerTrait;

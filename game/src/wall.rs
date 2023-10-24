@@ -127,18 +127,28 @@ pub fn check_complete_row_exists(mut occupancy: u32) -> bool {
     occupancy > 0
 }
 
-// #[inline]
-// pub fn count_complete_rows(mut occupancy: u32) -> u32 {
-//     occupancy &= occupancy >> 1;
-//     occupancy &= occupancy >> 2;
-//     occupancy &= occupancy >> 1;
-//     occupancy.count_ones()
-// }
+#[inline]
+pub fn count_complete_rows(mut occupancy: u32) -> u32 {
+    occupancy &= occupancy >> 1;
+    occupancy &= occupancy >> 2;
+    occupancy &= occupancy >> 1;
+    occupancy.count_ones()
+}
 
-// #[inline]
-// pub fn count_complete_columns(mut occupancy: u32) -> u32 {
-//     occupancy &= occupancy >> 6;
-//     occupancy &= occupancy >> 12;
-//     occupancy &= occupancy >> 6;
-//     occupancy.count_ones()
-// }
+#[inline]
+pub fn count_complete_columns(mut occupancy: u32) -> u32 {
+    occupancy &= occupancy >> 6;
+    occupancy &= occupancy >> 12;
+    occupancy &= occupancy >> 6;
+    occupancy.count_ones()
+}
+
+pub fn count_full_colors(occupancy: u32) -> u32 {
+    let mut num_full_colors = 0;
+    for color_mask in WALL_COLOR_MASKS.iter() {
+        if occupancy & color_mask == *color_mask {
+            num_full_colors += 1;
+        }
+    }
+    num_full_colors
+}
