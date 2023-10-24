@@ -28,7 +28,3 @@ impl std::fmt::Display for Move {
         )
     }
 }
-
-// In a game with 2 players, there are 5 factories and 1 center factory
-// 6 take * 5 color = up to 30 different combinations of picking colors from factories
-// might be less if there are no tiles of a certain color in a factory or if factories are empty / duplicated

@@ -6,7 +6,7 @@ use crate::wall::{self, WALL_COLOR_MASKS};
 use rand::SeedableRng;
 use std::fmt::Write;
 
-pub const NUM_PLAYERS: usize = 2;
+pub const NUM_PLAYERS: usize = 3;
 const LEFTOVER_PENALTY: [u8; 7] = [1, 2, 4, 6, 8, 11, 14];
 
 pub struct GameState {
@@ -425,7 +425,7 @@ fn bag_to_string(game_state: &GameState) -> String {
     for (color, number_of_tiles_left) in game_state.bag.iter().enumerate() {
         write!(
             string,
-            "{}: {} ",
+            "{} {}\t",
             TileColor::from(color),
             number_of_tiles_left
         )
@@ -438,13 +438,14 @@ fn bag_to_string(game_state: &GameState) -> String {
 fn factories_to_string(game_state: &GameState) -> String {
     let mut string = String::from("FACTORIES ");
     for (factory_index, factory) in game_state.factories.iter().enumerate() {
+        let tile_count: usize = factory.iter().sum::<u8>() as usize;
+
         if factory_index == CENTER_FACTORY_INDEX {
-            string.push_str("Center: ");
+            string.push_str("Center-");
         } else {
-            write!(string, "{}: ", factory_index + 1).unwrap();
+            write!(string, "{}-", factory_index + 1).unwrap();
         }
 
-        let tile_count: usize = factory.iter().sum::<u8>() as usize;
         for (color, number_of_tiles) in factory.iter().enumerate() {
             string.push_str(
                 &TileColor::from(color)
@@ -532,55 +533,60 @@ fn player_pattern_board_to_string(game_state: &GameState, player_index: usize) -
     string
 }
 
-fn merge_pattern_and_wall(pattern: &str, wall: &str) -> String {
-    let delimiter = " ->  ";
-    let mut result = String::new();
-
-    let mut pattern_lines = pattern.lines();
-    let mut wall_lines = wall.lines();
-
-    loop {
-        let pattern_line = pattern_lines.next();
-        let wall_line = wall_lines.next();
-
-        if pattern_line.is_none() && wall_line.is_none() {
-            break;
-        }
-
-        if let Some(pl) = pattern_line {
-            result.push_str(pl);
-        }
-
-        result.push_str(delimiter);
-
-        if let Some(wl) = wall_line {
-            result.push_str(wl);
-        }
-
-        result.push('\n');
-    }
-
-    result
-}
-
 impl std::fmt::Display for GameState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut string = String::with_capacity(1024);
         string.push_str(&bag_to_string(self));
         string.push_str(&factories_to_string(self));
+
+        // Player header
         for player_index in 0..NUM_PLAYERS {
-            let score = self.scores[player_index];
-            string.push_str(&format!("PLAYER {} (score: {})\n", player_index, score));
+            if usize::from(self.current_player) == player_index {
+                // set text color to black and background to white
+                string.push_str("\x1b[30m\x1b[47m");
+            }
+            string.push_str(&format!(
+                "PLAYER {} {:16}\x1b[0m |  ",
+                player_index, self.scores[player_index]
+            ));
+        }
+
+        string.push('\n');
+
+        // Compute max lines
+        let mut max_lines = 0;
+        for player_index in 0..NUM_PLAYERS {
             let pattern_string = player_pattern_board_to_string(self, player_index);
             let wall_string = player_wall_to_string(self, player_index);
-            string.push_str(&merge_pattern_and_wall(&pattern_string, &wall_string));
+            max_lines = max_lines.max(pattern_string.lines().count());
+            max_lines = max_lines.max(wall_string.lines().count());
+        }
 
-            string.push_str(
-                format!("Floor line: {}", self.floor_line_progress[player_index]).as_str(),
-            );
+        // Player pattern boards next to walls
+        for line in 0..max_lines {
+            for player_index in 0..NUM_PLAYERS {
+                let pattern_string = player_pattern_board_to_string(self, player_index);
+                let wall_string = player_wall_to_string(self, player_index);
 
+                let pattern_line = pattern_string.lines().nth(line).unwrap_or("");
+                let wall_line = wall_string.lines().nth(line).unwrap_or("");
+
+                string.push_str(pattern_line);
+                string.push_str(" -> "); // separator between pattern and wall
+                string.push_str(wall_line);
+                string.push_str("|  ");
+            }
             string.push('\n');
         }
+
+        // Player floor lines
+        for player_index in 0..NUM_PLAYERS {
+            string.push_str(&format!(
+                "Floor line: {:2}            |  ",
+                self.floor_line_progress[player_index]
+            ));
+        }
+        string.push('\n');
 
         write!(f, "{}", string)
     }
