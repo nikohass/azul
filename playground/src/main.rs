@@ -63,33 +63,41 @@ fn main() {
 
     let mut rng: SmallRng = SeedableRng::seed_from_u64(0);
 
-    println!("{}", game_state);
-    for round in 0..10 {
-        println!("Round: {}", round);
+    // println!("{}", game_state);
+    let start_time = std::time::Instant::now();
+    loop {
+        // println!("Round: {}", round);
         game_state.fill_factories();
-        println!("{}", game_state);
+        // println!("{}", game_state);
 
         game_state.check_integrity();
 
-        for _ in 0..80 {
+        loop {
             let possible_moves = game_state.get_possible_moves();
             if possible_moves.is_empty() {
                 break;
             }
             let move_ = possible_moves[rng.gen_range(0..possible_moves.len())];
 
-            println!("Number of possible moves: {}", possible_moves.len());
-            println!("Selected move: {}", move_);
+            //println!("Number of possible moves: {}", possible_moves.len());
+            // println!("Selected move: {}", move_);
 
             game_state.do_move(move_);
-            println!("{}", game_state);
+            // println!("{}", game_state);
             game_state.check_integrity();
         }
-        println!("Round finished");
-        println!("{}", game_state);
-        game_state.evaluate_round();
-        println!("{}", game_state);
+        // println!("Round finished");
+        // println!("{}", game_state);
+        let is_game_over = game_state.evaluate_round();
+        // println!("{}", game_state);
+        if is_game_over {
+            // println!("The game ended after round evaluation");
+            break;
+        }
     }
+    let end_time = std::time::Instant::now();
+    println!("Game finished after {:?}", end_time - start_time);
+
     // println!("Possible moves: {:#?}", possible_moves);
     // let mut mv = Move {
     //     take: 1,

@@ -13,14 +13,14 @@ impl Player {
     }
 }
 
-impl Into<u8> for Player {
-    fn into(self) -> u8 {
-        self.0
+impl From<Player> for u8 {
+    fn from(val: Player) -> Self {
+        val.0
     }
 }
 
-impl Into<usize> for Player {
-    fn into(self) -> usize {
-        self.0 as usize
+impl From<Player> for usize {
+    fn from(val: Player) -> Self {
+        val.0 as usize
     }
 }

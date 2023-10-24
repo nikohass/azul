@@ -11,7 +11,7 @@ use crate::NUM_TILE_COLORS;
 
 // Bitboard of all possible tile locations
 #[allow(clippy::unusual_byte_groupings)]
-pub const VALID_WALL_TILES: u32 = 0b00_0_11111_0_11111_0_11111_0_11111_0_11111;
+// pub const VALID_WALL_TILES: u32 = 0b00_0_11111_0_11111_0_11111_0_11111_0_11111;
 // Bitboards of the background color of the wall
 #[allow(clippy::unusual_byte_groupings)]
 pub const WALL_COLOR_MASKS: [u32; NUM_TILE_COLORS] = [
@@ -77,34 +77,34 @@ fn count_column_neighbors(mut occupancy: u32, new_tile_pos: u8) -> u32 {
     neighbors.count_ones()
 }
 
-pub fn print_32_bit_bitboard(bitboard: u32) {
-    let mut string = String::new();
-    for y in 0..5 {
-        for x in 0..6 {
-            let bit: u32 = 1 << (y * 6 + x);
-            let is_one = bit & bitboard > 0;
+// pub fn print_32_bit_bitboard(bitboard: u32) {
+//     let mut string = String::new();
+//     for y in 0..5 {
+//         for x in 0..6 {
+//             let bit: u32 = 1 << (y * 6 + x);
+//             let is_one = bit & bitboard > 0;
 
-            // Color the last column
-            if x == 5 {
-                string.push_str("\u{001b}[31m");
-            }
+//             // Color the last column
+//             if x == 5 {
+//                 string.push_str("\u{001b}[31m");
+//             }
 
-            // Print 1 or 0
-            if is_one {
-                string.push_str("1 ");
-            } else {
-                string.push_str("0 ");
-            }
+//             // Print 1 or 0
+//             if is_one {
+//                 string.push_str("1 ");
+//             } else {
+//                 string.push_str("0 ");
+//             }
 
-            // Reset the color
-            if x == 5 {
-                string.push_str("\u{001b}[0m");
-            }
-        }
-        string.push('\n');
-    }
-    println!("{}", string);
-}
+//             // Reset the color
+//             if x == 5 {
+//                 string.push_str("\u{001b}[0m");
+//             }
+//         }
+//         string.push('\n');
+//     }
+//     println!("{}", string);
+// }
 
 #[inline(always)]
 pub fn check_complete_row_exists(mut occupancy: u32) -> bool {
@@ -114,18 +114,18 @@ pub fn check_complete_row_exists(mut occupancy: u32) -> bool {
     occupancy > 0
 }
 
-#[inline(always)]
-pub fn count_complete_rows(mut occupancy: u32) -> u32 {
-    occupancy &= occupancy >> 1;
-    occupancy &= occupancy >> 2;
-    occupancy &= occupancy >> 1;
-    occupancy.count_ones()
-}
+// #[inline(always)]
+// pub fn count_complete_rows(mut occupancy: u32) -> u32 {
+//     occupancy &= occupancy >> 1;
+//     occupancy &= occupancy >> 2;
+//     occupancy &= occupancy >> 1;
+//     occupancy.count_ones()
+// }
 
-#[inline(always)]
-pub fn count_complete_columns(mut occupancy: u32) -> u32 {
-    occupancy &= occupancy >> 6;
-    occupancy &= occupancy >> 12;
-    occupancy &= occupancy >> 6;
-    occupancy.count_ones()
-}
+// #[inline(always)]
+// pub fn count_complete_columns(mut occupancy: u32) -> u32 {
+//     occupancy &= occupancy >> 6;
+//     occupancy &= occupancy >> 12;
+//     occupancy &= occupancy >> 6;
+//     occupancy.count_ones()
+// }

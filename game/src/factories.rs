@@ -12,12 +12,13 @@ pub fn fill_factories(
     bag: &mut [u8; NUM_TILE_COLORS],
     out_of_bag: &mut [u8; NUM_TILE_COLORS],
 ) {
-    println!("Filling factories");
+    // println!("Filling factories");
     let mut rng = SmallRng::from_entropy();
     //assert!(self.bag.iter().sum::<u8>() == 0);
     // Make sure the center is empty
+    #[cfg(debug_assertions)]
     for color in factories.last_mut().unwrap().iter_mut() {
-        assert!(*color == 0);
+        debug_assert!(*color == 0);
     }
     // Fill the bag
     //bag.copy_from_slice(&[20, 20, 20, 20, 20]);
@@ -25,8 +26,9 @@ pub fn fill_factories(
 
     for factory in factories.iter_mut().take(CENTER_FACTORY_INDEX) {
         // Make sure the factory is empty
+        #[cfg(debug_assertions)]
         for color in factory.iter_mut() {
-            assert!(*color == 0);
+            debug_assert!(*color == 0);
         }
         // Fill the factory
         let mut tiles_left = 4;
@@ -40,13 +42,13 @@ pub fn fill_factories(
             }
             if tiles_left_in_bag == 0 {
                 // Refill the bag
-                println!("Refilling bag");
-                println!("Bag: {:?}", bag);
+                // println!("Refilling bag");
+                // println!("Bag: {:?}", bag);
                 bag.copy_from_slice(out_of_bag);
                 tiles_left_in_bag = bag.iter().sum::<u8>();
-                println!("Bag: {:?}", bag);
+                // println!("Bag: {:?}", bag);
                 out_of_bag.fill(0);
-                println!("Out of bag: {:?}", out_of_bag);
+                // println!("Out of bag: {:?}", out_of_bag);
             }
         }
     }

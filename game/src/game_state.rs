@@ -9,7 +9,6 @@ const LEFTOVER_PENALTY: [u8; 7] = [1, 2, 4, 6, 8, 11, 14];
 pub struct GameState {
     pub bag: [u8; NUM_TILE_COLORS], // For each color, how many tiles are left in the bag
     pub out_of_bag: [u8; NUM_TILE_COLORS],
-    //pub tiles_released_after_round: [u8; NUM_TILE_COLORS],
     pub factories: [[u8; NUM_TILE_COLORS]; NUM_FACTORIES], // For each factory, how many tiles of each color are in it (including the center)
 
     pub scores: [i16; NUM_PLAYERS], // For each player, how many points they have
@@ -85,7 +84,8 @@ impl GameState {
             self.floor_line_progress[player_index] = 0;
 
             // Check if the row is complete
-            let complete_row_exists = check_complete_row_exists(self.wall_occupancy[player_index]);
+            let complete_row_exists =
+                wall::check_complete_row_exists(self.wall_occupancy[player_index]);
             if complete_row_exists {
                 println!(
                     "Player {} has a complete row. The game will end after this evaluation.",
@@ -95,30 +95,21 @@ impl GameState {
             }
         }
 
-        // Release tiles
-        /*for (color, tiles_released) in self.tiles_released_after_round.iter().enumerate() {
-            self.out_of_bag[color] += tiles_released;
-        }*/
-
         is_game_over
     }
 
     pub fn do_move(&mut self, mov: Move) {
         // Step 1. Take the tiles from the factory or center
-
         let take_from_factory_index = mov.take_from_factory_index as usize;
         let color = mov.color as usize;
         let factory_content: [u8; 5] = self.factories[take_from_factory_index];
-        //let took = factory_content[color]; // Get the number of tiles of the color that were taken
-        //let took = mov.number_of_tiles_taken;
-        //debug_assert!(took == mov.pattern.count_ones() as u8);
-        // Now we have the number of tiles that we took from the factory. We need to put the rest into the center
-        for color_index in 0..NUM_TILE_COLORS {
-            if color_index == color {
-                continue;
-            }
-            if take_from_factory_index != CENTER_FACTORY_INDEX {
-                self.factories[CENTER_FACTORY_INDEX][color_index] += factory_content[color_index];
+
+        // Put the remaining tiles in the center
+        for (color_index, factory_content) in factory_content.iter().enumerate() {
+            if color_index != color && take_from_factory_index != CENTER_FACTORY_INDEX {
+                // Don't put the color we are taking into the center
+                // Don't put the tiles into the center if we are taking from the center
+                self.factories[CENTER_FACTORY_INDEX][color_index] += factory_content;
             }
         }
         // Empty the factory
@@ -128,13 +119,6 @@ impl GameState {
             // only empty the color we took from the center
             self.factories[take_from_factory_index][color] = 0;
         }
-
-        /*debug_assert!(
-            took as u32 == mov.pattern.count_ones(),
-            "Took {} tiles but pattern has {} tiles",
-            took,
-            mov.pattern.count_ones()
-        );*/
 
         // Step 2. Place the tiles in the pattern lines. For that we need to know which player is playing
         let current_player_index: usize = self.current_player.into();
@@ -225,10 +209,19 @@ impl GameState {
         for pattern_line_index in pattern_line_start..5 {
             let pattern_line_color = self.pattern_lines_colors[current_player][pattern_line_index];
 
+            // Make sure the pattern line has the right color, if it has one
             if let Some(pattern_line_color) = pattern_line_color {
                 if pattern_line_color != TileColor::from(color) {
                     continue;
                 }
+            }
+
+            // Make sure the wall has space for the tiles
+            let wall_mask = WALL_COLOR_MASKS[color as usize];
+            let wall_occupancy = self.wall_occupancy[current_player];
+            let row = wall::get_row_mask(pattern_line_index);
+            if wall_occupancy & row & wall_mask > 0 {
+                continue;
             }
 
             let max_for_pattern = pattern_line_index + 1;
@@ -316,13 +309,13 @@ impl GameState {
                 match color {
                     None => {
                         if self.pattern_lines_occupancy[player][pattern_line] != 0 {
-                            println!("There are tiles in pattern line {} of player {} but they don't have a color", pattern_line, player);
+                            // println!("There are tiles in pattern line {} of player {} but they don't have a color", pattern_line, player);
                             is_valid = false;
                         }
                     }
-                    Some(color) => {
+                    Some(_color) => {
                         if self.pattern_lines_occupancy[player][pattern_line] == 0 {
-                            println!("There are no tiles in pattern line {} of player {} but the line has a color {}", pattern_line, player, color);
+                            // println!("There are no tiles in pattern line {} of player {} but the line has a color {}", pattern_line, player, color);
                             is_valid = false;
                         }
                     }
@@ -332,18 +325,18 @@ impl GameState {
 
         // Count the entire number of tiles in the game
         let mut tile_count = self.bag;
-        println!("Tile count bag:             {:?}", tile_count);
+        // println!("Tile count bag:             {:?}", tile_count);
         for factory in self.factories.iter() {
             for (color, number) in factory.iter().enumerate() {
                 tile_count[color] += number;
             }
         }
-        println!("Tile count + factories:     {:?}", tile_count);
+        // println!("Tile count + factories:     {:?}", tile_count);
 
         for (color, num) in self.out_of_bag.iter().enumerate() {
             tile_count[color] += num;
         }
-        println!("Tile count + out of bag:    {:?}", tile_count);
+        // println!("Tile count + out of bag:    {:?}", tile_count);
 
         for player in 0..NUM_PLAYERS {
             for pattern_line_index in 0..5 {
@@ -362,15 +355,14 @@ impl GameState {
                 }
             }
         }
-        println!("Tile count + pattern lines: {:?}", tile_count);
+        // println!("Tile count + pattern lines: {:?}", tile_count);
 
         for player in 0..NUM_PLAYERS {
-            for color in 0..NUM_TILE_COLORS {
-                tile_count[color] += self.walls[player][color].count_ones() as u8;
-                //(self.wall_occupancy[player] & PATTERN_MASKS[color]).count_ones() as u8;
+            for (color, wall) in self.walls[player].iter().enumerate() {
+                tile_count[color] += wall.count_ones() as u8;
             }
         }
-        println!("Tile count + wall:          {:?}", tile_count);
+        // println!("Tile count + wall:          {:?}", tile_count);
 
         // Make sure the total number of tiles is 20 for each
         //let sum_floor_line_progress: u8 = self.floor_line_progress.iter().sum();
@@ -504,8 +496,8 @@ fn player_pattern_board_to_string(game_state: &GameState, player_index: usize) -
 
     let pattern_line_occupancy = game_state.pattern_lines_occupancy[player_index];
     let pattern_colors = game_state.pattern_lines_colors[player_index];
-    for (pattern_index, pattern_mask) in PATTERN_MASKS.iter().enumerate() {
-        let pattern_color = pattern_colors[pattern_index];
+    for pattern_index in 0..5 {
+        let pattern_color: Option<TileColor> = pattern_colors[pattern_index];
         let color = if let Some(pattern_color) = pattern_color {
             pattern_color.get_color_string()
         } else {
@@ -516,8 +508,6 @@ fn player_pattern_board_to_string(game_state: &GameState, player_index: usize) -
         for _ in 0..leading_whitespace {
             string.push(' ');
         }
-        //let pattern_line = pattern_line_occupancy & pattern_mask;
-        //let count = pattern_line.count_ones() as usize;
         let count = pattern_line_occupancy[pattern_index] as usize;
         let missing = pattern_index + 1 - count;
         for _ in 0..missing {
