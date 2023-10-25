@@ -98,9 +98,25 @@ fn main() {
             println!("The game ended after round evaluation");
             break;
         }
+        break;
     }
     let end_time = std::time::Instant::now();
     println!("{}", game_state);
     println!("Game finished after {:?}", end_time - start_time);
+
+    println!("\n\n");
+    let string = game_state.serialize_string();
+    println!("ORIGINAL:");
+    println!("{}", game_state);
+    println!("DESERIALIZED:");
+    let game_state = GameState::deserialize_string(&string).unwrap();
+    println!("{}", game_state);
+    println!("INTEGRITY CHECK:");
+    // println!("\n\n");
+
+    // let string: String = game_state.serialize_string();
+    // println!("{}", string);
+
+    game_state.check_integrity();
     //}
 }

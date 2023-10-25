@@ -5,6 +5,7 @@ use crate::tile_color::{TileColor, NUM_TILE_COLORS};
 use crate::wall::{self, WALL_COLOR_MASKS};
 use rand::SeedableRng;
 use std::fmt::Write;
+use std::vec;
 
 pub const NUM_PLAYERS: usize = 4;
 const LEFTOVER_PENALTY: [u8; 8] = [0, 1, 2, 4, 6, 8, 11, 14];
@@ -47,6 +48,283 @@ impl GameState {
 
     pub fn get_current_player(&self) -> Player {
         self.current_player
+    }
+
+    pub fn serialize_string(&self) -> String {
+        let number_of_players = NUM_PLAYERS as u8;
+        let bag = (self.bag[0] as usize)
+            | (self.bag[1] as usize) << 8
+            | (self.bag[2] as usize) << 16
+            | (self.bag[3] as usize) << 24
+            | (self.bag[4] as usize) << 32;
+
+        let out_of_bag = (self.out_of_bag[0] as usize)
+            | (self.out_of_bag[1] as usize) << 8
+            | (self.out_of_bag[2] as usize) << 16
+            | (self.out_of_bag[3] as usize) << 24
+            | (self.out_of_bag[4] as usize) << 32;
+
+        // 3 bits per color per factory
+        // 3 bits * 5 colors * max 10 factories = 150 bit
+        // The center might be larger
+
+        let mut factories = vec![0b0_u64; NUM_FACTORIES];
+        for (factory_index, factory) in self.factories.iter().enumerate().take(CENTER_FACTORY_INDEX)
+        {
+            let mut factory_binary: u64 = 0b0_u64;
+            for (color_index, number_of_tiles) in factory.iter().enumerate() {
+                let number_of_tiles = *number_of_tiles as u64;
+                factory_binary |= number_of_tiles << (color_index * 3);
+            }
+            factories[factory_index] = factory_binary;
+        }
+        factories[CENTER_FACTORY_INDEX] = 0b0_u64;
+        for color_index in 0..NUM_TILE_COLORS {
+            let number_of_tiles = self.factories[CENTER_FACTORY_INDEX][color_index] as u64;
+            factories[CENTER_FACTORY_INDEX] |= number_of_tiles << (color_index * 8);
+        }
+
+        let factories_string = factories
+            .iter()
+            .map(|v| v.to_string())
+            .collect::<Vec<_>>()
+            .join("-");
+
+        let scores = ((self.scores[0] + 1000) as usize)
+            | ((self.scores[1] + 1000) as usize) << 16
+            | ((self.scores[2] + 1000) as usize) << 32
+            | ((self.scores[3] + 1000) as usize) << 48;
+
+        let floor_line_progress = (self.floor_line_progress[0] as usize)
+            | (self.floor_line_progress[1] as usize) << 8
+            | (self.floor_line_progress[2] as usize) << 16
+            | (self.floor_line_progress[3] as usize) << 24;
+
+        let mut walls = vec![0b0_u32; NUM_PLAYERS];
+        for (wall_index, wall) in self.walls.iter().enumerate() {
+            for bitboard in wall.iter() {
+                walls[wall_index] |= bitboard;
+            }
+        }
+        let walls_string = walls
+            .iter()
+            .map(|v| v.to_string())
+            .collect::<Vec<_>>()
+            .join("-");
+
+        // 4 * 5 * 8
+        let mut pattern_line_occupancy = vec![0b0_u64; NUM_PLAYERS];
+        for (player_index, pattern_lines) in self.pattern_lines_occupancy.iter().enumerate() {
+            pattern_line_occupancy[player_index] |= pattern_lines[0] as u64;
+            pattern_line_occupancy[player_index] |= (pattern_lines[1] as u64) << 8;
+            pattern_line_occupancy[player_index] |= (pattern_lines[2] as u64) << 16;
+            pattern_line_occupancy[player_index] |= (pattern_lines[3] as u64) << 24;
+            pattern_line_occupancy[player_index] |= (pattern_lines[4] as u64) << 32;
+        }
+        let pattern_line_string = pattern_line_occupancy
+            .iter()
+            .map(|v| v.to_string())
+            .collect::<Vec<_>>()
+            .join("-");
+
+        let mut pattern_line_colors = vec![0b0_u64; NUM_PLAYERS];
+        for (player_index, pattern_lines) in self.pattern_lines_colors.iter().enumerate() {
+            for (line_index, color) in pattern_lines.iter().enumerate() {
+                if let Some(color) = color {
+                    pattern_line_colors[player_index] |= (*color as u64) << (line_index * 8);
+                } else {
+                    pattern_line_colors[player_index] |= 255 << (line_index * 8);
+                }
+            }
+        }
+        let pattern_line_colors_string = pattern_line_colors
+            .iter()
+            .map(|v| v.to_string())
+            .collect::<Vec<_>>()
+            .join("-");
+
+        let next_round_starting_player = match self.next_round_starting_player {
+            None => 255,
+            Some(player) => usize::from(player),
+        };
+
+        format!(
+            "{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}",
+            number_of_players,
+            usize::from(self.current_player),
+            next_round_starting_player,
+            bag,
+            out_of_bag,
+            factories_string,
+            scores,
+            floor_line_progress,
+            walls_string,
+            pattern_line_string,
+            pattern_line_colors_string,
+        )
+    }
+
+    pub fn deserialize_string(string: &str) -> Result<Self, String> {
+        let entries: Vec<&str> = string.split('_').collect();
+
+        let number_of_players = entries.first().ok_or("No number of players")?;
+        let number_of_players = number_of_players
+            .parse::<u8>()
+            .map_err(|_| "Invalid number of players")?;
+        if number_of_players != NUM_PLAYERS as u8 {
+            return Err(format!(
+                "Number of players in string ({}) does not match number of players in game ({})",
+                number_of_players, NUM_PLAYERS
+            ));
+        }
+
+        let current_player = entries.get(1).ok_or("No current player")?;
+        let current_player = current_player
+            .parse::<u8>()
+            .map_err(|_| "Invalid current player")?;
+        let current_player = Player::new(current_player);
+
+        let next_round_starting_player = entries.get(2).ok_or("No next round starting player")?;
+        let next_round_starting_player = next_round_starting_player
+            .parse::<u8>()
+            .map_err(|_| "Invalid next round starting player")?;
+        let next_round_starting_player = if next_round_starting_player == 255 {
+            None
+        } else {
+            Some(Player::new(next_round_starting_player))
+        };
+
+        let bag_binary = entries.get(3).ok_or("No bag")?;
+        let bag_binary = bag_binary.parse::<usize>().map_err(|_| "Invalid bag")?;
+        let mut bag = [0; NUM_TILE_COLORS];
+        bag[0] = (bag_binary & 0xFF) as u8;
+        bag[1] = ((bag_binary >> 8) & 0xFF) as u8;
+        bag[2] = ((bag_binary >> 16) & 0xFF) as u8;
+        bag[3] = ((bag_binary >> 24) & 0xFF) as u8;
+        bag[4] = ((bag_binary >> 32) & 0xFF) as u8;
+
+        let out_of_bag_binary = entries.get(4).ok_or("No out of bag")?;
+        let out_of_bag_binary = out_of_bag_binary
+            .parse::<usize>()
+            .map_err(|_| "Invalid out of bag")?;
+        let mut out_of_bag = [0; NUM_TILE_COLORS];
+        out_of_bag[0] = (out_of_bag_binary & 0xFF) as u8;
+        out_of_bag[1] = ((out_of_bag_binary >> 8) & 0xFF) as u8;
+        out_of_bag[2] = ((out_of_bag_binary >> 16) & 0xFF) as u8;
+        out_of_bag[3] = ((out_of_bag_binary >> 24) & 0xFF) as u8;
+        out_of_bag[4] = ((out_of_bag_binary >> 32) & 0xFF) as u8;
+
+        let factories_strings = entries.get(5).ok_or("No factories")?;
+        let mut factories = [[0; NUM_TILE_COLORS]; NUM_FACTORIES];
+        for (factory_index, factory_string) in factories_strings
+            .split('-')
+            .enumerate()
+            .take(CENTER_FACTORY_INDEX)
+        {
+            let factory_binary = factory_string
+                .parse::<u64>()
+                .map_err(|_| "Invalid factory")?;
+            for color_index in 0..NUM_TILE_COLORS {
+                factories[factory_index][color_index] =
+                    ((factory_binary >> (color_index * 3)) & 0b111) as u8;
+            }
+        }
+        for color_index in 0..NUM_TILE_COLORS {
+            let factory_string = factories_strings
+                .split('-')
+                .nth(CENTER_FACTORY_INDEX)
+                .ok_or("No center factory")?;
+            let factory_binary = factory_string
+                .parse::<u64>()
+                .map_err(|_| "Invalid factory")?;
+
+            factories[CENTER_FACTORY_INDEX][color_index] =
+                ((factory_binary >> (color_index * 8)) & 0xFF) as u8;
+        }
+
+        let scores_binary = entries.get(6).ok_or("No scores")?;
+        let scores_binary = scores_binary
+            .parse::<usize>()
+            .map_err(|_| "Invalid scores")?;
+        let scores = [
+            (scores_binary & 0xFFFF) as i16 - 1000,
+            ((scores_binary >> 16) & 0xFFFF) as i16 - 1000,
+            ((scores_binary >> 32) & 0xFFFF) as i16 - 1000,
+            ((scores_binary >> 48) & 0xFFFF) as i16 - 1000,
+        ];
+
+        let floor_line_progress_binary = entries.get(7).ok_or("No floor line progress")?;
+        let floor_line_progress_binary = floor_line_progress_binary
+            .parse::<usize>()
+            .map_err(|_| "Invalid floor line progress")?;
+        let floor_line_progress = [
+            (floor_line_progress_binary & 0xFF) as u8,
+            ((floor_line_progress_binary >> 8) & 0xFF) as u8,
+            ((floor_line_progress_binary >> 16) & 0xFF) as u8,
+            ((floor_line_progress_binary >> 24) & 0xFF) as u8,
+        ];
+
+        let walls_strings = entries.get(8).ok_or("No walls")?;
+        let mut walls = [[0; NUM_TILE_COLORS]; NUM_PLAYERS];
+
+        for (wall_index, wall_string) in walls_strings.split('-').enumerate() {
+            let wall_binary = wall_string.parse::<u32>().map_err(|_| "Invalid wall")?;
+            for (color_index, color_mask) in WALL_COLOR_MASKS.iter().enumerate() {
+                walls[wall_index][color_index] = wall_binary & color_mask;
+            }
+        }
+
+        let pattern_lines_strings = entries.get(9).ok_or("No pattern lines")?;
+        let mut pattern_lines_occupancy = [[0; 5]; NUM_PLAYERS];
+        for (player_index, pattern_string) in pattern_lines_strings.split('-').enumerate() {
+            let pattern_binary = pattern_string
+                .parse::<u64>()
+                .map_err(|_| "Invalid pattern")?;
+            for line_index in 0..5 {
+                pattern_lines_occupancy[player_index][line_index] =
+                    ((pattern_binary >> (line_index * 8)) & 0xFF) as u8;
+            }
+        }
+
+        let pattern_lines_colors_strings = entries.get(10).ok_or("No pattern lines colors")?;
+        let mut pattern_lines_colors = [[Option::None; 5]; NUM_PLAYERS];
+        for (player_index, player_string) in pattern_lines_colors_strings.split('-').enumerate() {
+            let player_binary = player_string.parse::<u64>().map_err(|_| "Invalid player")?;
+            for line_index in 0..5 {
+                let color = ((player_binary >> (line_index * 8)) & 0xFF) as u8;
+                if color == 255 {
+                    pattern_lines_colors[player_index][line_index] = None;
+                } else {
+                    pattern_lines_colors[player_index][line_index] = Some(TileColor::from(color));
+                }
+            }
+        }
+
+        let mut wall_occupancy = [0u32; NUM_PLAYERS];
+        for (player_index, wall) in walls.iter().enumerate() {
+            for bitboard in wall.iter() {
+                wall_occupancy[player_index] |= bitboard;
+            }
+        }
+
+        println!("Bag: {:?}", bag);
+        println!("Out of bag: {:?}", out_of_bag);
+
+        Ok(Self {
+            current_player,
+            bag,
+            out_of_bag,
+            factories,
+            scores,
+            floor_line_progress,
+            walls,
+            wall_occupancy,
+            pattern_lines_occupancy,
+            pattern_lines_colors,
+            next_round_starting_player,
+
+            ..Default::default()
+        })
     }
 
     pub fn evaluate_round(&mut self) -> bool {
@@ -348,6 +626,22 @@ impl GameState {
             }
         }
 
+        // Make sure occupancy is correct
+        for player in 0..NUM_PLAYERS {
+            let mut calculated_occupancy: u32 = 0b0;
+            for color in 0..NUM_TILE_COLORS {
+                let bitboard = self.walls[player][color];
+                calculated_occupancy |= bitboard;
+            }
+            if calculated_occupancy != self.wall_occupancy[player] {
+                is_valid = false;
+                println!(
+                    "Player {} has wrong occupancy. Expected: {:b} Actual: {:b}",
+                    player, calculated_occupancy, self.wall_occupancy[player]
+                );
+            }
+        }
+
         // Check pattern line color assignment / occupancy match
         for player in 0..NUM_PLAYERS {
             for pattern_line in 0..5 {
@@ -627,7 +921,85 @@ impl std::fmt::Display for GameState {
             ));
         }
         string.push('\n');
-
+        string.push_str(self.serialize_string().as_str());
         write!(f, "{}", string)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::{Rng, SeedableRng};
+
+    #[test]
+    fn test_serialize_deserialize() {
+        for _ in 0..20 {
+            let mut rng: rand::rngs::SmallRng = SeedableRng::seed_from_u64(0);
+            let mut game_state = GameState::default();
+            loop {
+                game_state.fill_factories();
+
+                game_state.check_integrity();
+
+                loop {
+                    let possible_moves = game_state.get_possible_moves();
+                    if possible_moves.is_empty() {
+                        break;
+                    }
+                    let move_ = possible_moves[rng.gen_range(0..possible_moves.len())];
+
+                    game_state.do_move(move_);
+                    game_state.check_integrity();
+
+                    let string = game_state.serialize_string();
+                    let reconstructed_game_state =
+                        GameState::deserialize_string(string.as_str()).unwrap();
+                    assert_eq!(game_state.bag, reconstructed_game_state.bag, "Bag");
+                    assert_eq!(
+                        game_state.out_of_bag, reconstructed_game_state.out_of_bag,
+                        "Out of bag"
+                    );
+                    assert_eq!(
+                        game_state.factories, reconstructed_game_state.factories,
+                        "Factories"
+                    );
+                    assert_eq!(game_state.scores, reconstructed_game_state.scores, "Scores");
+                    assert_eq!(
+                        game_state.floor_line_progress,
+                        reconstructed_game_state.floor_line_progress,
+                        "Floor line progress"
+                    );
+                    assert_eq!(game_state.walls, reconstructed_game_state.walls, "Walls");
+                    assert_eq!(
+                        game_state.wall_occupancy, reconstructed_game_state.wall_occupancy,
+                        "Wall occupancy"
+                    );
+                    assert_eq!(
+                        game_state.pattern_lines_occupancy,
+                        reconstructed_game_state.pattern_lines_occupancy,
+                        "Pattern lines occupancy"
+                    );
+                    assert_eq!(
+                        game_state.pattern_lines_colors,
+                        reconstructed_game_state.pattern_lines_colors,
+                        "Pattern lines colors"
+                    );
+                    assert_eq!(
+                        game_state.current_player, reconstructed_game_state.current_player,
+                        "Current player"
+                    );
+                    assert_eq!(
+                        game_state.next_round_starting_player,
+                        reconstructed_game_state.next_round_starting_player,
+                        "Next round starting player"
+                    );
+                }
+                let is_game_over = game_state.evaluate_round();
+                if is_game_over {
+                    println!("The game ended after round evaluation");
+                    break;
+                }
+            }
+        }
     }
 }
