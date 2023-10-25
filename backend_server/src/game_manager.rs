@@ -1,5 +1,11 @@
+use crate::shared_state::SharedState;
 use game::{GameState, PlayerTrait};
+use std::collections::HashMap;
 use uuid::Uuid;
+
+lazy_static::lazy_static! {
+    static ref ALL_GAMES: SharedState<HashMap<String, SharedState<GameManager>>> = SharedState::new(HashMap::new());
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GameManagerState {
@@ -16,14 +22,32 @@ pub struct GameManager {
 }
 
 impl GameManager {
-    pub fn with_players(players: Vec<Box<dyn PlayerTrait>>) -> Self {
-        let mut game_state = GameState::default();
-        Self {
-            id: Uuid::new_v4().to_string(),
+    pub async fn new_with_players(players: Vec<Box<dyn PlayerTrait>>) -> SharedState<GameManager> {
+        let game_state = GameState::default();
+        let id = Uuid::new_v4().to_string();
+        let game_manager = Self {
+            id: id.clone(),
             game_state,
             players,
             state: GameManagerState::NotStarted,
+        };
+        let shared_state = SharedState::new(game_manager);
+        let mut all_games = ALL_GAMES.lock().await;
+        all_games.insert(id.to_string(), shared_state.clone());
+        shared_state
+    }
+
+    pub async fn get_game(id: &str) -> Option<SharedState<Self>> {
+        let all_games = ALL_GAMES.lock().await;
+        all_games.get(id).cloned()
+    }
+
+    pub async fn get_player_names(&self) -> Vec<String> {
+        let mut player_names = Vec::new();
+        for player in &self.players {
+            player_names.push(player.name().to_string());
         }
+        player_names
     }
 
     pub fn get_id(&self) -> &str {

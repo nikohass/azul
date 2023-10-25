@@ -1,4 +1,5 @@
 mod game_manager;
+mod human_player;
 mod logging;
 mod shared_state;
 mod websocket_api;
