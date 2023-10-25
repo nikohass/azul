@@ -2,8 +2,20 @@ import json
 import websocket
 
 def on_message(ws, message):
-    formatted_message = json.loads(message)
-    print("Received:", json.dumps(formatted_message, indent=4))
+    msg_json = json.loads(message)
+    if not msg_json["event"] == "game_state_update":
+        print("Received:", json.dumps(msg_json, indent=4))
+    else:
+        print("Received game state update...")
+    
+    if msg_json["event"] == "new_game":
+        game_id = msg_json["data"]["id"]
+        start_game_msg = json.dumps({
+            "event": "start_game",
+            "data": {"id": game_id}
+        })
+        print("Sending:", start_game_msg)
+        ws.send(start_game_msg)
 
 def on_error(ws, error):
     print("Error:", error)
@@ -16,17 +28,19 @@ def on_open(ws):
         "event": "ping",
         "data": {1: "test 1 2 3"}
     })
+    print("Sending:", ping_msg)
     ws.send(ping_msg)
 
     new_game_msg = json.dumps({
         "event": "new_game",
         "data": {
             "players": [
-                {"name": "Player 1", "type": "human"},
+                {"name": "Player 1", "type": "computer"},
                 {"name": "Player 2", "type": "computer"}
             ]
         }
     })
+    print("Sending:", new_game_msg)
     ws.send(new_game_msg)
 
 if __name__ == "__main__":

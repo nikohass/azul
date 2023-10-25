@@ -1,7 +1,7 @@
-use crate::{game_manager::GameManager, human_player::HumanPlayer, shared_state::SharedState};
+use crate::{game_manager::Match, human_player::HumanPlayer, shared_state::SharedState};
 use futures::{SinkExt, StreamExt};
 use game::{PlayerTrait, RandomPlayer};
-use std::{collections::HashMap, net::SocketAddr};
+use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use tokio_tungstenite::{accept_async, tungstenite::protocol::Message, WebSocketStream};
 
@@ -13,6 +13,9 @@ pub enum EventType {
     Ping,
     NewGame,
     Error,
+    StartGame,
+    GameStateUpdate,
+    GameOver,
 }
 
 impl EventType {
@@ -21,6 +24,9 @@ impl EventType {
             "ping" => Some(Self::Ping),
             "new_game" => Some(Self::NewGame),
             "error" => Some(Self::Error),
+            "start_game" => Some(Self::StartGame),
+            "game_state_update" => Some(Self::GameStateUpdate),
+            "game_over" => Some(Self::GameOver),
             _ => None,
         }
     }
@@ -32,6 +38,9 @@ impl ToString for EventType {
             Self::Ping => "ping",
             Self::NewGame => "new_game",
             Self::Error => "error",
+            Self::StartGame => "start_game",
+            Self::GameStateUpdate => "game_state_update",
+            Self::GameOver => "game_over",
         }
         .to_string()
     }
@@ -39,10 +48,11 @@ impl ToString for EventType {
 
 #[derive(Debug, Clone)]
 pub struct WebSocketMessage {
-    event_type: EventType,
-    data: serde_json::Value,
+    pub event_type: EventType,
+    pub data: serde_json::Value,
 }
 
+#[derive(Clone)]
 pub struct WebSocketConnection {
     write: SharedState<WsSink>,
     addr: SocketAddr,
@@ -77,6 +87,10 @@ impl WebSocketConnection {
         connection.spawn_receiver_task(read).await;
 
         connection.run().await
+    }
+
+    pub fn get_address(&self) -> SocketAddr {
+        self.addr
     }
 
     async fn spawn_receiver_task(&self, mut read: futures::stream::SplitStream<WsTcpStream>) {
@@ -128,7 +142,7 @@ impl WebSocketConnection {
         self.read_broadcast.subscribe()
     }
 
-    fn send_message(&self, message: WebSocketMessage) {
+    pub fn send_message(&self, message: WebSocketMessage) {
         let json = serde_json::json!({
             "event": message.event_type.to_string(),
             "data": message.data,
@@ -150,7 +164,7 @@ impl WebSocketConnection {
         //let write = self.write.clone();
         while let Ok(message) = receiver.recv().await {
             let response = match message.event_type {
-                EventType::NewGame => self.handle_new_game(message).await,
+                EventType::NewGame => self.handle_new_game_msg(message).await,
                 EventType::Ping => {
                     log::debug!("Received ping event");
                     Ok(WebSocketMessage {
@@ -158,8 +172,16 @@ impl WebSocketConnection {
                         data: serde_json::json!({}),
                     })
                 }
+                EventType::StartGame => self.handle_start_game_msg(message).await,
                 EventType::Error => {
                     log::error!("Client sent error event");
+                    continue;
+                }
+                EventType::GameStateUpdate | EventType::GameOver => {
+                    log::error!(
+                        "Client sent {} event, this event is only sent by the server",
+                        message.event_type.to_string()
+                    );
                     continue;
                 }
             };
@@ -180,7 +202,10 @@ impl WebSocketConnection {
         Ok(())
     }
 
-    async fn handle_new_game(&self, message: WebSocketMessage) -> Result<WebSocketMessage, String> {
+    async fn handle_new_game_msg(
+        &self,
+        message: WebSocketMessage,
+    ) -> Result<WebSocketMessage, String> {
         let data = message.data;
         println!("{:#?}", data);
 
@@ -189,13 +214,13 @@ impl WebSocketConnection {
             let name = player_json["name"].as_str().ok_or("Missing name field")?;
             let player_type = player_json["type"].as_str().ok_or("Missing type field")?;
             let player: Box<dyn PlayerTrait> = match player_type {
-                "human" => Box::new(HumanPlayer::new(name.to_string())),
+                "human" => Box::new(HumanPlayer::new(name.to_string(), self.clone())),
                 "computer" => Box::new(RandomPlayer::new(name.to_string())),
                 _ => return Err(format!("Unknown player type: {}", player_type)),
             };
             players.push(player);
         }
-        let game_manager_shared = GameManager::new_with_players(players).await;
+        let game_manager_shared = Match::new_with_players(players).await;
         let game_manager = game_manager_shared.lock().await;
         let player_names = game_manager.get_player_names().await;
         let game_id = game_manager.get_id().to_string();
@@ -210,6 +235,29 @@ impl WebSocketConnection {
             ),
         };
         log::info!("Created new game: {}", game_id);
+        Ok(response)
+    }
+
+    async fn handle_start_game_msg(
+        &self,
+        message: WebSocketMessage,
+    ) -> Result<WebSocketMessage, String> {
+        let id = message.data["id"].as_str().ok_or("Missing id field")?;
+        let start_msg = WebSocketMessage {
+            event_type: EventType::StartGame,
+            data: serde_json::json!({ "id": id }),
+        };
+        self.send_message(start_msg);
+        let game_manager_shared = Match::get_game(id)
+            .await
+            .ok_or(format!("Game with id {} not found", id))?;
+        let mut game_manager = game_manager_shared.lock().await;
+        log::info!("Starting game {}", id);
+        game_manager.start_match(self.clone()).await;
+        let response = WebSocketMessage {
+            event_type: EventType::GameOver,
+            data: serde_json::json!({ "id": id }),
+        };
         Ok(response)
     }
 }

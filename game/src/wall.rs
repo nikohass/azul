@@ -25,6 +25,10 @@ pub const WALL_COLOR_MASKS: [u32; NUM_TILE_COLORS] = [
 
 pub const ROW_MASK: u32 = 0b11111;
 
+pub fn field_at(row: usize, col: usize) -> u32 {
+    1 << (row * 6 + col)
+}
+
 #[inline]
 pub fn get_row_mask(row_index: usize) -> u32 {
     ROW_MASK << (row_index * 6)

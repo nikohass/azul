@@ -1,44 +1,50 @@
-use crate::shared_state::SharedState;
-use game::{GameState, PlayerTrait};
+use crate::{
+    shared_state::SharedState,
+    websocket_api::{EventType, WebSocketConnection, WebSocketMessage},
+};
+use game::{
+    GameState, PlayerTrait, TileColor, CENTER_FACTORY_INDEX, FLOOR_LINE_PENALTY, NUM_PLAYERS,
+    NUM_TILE_COLORS,
+};
 use std::collections::HashMap;
 use uuid::Uuid;
 
 lazy_static::lazy_static! {
-    static ref ALL_GAMES: SharedState<HashMap<String, SharedState<GameManager>>> = SharedState::new(HashMap::new());
+    static ref MATCHES: SharedState<HashMap<String, SharedState<Match>>> = SharedState::new(HashMap::new());
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GameManagerState {
+pub enum MatchState {
     NotStarted,
     WaitingForPlayerTurn(usize),
     GameOver,
 }
 
-pub struct GameManager {
+pub struct Match {
     id: String,
     game_state: GameState,
     players: Vec<Box<dyn PlayerTrait>>,
-    state: GameManagerState,
+    state: MatchState,
 }
 
-impl GameManager {
-    pub async fn new_with_players(players: Vec<Box<dyn PlayerTrait>>) -> SharedState<GameManager> {
+impl Match {
+    pub async fn new_with_players(players: Vec<Box<dyn PlayerTrait>>) -> SharedState<Match> {
         let game_state = GameState::default();
         let id = Uuid::new_v4().to_string();
         let game_manager = Self {
             id: id.clone(),
             game_state,
             players,
-            state: GameManagerState::NotStarted,
+            state: MatchState::NotStarted,
         };
         let shared_state = SharedState::new(game_manager);
-        let mut all_games = ALL_GAMES.lock().await;
+        let mut all_games = MATCHES.lock().await;
         all_games.insert(id.to_string(), shared_state.clone());
         shared_state
     }
 
     pub async fn get_game(id: &str) -> Option<SharedState<Self>> {
-        let all_games = ALL_GAMES.lock().await;
+        let all_games = MATCHES.lock().await;
         all_games.get(id).cloned()
     }
 
@@ -62,24 +68,23 @@ impl GameManager {
         &self.players
     }
 
-    pub fn get_state(&self) -> GameManagerState {
+    pub fn get_state(&self) -> MatchState {
         self.state
     }
 
     pub fn reset(&mut self) {
         self.game_state = GameState::default();
-        self.state = GameManagerState::NotStarted;
+        self.state = MatchState::NotStarted;
     }
 
-    pub fn run_game(&mut self) {
+    pub async fn start_match(&mut self, websocket: WebSocketConnection) {
         let game_state = &mut self.game_state;
 
         let mut round = 0;
-        log::info!("Starting game {}", self.id);
         loop {
             game_state.fill_factories(); // Fill the factories before every round
             game_state.check_integrity(); // Check the integrity of the game state. If it is not valid, panic and crash the tokio task
-
+            send_game_state_update(game_state, &websocket); // Send the game state to the players
             let mut turn = 0;
             loop {
                 let possible_moves = game_state.get_possible_moves();
@@ -111,6 +116,8 @@ impl GameManager {
                 // Apply the move to the game state
                 game_state.do_move(move_);
 
+                send_game_state_update(game_state, &websocket);
+
                 // Check integrity of the game state after the move
                 game_state.check_integrity();
 
@@ -118,11 +125,115 @@ impl GameManager {
             }
             // At the end of the round, evaluate it by counting the points and moving the first player marker
             let is_game_over = game_state.evaluate_round(); // If a player has ended the game, this will return true
+            send_game_state_update(game_state, &websocket);
             if is_game_over {
-                self.state = GameManagerState::GameOver;
+                self.state = MatchState::GameOver;
                 break;
             }
             round += 1;
         }
+        send_game_state_update(game_state, &websocket);
     }
+}
+
+pub fn send_game_state_update(game_state: &GameState, websocket: &WebSocketConnection) {
+    log::info!("Sending game state update to {}", websocket.get_address());
+    let json = game_state_to_json(game_state);
+    let message = WebSocketMessage {
+        event_type: EventType::GameStateUpdate,
+        data: json,
+    };
+    websocket.send_message(message);
+}
+
+pub fn game_state_to_json(game_state: &GameState) -> serde_json::Value {
+    let mut players = Vec::new();
+
+    let floor_lines = game_state.get_floor_line_progress();
+    let scores = game_state.get_scores();
+    let walls = game_state.get_walls();
+    let pattern_line_occupancy = game_state.get_pattern_lines_occupancy();
+    let pattern_line_colors = game_state.get_pattern_lines_colors();
+    for player in 0..NUM_PLAYERS {
+        let player_json = serde_json::json!({
+            "floor_line_progress": floor_lines[player],
+            "floor_line_penalty": FLOOR_LINE_PENALTY[floor_lines[player].min(FLOOR_LINE_PENALTY.len() as u8 - 1) as usize],
+            "score": scores[player],
+            "wall": wall_to_json(&walls[player]),
+            "pattern": pattern_lines_to_json(&pattern_line_occupancy[player], &pattern_line_colors[player]),
+        });
+        players.push(player_json);
+    }
+
+    let factories = game_state.get_factories();
+    let mut factories_json = Vec::new();
+    for (factory_index, factory) in factories.iter().enumerate() {
+        let mut factory_json = Vec::new();
+        for (color_index, number) in factory.iter().enumerate() {
+            let color = TileColor::from(color_index);
+            let color: char = color.into();
+            factory_json.push(serde_json::json!({
+                "color": color,
+                "number_of_tiles": number,
+            }));
+        }
+        let is_center = factory_index == CENTER_FACTORY_INDEX;
+        factories_json.push(serde_json::json!({
+            "is_center": is_center,
+            "tiles": factory_json,
+        }));
+    }
+
+    // Create new json object
+    let ret = serde_json::json!({
+        "bag": game_state.get_bag(),
+        "factories": factories_json,
+        "players": players,
+        "current_player": usize::from(game_state.get_current_player()),
+        "next_round_starting_player": game_state.get_next_round_starting_player().map(usize::from),
+    });
+    ret
+}
+
+pub fn wall_to_json(wall: &[u32; NUM_TILE_COLORS]) -> Vec<serde_json::Value> {
+    let mut wall_tiles = Vec::new();
+    for row in 0..5 {
+        for col in 0..5 {
+            let mut color = ' ';
+            for (c, wall_bitboard) in wall.iter().enumerate() {
+                let field = game::field_at(row, col);
+                if wall_bitboard & field > 0 {
+                    color = TileColor::from(c).into();
+                    break;
+                }
+            }
+            if color != ' ' {
+                wall_tiles.push(serde_json::json!({
+                    "row": row,
+                    "col": col,
+                    "color": color,
+                }));
+            }
+        }
+    }
+    wall_tiles
+}
+
+pub fn pattern_lines_to_json(
+    pattern_line_occupancy: &[u8; 5],
+    pattern_line_colors: &[Option<TileColor>; 5],
+) -> Vec<serde_json::Value> {
+    let mut pattern_lines = Vec::new();
+    for i in 0..5 {
+        let color = pattern_line_colors[i];
+        if let Some(color) = color {
+            let color: char = color.into();
+            pattern_lines.push(serde_json::json!({
+                "patern_line_index": i,
+                "color": color,
+                "number_of_tiles": pattern_line_occupancy[i],
+            }));
+        }
+    }
+    pattern_lines
 }

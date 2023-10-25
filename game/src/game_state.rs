@@ -7,8 +7,8 @@ use rand::SeedableRng;
 use std::fmt::Write;
 use std::vec;
 
-pub const NUM_PLAYERS: usize = 4;
-const LEFTOVER_PENALTY: [u8; 8] = [0, 1, 2, 4, 6, 8, 11, 14];
+pub const NUM_PLAYERS: usize = 2;
+pub const FLOOR_LINE_PENALTY: [u8; 8] = [0, 1, 2, 4, 6, 8, 11, 14];
 
 #[derive(Clone)]
 pub struct GameState {
@@ -48,6 +48,38 @@ impl GameState {
 
     pub fn get_current_player(&self) -> Player {
         self.current_player
+    }
+
+    pub fn get_next_round_starting_player(&self) -> Option<Player> {
+        self.next_round_starting_player
+    }
+
+    pub fn get_scores(&self) -> [i16; NUM_PLAYERS] {
+        self.scores
+    }
+
+    pub fn get_bag(&self) -> [u8; NUM_TILE_COLORS] {
+        self.bag
+    }
+
+    pub fn get_factories(&self) -> &[[u8; NUM_TILE_COLORS]; NUM_FACTORIES] {
+        &self.factories
+    }
+
+    pub fn get_floor_line_progress(&self) -> [u8; NUM_PLAYERS] {
+        self.floor_line_progress
+    }
+
+    pub fn get_walls(&self) -> &[[u32; NUM_TILE_COLORS]; NUM_PLAYERS] {
+        &self.walls
+    }
+
+    pub fn get_pattern_lines_occupancy(&self) -> &[[u8; 5]; NUM_PLAYERS] {
+        &self.pattern_lines_occupancy
+    }
+
+    pub fn get_pattern_lines_colors(&self) -> &[[Option<TileColor>; 5]; NUM_PLAYERS] {
+        &self.pattern_lines_colors
     }
 
     pub fn serialize_string(&self) -> String {
@@ -90,15 +122,25 @@ impl GameState {
             .collect::<Vec<_>>()
             .join("-");
 
-        let scores = ((self.scores[0] + 1000) as usize)
-            | ((self.scores[1] + 1000) as usize) << 16
-            | ((self.scores[2] + 1000) as usize) << 32
-            | ((self.scores[3] + 1000) as usize) << 48;
+        /*let scores = ((self.scores[0] + 1000) as usize)
+        | ((self.scores[1] + 1000) as usize) << 16
+        | ((self.scores[2] + 1000) as usize) << 32
+        | ((self.scores[3] + 1000) as usize) << 48;*/
+        let mut scores = 0b0_u64;
+        for (player_index, score) in self.scores.iter().enumerate() {
+            let score = (*score + 1000) as u64;
+            scores |= score << (player_index * 16);
+        }
 
-        let floor_line_progress = (self.floor_line_progress[0] as usize)
-            | (self.floor_line_progress[1] as usize) << 8
-            | (self.floor_line_progress[2] as usize) << 16
-            | (self.floor_line_progress[3] as usize) << 24;
+        // let floor_line_progress = (self.floor_line_progress[0] as usize)
+        //     | (self.floor_line_progress[1] as usize) << 8
+        //     | (self.floor_line_progress[2] as usize) << 16
+        //     | (self.floor_line_progress[3] as usize) << 24;
+        let mut floor_line_progress = 0b0_u64;
+        for (player_index, progress) in self.floor_line_progress.iter().enumerate() {
+            let progress = *progress as u64;
+            floor_line_progress |= progress << (player_index * 8);
+        }
 
         let mut walls = vec![0b0_u32; NUM_PLAYERS];
         for (wall_index, wall) in self.walls.iter().enumerate() {
@@ -246,23 +288,32 @@ impl GameState {
         let scores_binary = scores_binary
             .parse::<usize>()
             .map_err(|_| "Invalid scores")?;
-        let scores = [
-            (scores_binary & 0xFFFF) as i16 - 1000,
-            ((scores_binary >> 16) & 0xFFFF) as i16 - 1000,
-            ((scores_binary >> 32) & 0xFFFF) as i16 - 1000,
-            ((scores_binary >> 48) & 0xFFFF) as i16 - 1000,
-        ];
+        // let scores = [
+        //     (scores_binary & 0xFFFF) as i16 - 1000,
+        //     ((scores_binary >> 16) & 0xFFFF) as i16 - 1000,
+        //     ((scores_binary >> 32) & 0xFFFF) as i16 - 1000,
+        //     ((scores_binary >> 48) & 0xFFFF) as i16 - 1000,
+        // ];
+        let mut scores = [0; NUM_PLAYERS];
+        for player_index in 0..NUM_PLAYERS {
+            scores[player_index] = ((scores_binary >> (player_index * 16)) & 0xFFFF) as i16 - 1000;
+        }
 
         let floor_line_progress_binary = entries.get(7).ok_or("No floor line progress")?;
         let floor_line_progress_binary = floor_line_progress_binary
             .parse::<usize>()
             .map_err(|_| "Invalid floor line progress")?;
-        let floor_line_progress = [
+        /*let floor_line_progress = [
             (floor_line_progress_binary & 0xFF) as u8,
             ((floor_line_progress_binary >> 8) & 0xFF) as u8,
             ((floor_line_progress_binary >> 16) & 0xFF) as u8,
             ((floor_line_progress_binary >> 24) & 0xFF) as u8,
-        ];
+        ];*/
+        let mut floor_line_progress = [0; NUM_PLAYERS];
+        for player_index in 0..NUM_PLAYERS {
+            floor_line_progress[player_index] =
+                ((floor_line_progress_binary >> (player_index * 8)) & 0xFF) as u8;
+        }
 
         let walls_strings = entries.get(8).ok_or("No walls")?;
         let mut walls = [[0; NUM_TILE_COLORS]; NUM_PLAYERS];
@@ -365,9 +416,9 @@ impl GameState {
 
             // Penalize the player for the tiles in the floor line
             let floor_line_progress = self.floor_line_progress[player_index]
-                .min(LEFTOVER_PENALTY.len() as u8 - 1)
+                .min(FLOOR_LINE_PENALTY.len() as u8 - 1)
                 as usize;
-            let penalty = LEFTOVER_PENALTY[floor_line_progress];
+            let penalty = FLOOR_LINE_PENALTY[floor_line_progress];
             println!(
                 "Evaluate round: Player {} penalty: {} floor line progress: {}",
                 player_index, penalty, self.floor_line_progress[player_index]

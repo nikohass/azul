@@ -1,12 +1,15 @@
 use game::{Move, PlayerTrait};
 
+use crate::websocket_api::WebSocketConnection;
+
 pub struct HumanPlayer {
     name: String,
+    websocket: WebSocketConnection,
 }
 
 impl HumanPlayer {
-    pub fn new(name: String) -> Self {
-        Self { name }
+    pub fn new(name: String, websocket: WebSocketConnection) -> Self {
+        Self { name, websocket }
     }
 }
 
