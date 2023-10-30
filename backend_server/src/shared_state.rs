@@ -17,9 +17,9 @@ where
         self.0.lock().await
     }
 
-    pub async fn replace(&self, new: T) {
-        *self.0.lock().await = new;
-    }
+    // pub async fn replace(&self, new: T) {
+    //     *self.0.lock().await = new;
+    // }
 }
 
 impl<T> Clone for SharedState<T>

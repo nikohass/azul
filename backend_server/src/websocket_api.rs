@@ -1,7 +1,8 @@
 use crate::{game_manager::Match, human_player::HumanPlayer, shared_state::SharedState};
 use futures::{SinkExt, StreamExt};
-use game::{PlayerTrait, RandomPlayer};
-use std::net::SocketAddr;
+use game::PlayerTrait;
+use player::random_player::RandomPlayer;
+use std::{collections::HashMap, net::SocketAddr};
 use tokio::net::TcpListener;
 use tokio_tungstenite::{accept_async, tungstenite::protocol::Message, WebSocketStream};
 
@@ -16,6 +17,8 @@ pub enum EventType {
     StartGame,
     GameStateUpdate,
     GameOver,
+    MoveRequest,
+    MoveResponse,
 }
 
 impl EventType {
@@ -27,6 +30,8 @@ impl EventType {
             "start_game" => Some(Self::StartGame),
             "game_state_update" => Some(Self::GameStateUpdate),
             "game_over" => Some(Self::GameOver),
+            "move_request" => Some(Self::MoveRequest),
+            "move_response" => Some(Self::MoveResponse),
             _ => None,
         }
     }
@@ -41,6 +46,8 @@ impl ToString for EventType {
             Self::StartGame => "start_game",
             Self::GameStateUpdate => "game_state_update",
             Self::GameOver => "game_over",
+            Self::MoveRequest => "move_request",
+            Self::MoveResponse => "move_response",
         }
         .to_string()
     }
@@ -57,6 +64,7 @@ pub struct WebSocketConnection {
     write: SharedState<WsSink>,
     addr: SocketAddr,
     read_broadcast: tokio::sync::broadcast::Sender<WebSocketMessage>,
+    pending_responses: SharedState<HashMap<String, tokio::sync::mpsc::Sender<WebSocketMessage>>>,
 }
 
 impl WebSocketConnection {
@@ -82,6 +90,7 @@ impl WebSocketConnection {
             write,
             addr,
             read_broadcast: broadcast.0,
+            pending_responses: SharedState::new(HashMap::new()),
         };
 
         connection.spawn_receiver_task(read).await;
@@ -155,13 +164,13 @@ impl WebSocketConnection {
             if let Err(err) = write.send(message).await {
                 log::error!("Error sending message: {:?}", err);
             }
+            log::info!("Sent message");
         });
     }
 
     async fn run(self) -> Result<(), String> {
         let mut receiver: tokio::sync::broadcast::Receiver<WebSocketMessage> =
             self.get_read_broadcast();
-        //let write = self.write.clone();
         while let Ok(message) = receiver.recv().await {
             let response = match message.event_type {
                 EventType::NewGame => self.handle_new_game_msg(message).await,
@@ -177,7 +186,26 @@ impl WebSocketConnection {
                     log::error!("Client sent error event");
                     continue;
                 }
-                EventType::GameStateUpdate | EventType::GameOver => {
+                EventType::MoveResponse => {
+                    log::info!("Client sent a move.");
+                    let request_id = message.data["request_id"]
+                        .as_str()
+                        .ok_or("Missing request_id field")?;
+                    let sender = self.pending_responses.lock().await.remove(request_id);
+                    if let Some(sender) = sender {
+                        let result = sender.send(message).await;
+                        if let Err(err) = result {
+                            log::error!("Error sending move response: {}", err);
+                        }
+                    } else {
+                        log::error!(
+                            "Received move response for unknown request id: {}",
+                            request_id
+                        );
+                    }
+                    continue;
+                }
+                EventType::GameStateUpdate | EventType::GameOver | EventType::MoveRequest => {
                     log::error!(
                         "Client sent {} event, this event is only sent by the server",
                         message.event_type.to_string()
@@ -215,7 +243,8 @@ impl WebSocketConnection {
             let player_type = player_json["type"].as_str().ok_or("Missing type field")?;
             let player: Box<dyn PlayerTrait> = match player_type {
                 "human" => Box::new(HumanPlayer::new(name.to_string(), self.clone())),
-                "computer" => Box::new(RandomPlayer::new(name.to_string())),
+                "random" => Box::new(RandomPlayer::new(name.to_string())),
+                "greedy" => Box::new(player::greedy_player::GreedyPlayer::new(name.to_string())),
                 _ => return Err(format!("Unknown player type: {}", player_type)),
             };
             players.push(player);
@@ -259,6 +288,24 @@ impl WebSocketConnection {
             data: serde_json::json!({ "id": id }),
         };
         Ok(response)
+    }
+
+    pub async fn send_and_recv_move(
+        &mut self,
+        move_request: WebSocketMessage,
+        request_id: &str,
+    ) -> WebSocketMessage {
+        log::info!("Sending move requests (id: {})", request_id);
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
+        self.pending_responses
+            .lock()
+            .await
+            .insert(request_id.to_string(), sender);
+        self.send_message(move_request);
+        log::info!("Waiting for move response (id: {})", request_id);
+        let response = receiver.recv().await.unwrap();
+        log::info!("Received move response (id: {})", request_id);
+        response
     }
 }
 

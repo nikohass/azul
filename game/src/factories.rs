@@ -42,6 +42,11 @@ pub fn fill_factories(
                 bag.copy_from_slice(out_of_bag);
                 tiles_left_in_bag = bag.iter().sum::<u8>();
                 out_of_bag.fill(0);
+
+                // In the rare case that you run out of tiles again while there are none left in the lid, start the new round as usual even though not all Factory displays are properly filled.
+                if tiles_left_in_bag == 0 {
+                    break;
+                }
             }
         }
     }

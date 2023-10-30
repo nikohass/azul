@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 game = { path = "../game" }
+player = { path = "../player" }
 
 tokio = { version = "1.33", features = ["full"] }
 tokio-tungstenite = { version = "0.20.1", features = ["native-tls"] }
@@ -20,3 +21,5 @@ log4rs = "1.2.0"
 async-mutex = "1.4.0"
 uuid = { version = "1.5.0", features = ["v4"] }
 lazy_static = "1.4.0"
+
+async-trait = "0.1.51"

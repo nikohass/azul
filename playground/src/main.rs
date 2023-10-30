@@ -2,6 +2,8 @@ use game::*;
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 
 fn perft() {
+    let mut move_list = MoveList::default();
+    assert!(NUM_PLAYERS == 2);
     loop {
         let num_runs = 100_000; // Or any number you'd like
         let mut total_moves = 0;
@@ -10,6 +12,7 @@ fn perft() {
         let mut rng: SmallRng = SeedableRng::seed_from_u64(0);
         for _ in 0..num_runs {
             //game_state.check_integrity();
+            // println!("Starting new game");
             let mut game_state = GameState::with_seed(0);
 
             let start_time = std::time::Instant::now();
@@ -20,33 +23,42 @@ fn perft() {
                 //game_state.check_integrity();
 
                 loop {
-                    let possible_moves = game_state.get_possible_moves();
-                    if possible_moves.is_empty() {
+                    game_state.get_possible_moves(&mut move_list);
+                    if move_list.is_empty() {
                         break;
                     }
-                    let move_ = possible_moves[rng.gen_range(0..possible_moves.len())];
+                    let move_ = move_list[rng.gen_range(0..move_list.len())];
                     game_state.do_move(move_);
                     moves_made += 1;
-                    //game_state.check_integrity();
+                    // game_state.check_integrity();
                 }
 
                 let is_game_over = game_state.evaluate_round();
+                // println!("Done with round {}", is_game_over);
+                // println!("{}", game_state);
                 if is_game_over {
                     break;
                 }
             }
+            // println!("Done with game");
 
             let end_time = std::time::Instant::now();
             total_moves += moves_made;
             total_duration += end_time - start_time;
+            // println!(
+            //     "Game finished after {:?} with {} moves",
+            //     end_time - start_time,
+            //     moves_made
+            // );
         }
+        // println!("Done with {} runs", num_runs);
 
         let avg_moves_per_second = total_moves as f64 / total_duration.as_secs_f64();
 
         //println!("After {} runs:", num_runs);
         println!("Average moves per second: {:.2}", avg_moves_per_second);
 
-        static CURRENT_BEST: f64 = 841353.15;
+        static CURRENT_BEST: f64 = 756983.55;
         //println!("Current best: {:.2}", CURRENT_BEST);
         println!(
             "Improvement: {:.2}%",
@@ -56,9 +68,9 @@ fn perft() {
 }
 
 fn main() {
-    // perft();
+    perft();
     //loop {
-    let mut game_state = GameState::default();
+    /*let mut game_state = GameState::default();
     //game_state.fill_factories();
     game_state.check_integrity();
 
@@ -98,7 +110,6 @@ fn main() {
             println!("The game ended after round evaluation");
             break;
         }
-        break;
     }
     let end_time = std::time::Instant::now();
     println!("{}", game_state);
@@ -118,5 +129,5 @@ fn main() {
     // println!("{}", string);
 
     game_state.check_integrity();
-    //}
+    //}*/
 }

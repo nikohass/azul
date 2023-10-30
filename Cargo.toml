@@ -3,6 +3,7 @@ members = [
     "game",
     "playground",
     "backend_server",
+    "player",
 ]
 
 [profile.release]

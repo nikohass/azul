@@ -3,8 +3,8 @@ use crate::{
     websocket_api::{EventType, WebSocketConnection, WebSocketMessage},
 };
 use game::{
-    GameState, PlayerTrait, TileColor, CENTER_FACTORY_INDEX, FLOOR_LINE_PENALTY, NUM_PLAYERS,
-    NUM_TILE_COLORS,
+    GameState, MoveList, PlayerTrait, TileColor, CENTER_FACTORY_INDEX, FLOOR_LINE_PENALTY,
+    NUM_PLAYERS, NUM_TILE_COLORS,
 };
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -79,6 +79,7 @@ impl Match {
 
     pub async fn start_match(&mut self, websocket: WebSocketConnection) {
         let game_state = &mut self.game_state;
+        let mut move_list = MoveList::default();
 
         let mut round = 0;
         loop {
@@ -86,9 +87,10 @@ impl Match {
             game_state.check_integrity(); // Check the integrity of the game state. If it is not valid, panic and crash the tokio task
             send_game_state_update(game_state, &websocket); // Send the game state to the players
             let mut turn = 0;
+            println!("{}", game_state);
             loop {
-                let possible_moves = game_state.get_possible_moves();
-                if possible_moves.is_empty() {
+                game_state.get_possible_moves(&mut move_list);
+                if move_list.is_empty() {
                     // If there are no legal moves we end the game
                     break;
                 }
@@ -102,10 +104,12 @@ impl Match {
                     turn,
                     self.players[current_player].name()
                 );
-                let move_ = self.players[current_player].get_move(game_state.clone());
+                let move_ = self.players[current_player]
+                    .get_move(game_state.clone())
+                    .await;
 
                 // Validate the move
-                if !possible_moves.contains(&move_) {
+                if !move_list.contains(move_) {
                     // If the move is not legal, panic and crash the tokio task
                     panic!(
                         "Player {} made an illegal move: {:?}",
@@ -115,6 +119,7 @@ impl Match {
 
                 // Apply the move to the game state
                 game_state.do_move(move_);
+                println!("{}", game_state);
 
                 send_game_state_update(game_state, &websocket);
 
@@ -126,6 +131,7 @@ impl Match {
             // At the end of the round, evaluate it by counting the points and moving the first player marker
             let is_game_over = game_state.evaluate_round(); // If a player has ended the game, this will return true
             send_game_state_update(game_state, &websocket);
+            println!("{}", game_state);
             if is_game_over {
                 self.state = MatchState::GameOver;
                 break;

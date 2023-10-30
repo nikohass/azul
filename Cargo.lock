@@ -54,6 +54,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-trait"
+version = "0.1.74"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a66537f1bb974b254c98ed142ff995236e81b9d0fe4db0575f46612cb15eb0f9"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.38",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -64,12 +75,14 @@ name = "backend_server"
 version = "0.1.0"
 dependencies = [
  "async-mutex",
+ "async-trait",
  "futures",
  "game",
  "hyper",
  "lazy_static",
  "log",
  "log4rs",
+ "player",
  "serde",
  "serde_json",
  "tokio",
@@ -373,6 +386,7 @@ dependencies = [
 name = "game"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "rand",
 ]
 
@@ -787,6 +801,15 @@ name = "pkg-config"
 version = "0.3.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26072860ba924cbfa98ea39c8c19b4dd6a4a25423dbdf219c1eca91aa0cf6964"
+
+[[package]]
+name = "player"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "game",
+ "rand",
+]
 
 [[package]]
 name = "playground"

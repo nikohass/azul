@@ -2,13 +2,15 @@ import json
 import websocket
 
 def on_message(ws, message):
+    # print("Raw Message:", message)
     msg_json = json.loads(message)
-    if not msg_json["event"] == "game_state_update":
-        print("Received:", json.dumps(msg_json, indent=4))
-    else:
-        print("Received game state update...")
-    
-    if msg_json["event"] == "new_game":
+    event = msg_json["event"]
+    # if event != "game_state_update":
+    #     print("Received:", json.dumps(msg_json, indent=4))
+    # else:
+    #     print("Received game state update")
+
+    if event == "new_game":
         game_id = msg_json["data"]["id"]
         start_game_msg = json.dumps({
             "event": "start_game",
@@ -16,6 +18,22 @@ def on_message(ws, message):
         })
         print("Sending:", start_game_msg)
         ws.send(start_game_msg)
+    elif event == "game_over":
+        print("Game over, closing connection")
+        ws.close()
+    elif event == "move_request":
+        data = msg_json["data"]
+        moves = data["move_list"]
+        move = moves[0]
+        request_id = data["request_id"]
+        print("Sending move:", move, "for request id:", request_id)
+        ws.send(json.dumps({
+            "event": "move_response",
+            "data": {
+                "request_id": request_id,
+                "move_index": 0
+            }
+        }))
 
 def on_error(ws, error):
     print("Error:", error)
@@ -35,8 +53,8 @@ def on_open(ws):
         "event": "new_game",
         "data": {
             "players": [
-                {"name": "Player 1", "type": "computer"},
-                {"name": "Player 2", "type": "computer"}
+                {"name": "Player 1", "type": "human"},
+                {"name": "Player 2", "type": "greedy"}
             ]
         }
     })
