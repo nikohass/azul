@@ -30,18 +30,23 @@ impl PlayerTrait for HumanPlayer {
     async fn get_move(&mut self, mut game_state: GameState) -> Move {
         game_state.get_possible_moves(&mut self.move_list);
 
-        loop {
+        for _ in 0..10 {
             let request_id = uuid::Uuid::new_v4().to_string();
             let json = format_move_request_json(&game_state, &self.move_list, &request_id);
             let move_request_msg = WebSocketMessage {
                 event_type: EventType::MoveRequest,
                 data: json,
             };
+
             log::info!("Sending move request");
-            let response = self
+            let mut receiver = self
                 .websocket
                 .send_and_recv_move(move_request_msg, &request_id)
                 .await;
+
+            let response = receiver.recv().await.unwrap();
+
+            log::info!("Received move response");
             let move_index = response.data["move_index"].as_u64();
             match move_index {
                 Some(move_index) => {
@@ -57,6 +62,7 @@ impl PlayerTrait for HumanPlayer {
                 }
             }
         }
+        panic!("Failed to get valid move");
     }
 }
 

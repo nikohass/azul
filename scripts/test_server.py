@@ -1,10 +1,13 @@
 import json
 import websocket
+import threading
+import time
 
 def on_message(ws, message):
     # print("Raw Message:", message)
     msg_json = json.loads(message)
     event = msg_json["event"]
+    print("Received:", event)
     # if event != "game_state_update":
     #     print("Received:", json.dumps(msg_json, indent=4))
     # else:
@@ -16,9 +19,10 @@ def on_message(ws, message):
             "event": "start_game",
             "data": {"id": game_id}
         })
+        time.sleep(4)
         print("Sending:", start_game_msg)
         ws.send(start_game_msg)
-    elif event == "game_over":
+    if event == "game_over":
         print("Game over, closing connection")
         ws.close()
     elif event == "move_request":
@@ -26,6 +30,7 @@ def on_message(ws, message):
         moves = data["move_list"]
         move = moves[0]
         request_id = data["request_id"]
+        time.sleep(1)
         print("Sending move:", move, "for request id:", request_id)
         ws.send(json.dumps({
             "event": "move_response",
@@ -49,12 +54,26 @@ def on_open(ws):
     print("Sending:", ping_msg)
     ws.send(ping_msg)
 
+    def run(*args):
+        import time
+        while True:
+            time.sleep(ping_interval)  # Wait for the specified interval
+            ping_msg = json.dumps({
+                "event": "ping",
+                "data": {1: "test 1 2 3"}
+            })
+            print("Sending:", ping_msg)
+            ws.send(ping_msg)
+
+    # The daemon flag is set to True so that the thread will stop when the main thread exits
+    threading.Thread(target=run, daemon=True).start()
+
     new_game_msg = json.dumps({
         "event": "new_game",
         "data": {
             "players": [
                 {"name": "Player 1", "type": "random"},
-                {"name": "Player 2", "type": "mcts"}
+                {"name": "Player 2", "type": "human"}
             ]
         }
     })
@@ -64,6 +83,13 @@ def on_open(ws):
 if __name__ == "__main__":
     ws_url = "ws://127.0.0.1:3001"
     
+    # send ping every second
+    ping_interval = 1
+    ping_msg = json.dumps({
+        "event": "ping",
+        "data": {1: "test 1 2 3"}
+    })
+
     ws_app = websocket.WebSocketApp(
         ws_url,
         on_message=on_message,

@@ -64,7 +64,7 @@ pub struct WebSocketConnection {
     write: SharedState<WsSink>,
     addr: SocketAddr,
     read_broadcast: tokio::sync::broadcast::Sender<WebSocketMessage>,
-    pending_responses: SharedState<HashMap<String, tokio::sync::mpsc::Sender<WebSocketMessage>>>,
+    // pending_responses: SharedState<HashMap<String, tokio::sync::mpsc::Sender<WebSocketMessage>>>,
 }
 
 impl WebSocketConnection {
@@ -90,7 +90,7 @@ impl WebSocketConnection {
             write,
             addr,
             read_broadcast: broadcast.0,
-            pending_responses: SharedState::new(HashMap::new()),
+            // pending_responses: SharedState::new(HashMap::new()),
         };
 
         connection.spawn_receiver_task(read).await;
@@ -136,10 +136,12 @@ impl WebSocketConnection {
                             event_type: event,
                             data,
                         };
-                        let send_result = broadcast_sender.send(message);
-                        if let Err(err) = send_result {
-                            log::error!("Error sending message: {:?}", err);
-                        }
+                        let _ = broadcast_sender.send(message);
+                        // if let Err(err) = send_result {
+                        //     log::error!("Error sending message: {:?}", err);
+                        //     log::info!("Stopping receiver task");
+                        //     break;
+                        // }
                     }
                     Err(err) => log::error!("Error reading message: {:?}", err),
                 }
@@ -164,7 +166,7 @@ impl WebSocketConnection {
             if let Err(err) = write.send(message).await {
                 log::error!("Error sending message: {:?}", err);
             }
-            log::info!("Sent message");
+            println!("Sent message");
         });
     }
 
@@ -172,6 +174,7 @@ impl WebSocketConnection {
         let mut receiver: tokio::sync::broadcast::Receiver<WebSocketMessage> =
             self.get_read_broadcast();
         while let Ok(message) = receiver.recv().await {
+            log::info!("Received message: {:?}", message);
             let response = match message.event_type {
                 EventType::NewGame => self.handle_new_game_msg(message).await,
                 EventType::Ping => {
@@ -186,30 +189,38 @@ impl WebSocketConnection {
                     log::error!("Client sent error event");
                     continue;
                 }
-                EventType::MoveResponse => {
-                    log::info!("Client sent a move.");
-                    let request_id = message.data["request_id"]
-                        .as_str()
-                        .ok_or("Missing request_id field")?;
-                    let sender = self.pending_responses.lock().await.remove(request_id);
-                    if let Some(sender) = sender {
-                        let result = sender.send(message).await;
-                        if let Err(err) = result {
-                            log::error!("Error sending move response: {}", err);
-                        }
-                    } else {
-                        log::error!(
-                            "Received move response for unknown request id: {}",
-                            request_id
-                        );
-                    }
-                    continue;
-                }
+                // EventType::MoveResponse => {
+                //     log::info!("Client sent a move.");
+                //     let request_id = message.data["request_id"]
+                //         .as_str()
+                //         .ok_or("Missing request_id field")?;
+                //     println!("Accessing pending_responses");
+                //     let sender = self.pending_responses.lock().await.remove(request_id);
+                //     println!("Accessing pending_responses done");
+                //     if let Some(sender) = sender {
+                //         let result: Result<
+                //             (),
+                //             tokio::sync::mpsc::error::SendError<WebSocketMessage>,
+                //         > = sender.send(message).await;
+                //         if let Err(err) = result {
+                //             log::error!("Error sending move response: {}", err);
+                //         }
+                //     } else {
+                //         log::error!(
+                //             "Received move response for unknown request id: {}",
+                //             request_id
+                //         );
+                //     }
+                //     continue;
+                // }
                 EventType::GameStateUpdate | EventType::GameOver | EventType::MoveRequest => {
                     log::error!(
                         "Client sent {} event, this event is only sent by the server",
                         message.event_type.to_string()
                     );
+                    continue;
+                }
+                EventType::MoveResponse => {
                     continue;
                 }
             };
@@ -292,21 +303,38 @@ impl WebSocketConnection {
     }
 
     pub async fn send_and_recv_move(
-        &mut self,
+        &self,
         move_request: WebSocketMessage,
         request_id: &str,
-    ) -> WebSocketMessage {
+    ) -> tokio::sync::mpsc::Receiver<WebSocketMessage> {
         log::info!("Sending move requests (id: {})", request_id);
-        let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
-        self.pending_responses
-            .lock()
-            .await
-            .insert(request_id.to_string(), sender);
+        let mut read_broadcast = self.get_read_broadcast();
+        let my_request_id = request_id.to_string();
+        let (sender, receiver) = tokio::sync::mpsc::channel(1);
+
+        tokio::spawn(async move {
+            while let Ok(message) = read_broadcast.recv().await {
+                log::info!("Received message: {:?}", message);
+                if let EventType::MoveResponse = message.event_type {
+                    log::info!("Client sent a move.");
+                    if let Some(actual_request_id) = message.data["request_id"].as_str() {
+                        if my_request_id == actual_request_id {
+                            log::info!("Received move response for request id: {}", my_request_id);
+                            if let Err(e) = sender.send(message).await {
+                                log::error!("Failed to send move response: {:?}", e);
+                            }
+                            break;
+                        }
+                    } else {
+                        log::error!("Missing request_id field");
+                    }
+                }
+            }
+        });
+
         self.send_message(move_request);
         log::info!("Waiting for move response (id: {})", request_id);
-        let response = receiver.recv().await.unwrap();
-        log::info!("Received move response (id: {})", request_id);
-        response
+        receiver
     }
 }
 
