@@ -10,6 +10,29 @@ use std::fmt::Write;
 pub const NUM_PLAYERS: usize = 2;
 pub const FLOOR_LINE_PENALTY: [u8; 8] = [0, 1, 2, 4, 6, 8, 11, 14];
 
+fn find_tile_combinations(
+    tiles_left: u8,
+    current_pattern: &mut [u8; 6],
+    remaining_space: &mut [u8; 6],
+    results: &mut Vec<[u8; 6]>,
+    start_index: usize, // Add a parameter to keep track of the start index
+) {
+    if tiles_left == 0 {
+        results.push(*current_pattern);
+        return;
+    }
+
+    for pattern_line_index in start_index..6 {
+        if remaining_space[pattern_line_index] > 0 {
+            remaining_space[pattern_line_index] -= 1;
+            current_pattern[pattern_line_index] += 1;
+            find_tile_combinations(tiles_left - 1, current_pattern, remaining_space, results, pattern_line_index); // pass pattern_line_index to enforce order
+            remaining_space[pattern_line_index] += 1;
+            current_pattern[pattern_line_index] -= 1;
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct GameState {
     bag: [u8; NUM_TILE_COLORS], // For each color, how many tiles are left in the bag
@@ -534,9 +557,11 @@ impl GameState {
     }
 
     pub fn get_possible_moves(&mut self, move_list: &mut MoveList) -> bool {
-        // println!("Get possible moves");
         move_list.clear();
         let current_player: usize = self.current_player.into();
+        let player_pattern_lines: [u8; 5] = self.pattern_lines_occupancy[current_player];
+        let player_pattern_line_colors: [Option<TileColor>; 5] =
+            self.pattern_lines_colors[current_player];
 
         for (factory_index, factory) in self.factories.iter().enumerate() {
             for (color, number) in factory.iter().enumerate() {
@@ -544,15 +569,27 @@ impl GameState {
                     continue;
                 }
 
+                let mut remaining_space: [u8; 6] = [1, 2, 3, 4, 5, 255];
+                for (pattern_line_index, number_of_tiles) in player_pattern_lines.iter().enumerate()
+                {
+                    remaining_space[pattern_line_index] -= *number_of_tiles;
+                    if let Some(existing_color) = player_pattern_line_colors[pattern_line_index] {
+                        if color != usize::from(existing_color) {
+                            remaining_space[pattern_line_index] = 0;
+                        }
+                    } else {
+                        // Make sure the wall has space for the tiles
+                        let wall_mask = WALL_COLOR_MASKS[color as usize];
+                        let wall_occupancy = self.wall_occupancy[current_player];
+                        let row = wall::get_row_mask(pattern_line_index);
+                        if wall_occupancy & row & wall_mask > 0 {
+                            remaining_space[pattern_line_index] = 0;
+                        }
+                    }
+                }
+
                 let mut possible_patterns = Vec::new();
-                self.find_tile_combinations(
-                    *number as usize,
-                    color as u8,
-                    current_player,
-                    &mut [0u8; 6], // 5 for pattern lines 6th for discard
-                    0,
-                    &mut possible_patterns,
-                );
+                find_tile_combinations(*number, &mut [0, 0, 0, 0, 0, 0], &mut remaining_space, &mut possible_patterns, 0);
 
                 for pattern in possible_patterns {
                     move_list.push(Move {
@@ -565,85 +602,14 @@ impl GameState {
         }
 
         if move_list.is_empty() {
-            // println!("No possible moves, evaluating round.");
             let is_game_over = self.evaluate_round();
-            // println!("Is game over: {}", is_game_over);
             if !is_game_over {
-                // println!("Filling factories");
                 self.fill_factories();
                 self.get_possible_moves(move_list);
             }
             is_game_over
         } else {
             false
-        }
-    }
-
-    fn find_tile_combinations(
-        &self,
-        tiles_left: usize,
-        color: u8,
-        current_player: usize,
-        current_pattern: &mut [u8; 6],
-        pattern_line_start: usize,
-        results: &mut Vec<[u8; 6]>,
-    ) {
-        if tiles_left == 0 {
-            results.push(*current_pattern);
-            return;
-        }
-
-        // Handle discarding tiles
-        if pattern_line_start == 5 {
-            current_pattern[5] += tiles_left as u8;
-            results.push(*current_pattern);
-            current_pattern[5] -= tiles_left as u8;
-            return;
-        }
-
-        for pattern_line_index in pattern_line_start..5 {
-            let pattern_line_color = self.pattern_lines_colors[current_player][pattern_line_index];
-
-            // Make sure the pattern line has the right color, if it has one
-            if let Some(pattern_line_color) = pattern_line_color {
-                if pattern_line_color != TileColor::from(color) {
-                    continue;
-                }
-            }
-
-            // Make sure the wall has space for the tiles
-            let wall_mask = WALL_COLOR_MASKS[color as usize];
-            let wall_occupancy = self.wall_occupancy[current_player];
-            let row = wall::get_row_mask(pattern_line_index);
-            if wall_occupancy & row & wall_mask > 0 {
-                continue;
-            }
-
-            let max_for_pattern = pattern_line_index + 1;
-            let tiles_already_in_pattern =
-                self.pattern_lines_occupancy[current_player][pattern_line_index] as usize;
-            let space_in_pattern = max_for_pattern - tiles_already_in_pattern;
-
-            if space_in_pattern > 0 {
-                let tiles_to_place = space_in_pattern.min(tiles_left);
-                current_pattern[pattern_line_index] += tiles_to_place as u8;
-                self.find_tile_combinations(
-                    tiles_left - tiles_to_place,
-                    color,
-                    current_player,
-                    current_pattern,
-                    pattern_line_index + 1,
-                    results,
-                );
-                current_pattern[pattern_line_index] -= tiles_to_place as u8;
-            }
-        }
-
-        // If you reach here, and there are still tiles left, discard them
-        if tiles_left > 0 {
-            current_pattern[5] += tiles_left as u8;
-            results.push(*current_pattern);
-            current_pattern[5] -= tiles_left as u8;
         }
     }
 

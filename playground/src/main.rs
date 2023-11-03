@@ -27,6 +27,7 @@ fn perft() {
                     if is_game_over {
                         break;
                     }
+                    println!("Number of possible moves: {}", move_list.len());
                     let move_ = move_list[rng.gen_range(0..move_list.len())];
                     game_state.do_move(move_);
                     moves_made += 1;
@@ -66,8 +67,56 @@ fn perft() {
     }
 }
 
+fn find_tile_combinations(
+    tiles_left: usize,
+    current_pattern: &mut [u8; 6],
+    remaining_space: &mut [u8; 6],
+    results: &mut Vec<[u8; 6]>,
+    start_index: usize, // Add a parameter to keep track of the start index
+) {
+    if tiles_left == 0 {
+        results.push(*current_pattern);
+        return;
+    }
+
+    for pattern_line_index in start_index..6 {
+        if remaining_space[pattern_line_index] > 0 {
+            remaining_space[pattern_line_index] -= 1;
+            current_pattern[pattern_line_index] += 1;
+            find_tile_combinations(tiles_left - 1, current_pattern, remaining_space, results, pattern_line_index); // pass pattern_line_index to enforce order
+            remaining_space[pattern_line_index] += 1;
+            current_pattern[pattern_line_index] -= 1;
+        }
+    }
+}
+
 fn main() {
-    perft();
+    let num_tiles = 2;
+    let mut already_filled: [u8; 6] = [
+        1, 2, 3, 0, 0, 0
+    ];
+    let mut remaining_space: [u8; 6] = [1, 2, 3, 4, 5, 255];
+    for i in 0..6 {
+        remaining_space[i] -= already_filled[i];
+    }
+
+    let mut results = Vec::new();
+    let mut current_pattern = [0, 0, 0, 0, 0, 0];
+    let original_current_pattern = current_pattern.clone();
+    find_tile_combinations(
+        num_tiles,
+        &mut current_pattern,
+        &mut remaining_space,
+        &mut results,
+        0
+    );
+    println!("{} results", results.len());
+    for result in results {
+        println!("{:?}", result);
+    }
+
+    assert_eq!(current_pattern, original_current_pattern);
+    // perft();
     //loop {
     /*let mut game_state = GameState::default();
     //game_state.fill_factories();
