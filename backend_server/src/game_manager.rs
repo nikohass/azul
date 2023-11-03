@@ -82,15 +82,16 @@ impl Match {
         let mut move_list = MoveList::default();
 
         let mut round = 0;
+        game_state.fill_factories(); // Fill the factories before every round
         loop {
-            game_state.fill_factories(); // Fill the factories before every round
             game_state.check_integrity(); // Check the integrity of the game state. If it is not valid, panic and crash the tokio task
             send_game_state_update(game_state, &websocket); // Send the game state to the players
             let mut turn = 0;
             println!("{}", game_state);
+            let mut is_game_over;
             loop {
-                game_state.get_possible_moves(&mut move_list);
-                if move_list.is_empty() {
+                is_game_over = game_state.get_possible_moves(&mut move_list);
+                if is_game_over {
                     // If there are no legal moves we end the game
                     break;
                 }
@@ -129,7 +130,6 @@ impl Match {
                 turn += 1;
             }
             // At the end of the round, evaluate it by counting the points and moving the first player marker
-            let is_game_over = game_state.evaluate_round(); // If a player has ended the game, this will return true
             send_game_state_update(game_state, &websocket);
             println!("{}", game_state);
             if is_game_over {

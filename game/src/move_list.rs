@@ -103,3 +103,21 @@ impl<'a> IntoIterator for &'a mut MoveList {
         slice.iter_mut()
     }
 }
+
+impl std::fmt::Debug for MoveList {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_list().entries(self).finish()
+    }
+}
+
+impl std::fmt::Display for MoveList {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (i, move_) in self.into_iter().enumerate() {
+            if i > 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{}", move_)?;
+        }
+        Ok(())
+    }
+}

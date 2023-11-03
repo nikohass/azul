@@ -6,7 +6,7 @@ pub enum TileColor {
     Blue,
     Yellow,
     Red,
-    Black,
+    Green,
     White,
 }
 
@@ -16,7 +16,7 @@ impl std::fmt::Display for TileColor {
             TileColor::Blue => ("34", 'B'),   // Blue
             TileColor::Yellow => ("33", 'Y'), // Yellow
             TileColor::Red => ("31", 'R'),    // Red
-            TileColor::Black => ("32", 'G'),  // Green (Black)
+            TileColor::Green => ("32", 'G'),  // Green (Black)
             TileColor::White => ("97", 'W'),  // White (Bright White)
         };
 
@@ -30,7 +30,7 @@ impl TileColor {
             TileColor::Blue => "34",   // Blue
             TileColor::Yellow => "33", // Yellow
             TileColor::Red => "31",    // Red
-            TileColor::Black => "32",  // Green (Black)
+            TileColor::Green => "32",  // Green (Black)
             TileColor::White => "97",  // White (Bright White)
         };
         let start = format!("\x1b[{}m", color_code);
@@ -45,7 +45,7 @@ impl From<TileColor> for char {
             TileColor::Blue => 'B',
             TileColor::Yellow => 'Y',
             TileColor::Red => 'R',
-            TileColor::Black => 'K',
+            TileColor::Green => 'K',
             TileColor::White => 'W',
         }
     }
@@ -57,7 +57,7 @@ impl From<u8> for TileColor {
             0 => Self::Blue,
             1 => Self::Yellow,
             2 => Self::Red,
-            3 => Self::Black,
+            3 => Self::Green,
             4 => Self::White,
             _ => panic!("Invalid color: {}", color),
         }
@@ -70,7 +70,7 @@ impl From<usize> for TileColor {
             0 => Self::Blue,
             1 => Self::Yellow,
             2 => Self::Red,
-            3 => Self::Black,
+            3 => Self::Green,
             4 => Self::White,
             _ => panic!("Invalid color: {}", color),
         }
@@ -83,7 +83,7 @@ impl From<TileColor> for u8 {
             TileColor::Blue => 0,
             TileColor::Yellow => 1,
             TileColor::Red => 2,
-            TileColor::Black => 3,
+            TileColor::Green => 3,
             TileColor::White => 4,
         }
     }
@@ -95,7 +95,7 @@ impl From<TileColor> for usize {
             TileColor::Blue => 0,
             TileColor::Yellow => 1,
             TileColor::Red => 2,
-            TileColor::Black => 3,
+            TileColor::Green => 3,
             TileColor::White => 4,
         }
     }

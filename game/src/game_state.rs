@@ -6,7 +6,6 @@ use crate::tile_color::{TileColor, NUM_TILE_COLORS};
 use crate::wall::{self, WALL_COLOR_MASKS};
 use rand::SeedableRng;
 use std::fmt::Write;
-use std::vec;
 
 pub const NUM_PLAYERS: usize = 2;
 pub const FLOOR_LINE_PENALTY: [u8; 8] = [0, 1, 2, 4, 6, 8, 11, 14];
@@ -101,7 +100,7 @@ impl GameState {
         // 3 bits * 5 colors * max 10 factories = 150 bit
         // The center might be larger
 
-        let mut factories = vec![0b0_u64; NUM_FACTORIES];
+        let mut factories = [0b0_u64; NUM_FACTORIES];
         for (factory_index, factory) in self.factories.iter().enumerate().take(CENTER_FACTORY_INDEX)
         {
             let mut factory_binary: u64 = 0b0_u64;
@@ -143,7 +142,7 @@ impl GameState {
             floor_line_progress |= progress << (player_index * 8);
         }
 
-        let mut walls = vec![0b0_u32; NUM_PLAYERS];
+        let mut walls = [0b0_u32; NUM_PLAYERS];
         for (wall_index, wall) in self.walls.iter().enumerate() {
             for bitboard in wall.iter() {
                 walls[wall_index] |= bitboard;
@@ -156,7 +155,7 @@ impl GameState {
             .join("-");
 
         // 4 * 5 * 8
-        let mut pattern_line_occupancy = vec![0b0_u64; NUM_PLAYERS];
+        let mut pattern_line_occupancy = [0b0_u64; NUM_PLAYERS];
         for (player_index, pattern_lines) in self.pattern_lines_occupancy.iter().enumerate() {
             pattern_line_occupancy[player_index] |= pattern_lines[0] as u64;
             pattern_line_occupancy[player_index] |= (pattern_lines[1] as u64) << 8;
@@ -170,7 +169,7 @@ impl GameState {
             .collect::<Vec<_>>()
             .join("-");
 
-        let mut pattern_line_colors = vec![0b0_u64; NUM_PLAYERS];
+        let mut pattern_line_colors = [0b0_u64; NUM_PLAYERS];
         for (player_index, pattern_lines) in self.pattern_lines_colors.iter().enumerate() {
             for (line_index, color) in pattern_lines.iter().enumerate() {
                 if let Some(color) = color {
@@ -491,15 +490,31 @@ impl GameState {
         for pattern_line_index in 0..5 {
             // Update / Check color of pattern line
             if mov.pattern[pattern_line_index] > 0 {
-                debug_assert!({
-                    if let Some(pattern_line_color) =
-                        self.pattern_lines_colors[current_player][pattern_line_index]
-                    {
-                        pattern_line_color == mov.color
-                    } else {
-                        true
+                #[cfg(debug_assertions)]
+                {
+                    let pattern_line_color_match = {
+                        if let Some(pattern_line_color) =
+                            self.pattern_lines_colors[current_player][pattern_line_index]
+                        {
+                            pattern_line_color == mov.color
+                        } else {
+                            true
+                        }
+                    };
+                    if !pattern_line_color_match {
+                        println!("{}", self);
+                        println!("{} {}", mov, pattern_line_index);
+                        println!(
+                            "{:?}",
+                            self.pattern_lines_colors[current_player][pattern_line_index]
+                        );
+                        println!("{}", mov.color);
                     }
-                });
+                    debug_assert!(
+                        pattern_line_color_match,
+                        "Pattern line color does not match"
+                    )
+                }
                 // Set the color of the pattern line
                 self.pattern_lines_colors[current_player][pattern_line_index] = Some(mov.color);
             }
@@ -518,7 +533,8 @@ impl GameState {
         self.check_integrity();
     }
 
-    pub fn get_possible_moves(&self, move_list: &mut MoveList) {
+    pub fn get_possible_moves(&mut self, move_list: &mut MoveList) -> bool {
+        // println!("Get possible moves");
         move_list.clear();
         let current_player: usize = self.current_player.into();
 
@@ -546,6 +562,20 @@ impl GameState {
                     });
                 }
             }
+        }
+
+        if move_list.is_empty() {
+            // println!("No possible moves, evaluating round.");
+            let is_game_over = self.evaluate_round();
+            // println!("Is game over: {}", is_game_over);
+            if !is_game_over {
+                // println!("Filling factories");
+                self.fill_factories();
+                self.get_possible_moves(move_list);
+            }
+            is_game_over
+        } else {
+            false
         }
     }
 

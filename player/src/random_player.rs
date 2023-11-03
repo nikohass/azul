@@ -25,7 +25,7 @@ impl PlayerTrait for RandomPlayer {
         &self.name
     }
 
-    async fn get_move(&mut self, game_state: GameState) -> Move {
+    async fn get_move(&mut self, mut game_state: GameState) -> Move {
         game_state.get_possible_moves(&mut self.move_list);
         self.move_list[self.rng.gen_range(0..self.move_list.len())]
     }

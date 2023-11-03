@@ -17,23 +17,22 @@ fn perft() {
 
             let start_time = std::time::Instant::now();
             let mut moves_made = 0;
-
+            let mut is_game_over;
+            game_state.fill_factories();
             loop {
-                game_state.fill_factories();
-                //game_state.check_integrity();
+                game_state.check_integrity();
 
                 loop {
-                    game_state.get_possible_moves(&mut move_list);
-                    if move_list.is_empty() {
+                    is_game_over = game_state.get_possible_moves(&mut move_list);
+                    if is_game_over {
                         break;
                     }
                     let move_ = move_list[rng.gen_range(0..move_list.len())];
                     game_state.do_move(move_);
                     moves_made += 1;
-                    // game_state.check_integrity();
+                    game_state.check_integrity();
                 }
 
-                let is_game_over = game_state.evaluate_round();
                 // println!("Done with round {}", is_game_over);
                 // println!("{}", game_state);
                 if is_game_over {

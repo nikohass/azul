@@ -27,7 +27,7 @@ impl PlayerTrait for HumanPlayer {
         &self.name
     }
 
-    async fn get_move(&mut self, game_state: GameState) -> Move {
+    async fn get_move(&mut self, mut game_state: GameState) -> Move {
         game_state.get_possible_moves(&mut self.move_list);
 
         loop {

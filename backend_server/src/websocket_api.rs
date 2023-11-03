@@ -245,6 +245,7 @@ impl WebSocketConnection {
                 "human" => Box::new(HumanPlayer::new(name.to_string(), self.clone())),
                 "random" => Box::new(RandomPlayer::new(name.to_string())),
                 "greedy" => Box::new(player::greedy_player::GreedyPlayer::new(name.to_string())),
+                "mcts" => Box::<player::mcts::node::MonteCarloTreeSearch>::default(),
                 _ => return Err(format!("Unknown player type: {}", player_type)),
             };
             players.push(player);

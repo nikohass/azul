@@ -53,8 +53,8 @@ def on_open(ws):
         "event": "new_game",
         "data": {
             "players": [
-                {"name": "Player 1", "type": "human"},
-                {"name": "Player 2", "type": "greedy"}
+                {"name": "Player 1", "type": "random"},
+                {"name": "Player 2", "type": "mcts"}
             ]
         }
     })
