@@ -105,6 +105,7 @@ impl Match {
                     turn,
                     self.players[current_player].name()
                 );
+                send_game_state_update(game_state, &websocket);
                 let move_ = self.players[current_player]
                     .get_move(game_state.clone())
                     .await;

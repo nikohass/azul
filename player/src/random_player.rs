@@ -26,6 +26,8 @@ impl PlayerTrait for RandomPlayer {
     }
 
     async fn get_move(&mut self, mut game_state: GameState) -> Move {
+        // Tokio sleep 1 s
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         game_state.get_possible_moves(&mut self.move_list);
         self.move_list[self.rng.gen_range(0..self.move_list.len())]
     }
