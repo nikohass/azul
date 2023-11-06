@@ -10,8 +10,8 @@ use crate::tile_color::NUM_TILE_COLORS;
 */
 
 // Bitboard of all possible tile locations
-#[allow(clippy::unusual_byte_groupings)]
-// pub const VALID_WALL_TILES: u32 = 0b00_0_11111_0_11111_0_11111_0_11111_0_11111;
+#[allow(clippy::unusual_byte_groupings, dead_code)]
+pub const VALID_WALL_TILES: u32 = 0b00_0_11111_0_11111_0_11111_0_11111_0_11111;
 
 // Bitboards of the background color of the wall
 #[allow(clippy::unusual_byte_groupings)]
@@ -38,7 +38,7 @@ pub fn get_row_mask(row_index: usize) -> u32 {
 #[inline]
 pub fn get_placed_tile_score(occupancy: u32, new_tile_pos: u8) -> u32 {
     let col = count_column_neighbors(occupancy, new_tile_pos) - 1;
-    let row = count_row_neighbors(occupancy, new_tile_pos) - 1;
+    let row = count_row_neighbors_quick(occupancy, new_tile_pos) - 1;
     if col > 0 && row > 0 {
         col + row + 2 // We count the tile itself as a point in both directions
     } else {
@@ -46,7 +46,39 @@ pub fn get_placed_tile_score(occupancy: u32, new_tile_pos: u8) -> u32 {
     }
 }
 
+const ROW_NEIGHBORS_LOOKUP: [[u8; 32]; 5] = [
+    [
+        1, 1, 2, 2, 1, 1, 3, 3, 1, 1, 2, 2, 1, 1, 4, 4, 1, 1, 2, 2, 1, 1, 3, 3, 1, 1, 2, 2, 1, 1,
+        5, 0,
+    ],
+    [
+        1, 2, 1, 2, 2, 3, 2, 3, 1, 2, 1, 2, 3, 4, 3, 4, 1, 2, 1, 2, 2, 3, 2, 3, 1, 2, 1, 2, 4, 5,
+        4, 0,
+    ],
+    [
+        1, 1, 2, 3, 1, 1, 2, 3, 2, 2, 3, 4, 2, 2, 3, 4, 1, 1, 2, 3, 1, 1, 2, 3, 3, 3, 4, 5, 3, 3,
+        4, 0,
+    ],
+    [
+        1, 1, 1, 1, 2, 2, 3, 4, 1, 1, 1, 1, 2, 2, 3, 4, 2, 2, 2, 2, 3, 3, 4, 5, 2, 2, 2, 2, 3, 3,
+        4, 0,
+    ],
+    [
+        1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 4, 5, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3,
+        4, 0,
+    ],
+];
+
 #[inline]
+fn count_row_neighbors_quick(occupancy: u32, new_tile_pos: u8) -> u32 {
+    let row_index: u8 = new_tile_pos / 6;
+    let new_tile_pos = new_tile_pos % 6;
+    let lookup_key: u32 = occupancy >> (row_index * 6) & ROW_MASK;
+    ROW_NEIGHBORS_LOOKUP[new_tile_pos as usize][lookup_key as usize] as u32
+}
+
+#[inline]
+#[allow(dead_code)]
 fn count_row_neighbors(mut occupancy: u32, new_tile_pos: u8) -> u32 {
     // Create a bitboard with the new tile on it
     let new_tile: u32 = 1 << new_tile_pos;
@@ -68,6 +100,54 @@ fn count_row_neighbors(mut occupancy: u32, new_tile_pos: u8) -> u32 {
     }
     // Return the number of neighbors (including the tile itself)
     neighbors.count_ones()
+}
+
+#[cfg(test)]
+mod test {
+    use rand::Rng;
+
+    use super::*;
+
+    fn display_bitboard(bitboard: u32) {
+        for row in 0..5 {
+            for col in 0..5 {
+                // Calculate the position of the bit to check
+                let bit_position = row * 6 + (4 - col);
+                // Check if the bit is set in the bitboard
+                let is_set = bitboard & (1 << bit_position) != 0;
+                // Print an 'X' if the bit is set; otherwise, print a '.'
+                print!("{}", if is_set { '1' } else { '.' });
+            }
+            // Newline after each row
+            println!();
+        }
+    }
+
+    #[test]
+    fn test_count_row_neighbors_quick() {
+        let mut rng = rand::thread_rng();
+        for _ in 0..1000 {
+            let occupancy: u32 = rng.gen();
+            let occupancy = occupancy & VALID_WALL_TILES;
+
+            let mut new_tile_pos;
+            loop {
+                new_tile_pos = rng.gen_range(0..30);
+                if 1 << new_tile_pos & occupancy == 0 && 1 << new_tile_pos & VALID_WALL_TILES > 0 {
+                    break;
+                }
+            }
+            println!("Occupancy:");
+            display_bitboard(occupancy);
+            println!("New tile:");
+            display_bitboard(1 << new_tile_pos);
+            let expected = count_row_neighbors(occupancy, new_tile_pos);
+            let actual = count_row_neighbors_quick(occupancy, new_tile_pos);
+            println!("Expected: {}", expected);
+            println!("Actual: {}", actual);
+            assert_eq!(expected, actual);
+        }
+    }
 }
 
 #[inline]

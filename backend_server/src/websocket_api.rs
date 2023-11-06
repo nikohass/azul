@@ -2,7 +2,7 @@ use crate::{game_manager::Match, human_player::HumanPlayer, shared_state::Shared
 use futures::{SinkExt, StreamExt};
 use game::PlayerTrait;
 use player::random_player::RandomPlayer;
-use std::{collections::HashMap, net::SocketAddr};
+use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use tokio_tungstenite::{accept_async, tungstenite::protocol::Message, WebSocketStream};
 

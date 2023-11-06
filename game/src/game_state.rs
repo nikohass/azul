@@ -26,7 +26,13 @@ fn find_tile_combinations(
         if remaining_space[pattern_line_index] > 0 {
             remaining_space[pattern_line_index] -= 1;
             current_pattern[pattern_line_index] += 1;
-            find_tile_combinations(tiles_left - 1, current_pattern, remaining_space, results, pattern_line_index); // pass pattern_line_index to enforce order
+            find_tile_combinations(
+                tiles_left - 1,
+                current_pattern,
+                remaining_space,
+                results,
+                pattern_line_index,
+            ); // pass pattern_line_index to enforce order
             remaining_space[pattern_line_index] += 1;
             current_pattern[pattern_line_index] -= 1;
         }
@@ -579,7 +585,7 @@ impl GameState {
                         }
                     } else {
                         // Make sure the wall has space for the tiles
-                        let wall_mask = WALL_COLOR_MASKS[color as usize];
+                        let wall_mask = WALL_COLOR_MASKS[color];
                         let wall_occupancy = self.wall_occupancy[current_player];
                         let row = wall::get_row_mask(pattern_line_index);
                         if wall_occupancy & row & wall_mask > 0 {
@@ -589,7 +595,13 @@ impl GameState {
                 }
 
                 let mut possible_patterns = Vec::new();
-                find_tile_combinations(*number, &mut [0, 0, 0, 0, 0, 0], &mut remaining_space, &mut possible_patterns, 0);
+                find_tile_combinations(
+                    *number,
+                    &mut [0, 0, 0, 0, 0, 0],
+                    &mut remaining_space,
+                    &mut possible_patterns,
+                    0,
+                );
 
                 for pattern in possible_patterns {
                     move_list.push(Move {

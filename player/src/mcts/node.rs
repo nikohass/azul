@@ -14,6 +14,7 @@ pub struct Node {
     pub move_to_reach: Option<Move>,
     pub n: f32,
     pub q: f32,
+    pub is_game_over: bool,
 }
 
 impl Default for Node {
@@ -23,6 +24,7 @@ impl Default for Node {
             move_to_reach: None,
             n: 0.0,
             q: 0.0,
+            is_game_over: false,
         }
     }
 }
@@ -77,6 +79,7 @@ impl Node {
         let is_game_over = game_state.get_possible_moves(move_list);
         if is_game_over {
             self.children = Vec::new();
+            self.is_game_over = true;
             return true;
         }
         self.children = Vec::with_capacity(move_list.len());
@@ -86,6 +89,7 @@ impl Node {
                 move_to_reach: Some(move_list[i]),
                 n: 0.,
                 q: 0.,
+                is_game_over: false,
             })
         }
         false
@@ -107,7 +111,7 @@ impl Node {
             let is_game_over = if self.n == 1. {
                 self.expand(game_state, move_list)
             } else {
-                false
+                self.is_game_over
             };
             if !is_game_over {
                 let result = playout(&mut game_state.clone(), rng, move_list);
@@ -134,11 +138,16 @@ impl Node {
             1. - delta
         } else {
             let next_child = self.child_with_max_uct_value(is_root);
-            println!(
-                "Do move {}\n{}",
-                next_child.move_to_reach.unwrap(),
-                game_state
-            );
+            let is_game_over_check = game_state.get_possible_moves(move_list);
+            assert!(!is_game_over_check, "Game is over in iteration");
+            let next_move = next_child.move_to_reach.unwrap();
+            // Make sure the move is actually legal
+            assert!(move_list.contains(next_move), "Illegam move in state\n{}\nMove: {}", game_state, next_move);
+            // println!(
+            //     "Do move {}\n{}",
+            //     next_child.move_to_reach.unwrap(),
+            //     game_state
+            // );
             game_state.do_move(next_child.move_to_reach.unwrap());
             // println!("Move: {}", next_child.move_to_reach.unwrap());
             game_state.check_integrity();
@@ -178,20 +187,15 @@ impl Node {
 }
 
 fn playout(game_state: &mut GameState, rng: &mut SmallRng, move_list: &mut MoveList) -> f32 {
-    // if game_state
-    //     .get_factories()
-    //     .iter()
-    //     .all(|factory| factory.is_empty())
-    // {
-    //     game_state.fill_factories();
-    // }
+    // println!("Integrity check before playout");
+    game_state.check_integrity();
     loop {
         if game_state.get_possible_moves(move_list) {
             let result = game_result(game_state);
             return result_to_value(result);
         }
         let move_ = move_list[rng.gen_range(0..move_list.len())];
-        println!("Do move playout");
+        // println!("Do move playout: {}", move_);
         game_state.do_move(move_);
     }
 }

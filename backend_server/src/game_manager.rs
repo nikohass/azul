@@ -16,7 +16,6 @@ lazy_static::lazy_static! {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MatchState {
     NotStarted,
-    WaitingForPlayerTurn(usize),
     GameOver,
 }
 
@@ -60,22 +59,22 @@ impl Match {
         &self.id
     }
 
-    pub fn get_game_state(&self) -> &GameState {
-        &self.game_state
-    }
+    // pub fn get_game_state(&self) -> &GameState {
+    //     &self.game_state
+    // }
 
-    pub fn get_players(&self) -> &[Box<dyn PlayerTrait>] {
-        &self.players
-    }
+    // pub fn get_players(&self) -> &[Box<dyn PlayerTrait>] {
+    //     &self.players
+    // }
 
-    pub fn get_state(&self) -> MatchState {
-        self.state
-    }
+    // pub fn get_state(&self) -> MatchState {
+    //     self.state
+    // }
 
-    pub fn reset(&mut self) {
-        self.game_state = GameState::default();
-        self.state = MatchState::NotStarted;
-    }
+    // pub fn reset(&mut self) {
+    //     self.game_state = GameState::default();
+    //     self.state = MatchState::NotStarted;
+    // }
 
     pub async fn start_match(&mut self, websocket: WebSocketConnection) {
         let game_state = &mut self.game_state;
