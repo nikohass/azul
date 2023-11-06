@@ -71,14 +71,14 @@ use rand::{rngs::SmallRng, Rng, SeedableRng};
 //     }
 // }
 
-use player::{random_player::RandomPlayer, mcts::node::*};
+use player::{mcts::node::*, random_player::RandomPlayer};
 
 #[tokio::main]
 async fn main() {
     let mut game_state = GameState::with_seed(0);
     let mut move_list = MoveList::default();
 
-    let mut random_player = RandomPlayer::new("Random player".to_string());
+    let mut random_player = MonteCarloTreeSearch::default(); //RandomPlayer::new("Random player".to_string());
     let mut mcts_player = MonteCarloTreeSearch::default();
 
     let mut is_game_over;
@@ -88,7 +88,7 @@ async fn main() {
         game_state.check_integrity();
 
         loop {
-            is_game_over = game_state.get_possible_moves(&mut move_list);
+            is_game_over = game_state.get_possible_moves(&mut move_list).0;
             if is_game_over {
                 break;
             }

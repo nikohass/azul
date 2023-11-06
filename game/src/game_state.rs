@@ -532,7 +532,7 @@ impl GameState {
                     };
                     if !pattern_line_color_match {
                         println!("{}", self);
-                        println!("{} {}", mov, pattern_line_index);
+                        println!("{}", mov);
                         println!(
                             "{:?}",
                             self.pattern_lines_colors[current_player][pattern_line_index]
@@ -562,7 +562,8 @@ impl GameState {
         self.check_integrity();
     }
 
-    pub fn get_possible_moves(&mut self, move_list: &mut MoveList) -> bool {
+    pub fn get_possible_moves(&mut self, move_list: &mut MoveList) -> (bool, bool) {
+        // -> (is_game_over, did_fill_factories)
         move_list.clear();
         let current_player: usize = self.current_player.into();
         let player_pattern_lines: [u8; 5] = self.pattern_lines_occupancy[current_player];
@@ -619,9 +620,9 @@ impl GameState {
                 self.fill_factories();
                 self.get_possible_moves(move_list);
             }
-            is_game_over
+            (is_game_over, true)
         } else {
-            false
+            (false, false)
         }
     }
 

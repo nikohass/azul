@@ -89,7 +89,7 @@ impl Match {
             println!("{}", game_state);
             let mut is_game_over;
             loop {
-                is_game_over = game_state.get_possible_moves(&mut move_list);
+                is_game_over = game_state.get_possible_moves(&mut move_list).0;
                 if is_game_over {
                     // If there are no legal moves we end the game
                     break;

@@ -15,6 +15,7 @@ pub struct Node {
     pub n: f32,
     pub q: f32,
     pub is_game_over: bool,
+    pub refill_factories: bool,
 }
 
 impl Default for Node {
@@ -25,6 +26,7 @@ impl Default for Node {
             n: 0.0,
             q: 0.0,
             is_game_over: false,
+            refill_factories: false,
         }
     }
 }
@@ -76,7 +78,7 @@ impl Node {
     }
 
     fn expand(&mut self, game_state: &mut GameState, move_list: &mut MoveList) -> bool {
-        let is_game_over = game_state.get_possible_moves(move_list);
+        let (is_game_over, refill_factories) = game_state.get_possible_moves(move_list);
         if is_game_over {
             self.children = Vec::new();
             self.is_game_over = true;
@@ -90,6 +92,7 @@ impl Node {
                 n: 0.,
                 q: 0.,
                 is_game_over: false,
+                refill_factories: refill_factories,
             })
         }
         false
@@ -138,19 +141,30 @@ impl Node {
             1. - delta
         } else {
             let next_child = self.child_with_max_uct_value(is_root);
-            let is_game_over_check = game_state.get_possible_moves(move_list);
-            assert!(!is_game_over_check, "Game is over in iteration");
-            let next_move = next_child.move_to_reach.unwrap();
+            // let is_game_over_check = game_state.get_possible_moves(move_list);
+            // assert!(!is_game_over_check, "Game is over in iteration");
+            // let next_move = next_child.move_to_reach.unwrap();
             // Make sure the move is actually legal
-            assert!(move_list.contains(next_move), "Illegam move in state\n{}\nMove: {}", game_state, next_move);
+            // assert!(
+            //     move_list.contains(next_move),
+            //     "Illegam move in state\n{}\nMove: {}",
+            //     game_state,
+            //     next_move
+            // );
             // println!(
             //     "Do move {}\n{}",
             //     next_child.move_to_reach.unwrap(),
             //     game_state
             // );
+            if next_child.refill_factories {
+                game_state.evaluate_round();
+                game_state.fill_factories();
+            }
+            // OMG i am so stupid its the rng
             game_state.do_move(next_child.move_to_reach.unwrap());
             // println!("Move: {}", next_child.move_to_reach.unwrap());
             game_state.check_integrity();
+            if next_child.refill_factories {}
             delta = next_child.iteration(move_list, game_state, rng, false);
             self.backpropagate(delta);
             1. - delta
@@ -190,7 +204,7 @@ fn playout(game_state: &mut GameState, rng: &mut SmallRng, move_list: &mut MoveL
     // println!("Integrity check before playout");
     game_state.check_integrity();
     loop {
-        if game_state.get_possible_moves(move_list) {
+        if game_state.get_possible_moves(move_list).0 {
             let result = game_result(game_state);
             return result_to_value(result);
         }
@@ -333,7 +347,7 @@ impl Default for MonteCarloTreeSearch {
         Self {
             root_node: Node::default(),
             root_state: GameState::default(),
-            time_limit: Some(8000),
+            time_limit: Some(1500),
             iteration_limit: None,
         }
     }
