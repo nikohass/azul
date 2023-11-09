@@ -163,8 +163,8 @@ impl Node {
             // OMG i am so stupid its the rng
             game_state.do_move(next_child.move_to_reach.unwrap());
             // println!("Move: {}", next_child.move_to_reach.unwrap());
-            game_state.check_integrity();
-            if next_child.refill_factories {}
+            // game_state.check_integrity();
+            // if next_child.refill_factories {}
             delta = next_child.iteration(move_list, game_state, rng, false);
             self.backpropagate(delta);
             1. - delta
@@ -227,6 +227,12 @@ pub fn result_to_value(result: i16) -> f32 {
         _ => 0.5,
     }
 }
+
+/*
+    Completing a row on my board.
+    Preventing my opponent from completing a high-scoring row.
+    The likelihood that certain tiles will be available in later turns.
+*/
 
 pub struct MonteCarloTreeSearch {
     root_node: Node,
@@ -347,7 +353,7 @@ impl Default for MonteCarloTreeSearch {
         Self {
             root_node: Node::default(),
             root_state: GameState::default(),
-            time_limit: Some(1500),
+            time_limit: Some(45000),
             iteration_limit: None,
         }
     }
