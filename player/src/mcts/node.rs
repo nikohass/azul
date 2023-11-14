@@ -79,6 +79,7 @@ impl Node {
 
     fn expand(&mut self, game_state: &mut GameState, move_list: &mut MoveList) -> bool {
         let (is_game_over, refill_factories) = game_state.get_possible_moves(move_list);
+        println!("{}", refill_factories);
         if is_game_over {
             self.children = Vec::new();
             self.is_game_over = true;
@@ -92,7 +93,7 @@ impl Node {
                 n: 0.,
                 q: 0.,
                 is_game_over: false,
-                refill_factories: refill_factories,
+                refill_factories,
             })
         }
         false
@@ -105,20 +106,32 @@ impl Node {
         rng: &mut SmallRng,
         is_root: bool,
     ) -> f32 {
-        let delta;
-        // println!("Iteration");
-        // println!("{}", game_state);
         game_state.check_integrity();
+
+        let delta: f32;
+
+        let mut is_game_over = self.is_game_over;
+        let do_playout = self.refill_factories; // For now just do the playout
+
+        if do_playout {
+            let result = playout(&mut game_state.clone(), rng, move_list);
+            // Invert the score based on the player
+            return if u8::from(game_state.get_current_player()) == 0 {
+                1. - result
+            } else {
+                result
+            };
+        }
+
         if self.children.is_empty() {
-            #[allow(clippy::float_cmp)]
-            let is_game_over = if self.n == 1. {
+            is_game_over |= if self.n == 1. {
                 self.expand(game_state, move_list)
             } else {
                 self.is_game_over
             };
             if !is_game_over {
                 let result = playout(&mut game_state.clone(), rng, move_list);
-                // TODO: this only works for 2 players
+                // Invert the score based on the player
                 delta = if u8::from(game_state.get_current_player()) == 0 {
                     1. - result
                 } else {
@@ -140,35 +153,84 @@ impl Node {
             self.backpropagate(delta);
             1. - delta
         } else {
-            let next_child = self.child_with_max_uct_value(is_root);
-            // let is_game_over_check = game_state.get_possible_moves(move_list);
-            // assert!(!is_game_over_check, "Game is over in iteration");
-            // let next_move = next_child.move_to_reach.unwrap();
-            // Make sure the move is actually legal
-            // assert!(
-            //     move_list.contains(next_move),
-            //     "Illegam move in state\n{}\nMove: {}",
-            //     game_state,
-            //     next_move
-            // );
-            // println!(
-            //     "Do move {}\n{}",
-            //     next_child.move_to_reach.unwrap(),
-            //     game_state
-            // );
-            if next_child.refill_factories {
-                game_state.evaluate_round();
-                game_state.fill_factories();
-            }
-            // OMG i am so stupid its the rng
+            let next_child: &mut Node = self.child_with_max_uct_value(is_root);
+            game_state.check_integrity();
             game_state.do_move(next_child.move_to_reach.unwrap());
-            // println!("Move: {}", next_child.move_to_reach.unwrap());
-            // game_state.check_integrity();
-            // if next_child.refill_factories {}
             delta = next_child.iteration(move_list, game_state, rng, false);
+            game_state.check_integrity();
             self.backpropagate(delta);
             1. - delta
         }
+
+        // println!("Iteration");
+        // println!("{}", game_state);
+
+        // // game_state.check_integrity();
+        // if self.children.is_empty() {
+        //     #[allow(clippy::float_cmp)]
+        //     let mut is_game_over = if self.n == 1. {
+        //         self.expand(game_state, move_list)
+        //     } else {
+        //         self.is_game_over
+        //     };
+        //     if self.refill_factories {
+        //         is_game_over = false;
+        //         game_state.evaluate_round();
+        //     }
+        //     if !is_game_over && !self.refill_factories {
+        //         let result = playout(&mut game_state.clone(), rng, move_list);
+        //         // TODO: this only works for 2 players
+        //         delta = if u8::from(game_state.get_current_player()) == 0 {
+        //             1. - result
+        //         } else {
+        //             result
+        //         };
+        //     } else if self.n == 0. || self.refill_factories {
+        //         let side = if u8::from(game_state.get_current_player()) == 0 {
+        //             1
+        //         } else {
+        //             -1
+        //         };
+        //         let result = game_result(game_state) * side;
+        //         self.q = result_to_value(result);
+        //         self.n = 1.;
+        //         delta = self.q;
+        //     } else {
+        //         delta = self.q / self.n;
+        //     }
+        //     self.backpropagate(delta);
+        //     1. - delta
+        // } else {
+        //     let next_child: &mut Node = self.child_with_max_uct_value(is_root);
+        //     // let is_game_over_check = game_state.get_possible_moves(move_list);
+        //     // assert!(!is_game_over_check, "Game is over in iteration");
+        //     // let next_move = next_child.move_to_reach.unwrap();
+        //     // Make sure the move is actually legal
+        //     // assert!(
+        //     //     move_list.contains(next_move),
+        //     //     "Illegam move in state\n{}\nMove: {}",
+        //     //     game_state,
+        //     //     next_move
+        //     // );
+        //     // println!(
+        //     //     "Do move {}\n{}",
+        //     //     next_child.move_to_reach.unwrap(),
+        //     //     game_state
+        //     // );
+        //     // if next_child.refill_factories {
+        //     //     game_state.evaluate_round();
+
+        //     //     game_state.fill_factories();
+        //     // }
+        //     // OMG i am so stupid its the rng
+        //     game_state.do_move(next_child.move_to_reach.unwrap());
+        //     // println!("Move: {}", next_child.move_to_reach.unwrap());
+        //     // game_state.check_integrity();
+        //     // if next_child.refill_factories {}
+        //     delta = next_child.iteration(move_list, game_state, rng, false);
+        //     self.backpropagate(delta);
+        //     1. - delta
+        // }
     }
 
     pub fn pv(&mut self, game_state: &mut GameState, move_list: &mut MoveList) {
@@ -202,7 +264,8 @@ impl Node {
 
 fn playout(game_state: &mut GameState, rng: &mut SmallRng, move_list: &mut MoveList) -> f32 {
     // println!("Integrity check before playout");
-    game_state.check_integrity();
+    // println!("{}", game_state);
+    // game_state.check_integrity();
     loop {
         if game_state.get_possible_moves(move_list).0 {
             let result = game_result(game_state);
@@ -353,7 +416,7 @@ impl Default for MonteCarloTreeSearch {
         Self {
             root_node: Node::default(),
             root_state: GameState::default(),
-            time_limit: Some(45000),
+            time_limit: Some(1000),
             iteration_limit: None,
         }
     }
