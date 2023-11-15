@@ -16,7 +16,6 @@ pub struct Node {
     pub q: f32,
     pub is_game_over: bool,
     pub refill_factories: bool,
-    pub fen: String,
 }
 
 impl Default for Node {
@@ -28,7 +27,6 @@ impl Default for Node {
             q: 0.0,
             is_game_over: false,
             refill_factories: false,
-            fen: String::new(),
         }
     }
 }
@@ -98,8 +96,7 @@ impl Node {
                 n: 0.,
                 q: 0.,
                 is_game_over: false,
-                refill_factories: false,//refill_factories,
-                fen: game_state.serialize_string(),
+                refill_factories: false, //refill_factories,
             })
         }
         false
@@ -112,7 +109,6 @@ impl Node {
         rng: &mut SmallRng,
         is_root: bool,
     ) -> f32 {
-        game_state.check_integrity();
         let delta: f32;
 
         let mut is_game_over = self.is_game_over;
@@ -121,11 +117,13 @@ impl Node {
         if do_playout {
             let result = playout(&mut game_state.clone(), rng, move_list);
             // Invert the score based on the player
-            return if u8::from(game_state.get_current_player()) == 0 {
+            let delta = if u8::from(game_state.get_current_player()) == 0 {
                 1. - result
             } else {
                 result
             };
+            self.backpropagate(delta);
+            return 1. - delta;
         }
 
         if self.children.is_empty() {
@@ -159,120 +157,11 @@ impl Node {
             1. - delta
         } else {
             let next_child: &mut Node = self.child_with_max_uct_value(is_root);
-            let move_to_reach = next_child.move_to_reach;
-            if !is_root {
-                let fen = game_state.serialize_string();
-
-                if fen != next_child.fen {
-                    println!(
-                        "Fen mismatch\n{}\n{}\nMove: {}",
-                        fen,
-                        self.fen,
-                        move_to_reach.unwrap()
-                    );
-
-                    println!(
-                        "Expected game state to look like this:\n{}",
-                        GameState::deserialize_string(&self.fen).unwrap()
-                    );
-                    println!("But it looks like this:\n{}", game_state);
-                    game_state.do_move(move_to_reach.unwrap());
-                    println!("State after move:\n");
-                    println!("{}", game_state);
-
-                    panic!("Fen mismatch");
-                }
-            }
-
-            game_state.get_possible_moves(move_list);
-            // Make sure the move is actually legal
-            assert!(
-                move_list.contains(move_to_reach.unwrap()),
-                "Illegal move in state\n{}\nMove: {}",
-                game_state,
-                move_to_reach.unwrap()
-            );
-
-            game_state.check_integrity();
-            // println!("Do move: {}", move_to_reach.unwrap());
             game_state.do_move(next_child.move_to_reach.unwrap());
-
             delta = next_child.iteration(move_list, game_state, rng, false);
-
-            game_state.check_integrity();
             self.backpropagate(delta);
             1. - delta
         }
-
-        // println!("Iteration");
-        // println!("{}", game_state);
-
-        // // game_state.check_integrity();
-        // if self.children.is_empty() {
-        //     #[allow(clippy::float_cmp)]
-        //     let mut is_game_over = if self.n == 1. {
-        //         self.expand(game_state, move_list)
-        //     } else {
-        //         self.is_game_over
-        //     };
-        //     if self.refill_factories {
-        //         is_game_over = false;
-        //         game_state.evaluate_round();
-        //     }
-        //     if !is_game_over && !self.refill_factories {
-        //         let result = playout(&mut game_state.clone(), rng, move_list);
-        //         // TODO: this only works for 2 players
-        //         delta = if u8::from(game_state.get_current_player()) == 0 {
-        //             1. - result
-        //         } else {
-        //             result
-        //         };
-        //     } else if self.n == 0. || self.refill_factories {
-        //         let side = if u8::from(game_state.get_current_player()) == 0 {
-        //             1
-        //         } else {
-        //             -1
-        //         };
-        //         let result = game_result(game_state) * side;
-        //         self.q = result_to_value(result);
-        //         self.n = 1.;
-        //         delta = self.q;
-        //     } else {
-        //         delta = self.q / self.n;
-        //     }
-        //     self.backpropagate(delta);
-        //     1. - delta
-        // } else {
-        //     let next_child: &mut Node = self.child_with_max_uct_value(is_root);
-        //     // let is_game_over_check = game_state.get_possible_moves(move_list);
-        //     // assert!(!is_game_over_check, "Game is over in iteration");
-        //     // let next_move = next_child.move_to_reach.unwrap();
-        //     // Make sure the move is actually legal
-        //     // assert!(
-        //     //     move_list.contains(next_move),
-        //     //     "Illegal move in state\n{}\nMove: {}",
-        //     //     game_state,
-        //     //     next_move
-        //     // );
-        //     // println!(
-        //     //     "Do move {}\n{}",
-        //     //     next_child.move_to_reach.unwrap(),
-        //     //     game_state
-        //     // );
-        //     // if next_child.refill_factories {
-        //     //     game_state.evaluate_round();
-
-        //     //     game_state.fill_factories();
-        //     // }
-        //     // OMG i am so stupid its the rng
-        //     game_state.do_move(next_child.move_to_reach.unwrap());
-        //     // println!("Move: {}", next_child.move_to_reach.unwrap());
-        //     // game_state.check_integrity();
-        //     // if next_child.refill_factories {}
-        //     delta = next_child.iteration(move_list, game_state, rng, false);
-        //     self.backpropagate(delta);
-        //     1. - delta
-        // }
     }
 
     pub fn pv(&mut self, game_state: &mut GameState, move_list: &mut MoveList) {
@@ -305,16 +194,12 @@ impl Node {
 }
 
 fn playout(game_state: &mut GameState, rng: &mut SmallRng, move_list: &mut MoveList) -> f32 {
-    // println!("Integrity check before playout");
-    // println!("{}", game_state);
-    // game_state.check_integrity();
     loop {
         if game_state.get_possible_moves(move_list).0 {
             let result = game_result(game_state);
             return result_to_value(result);
         }
         let move_ = move_list[rng.gen_range(0..move_list.len())];
-        // println!("Do move playout: {}", move_);
         game_state.do_move(move_);
     }
 }
@@ -355,10 +240,22 @@ impl MonteCarloTreeSearch {
         &mut self.root_node
     }
 
-    fn set_root(&mut self, state: &GameState) {
-        // TODO: Reuse the root node instead of creating a new one
+    fn set_root(&mut self, game_state: &GameState) {
+        for child in &mut self.root_node.children {
+            let mut cloned_game_state = game_state.clone();
+            cloned_game_state.do_move(child.move_to_reach.unwrap());
+
+            if cloned_game_state.serialize_string() == *game_state.serialize_string() {
+                // Take the node and replace it with a default node
+                let new_root_node = std::mem::take(child);
+                self.root_node = new_root_node;
+                self.root_state = cloned_game_state;
+                return;
+            }
+        }
+        println!("Could not find the given game state in the tree. Falling back to the default root node.");
         self.root_node = Node::default();
-        self.root_state = state.clone();
+        self.root_state = game_state.clone();
     }
 
     fn do_iterations(&mut self, n: usize, rng: &mut SmallRng) {
@@ -368,14 +265,14 @@ impl MonteCarloTreeSearch {
                 .iteration(&mut move_list, &mut self.root_state.clone(), rng, true);
         }
     }
-    pub fn search_action(&mut self, state: &GameState) -> Move {
+    pub fn search_action(&mut self, game_state: &GameState) -> Move {
         println!(
             "Searching action using MCTS. Fen: {}",
-            state.serialize_string()
+            game_state.serialize_string()
         );
         println!("    Left Depth Iterations Value PV");
         let start_time = Instant::now();
-        self.set_root(state);
+        self.set_root(game_state);
         let mut rng = SmallRng::from_entropy();
         let mut pv = MoveList::default();
         let mut iterations_per_ms = 5.;
@@ -458,7 +355,7 @@ impl Default for MonteCarloTreeSearch {
         Self {
             root_node: Node::default(),
             root_state: GameState::default(),
-            time_limit: Some(1_000),
+            time_limit: Some(10_000),
             iteration_limit: None,
         }
     }
