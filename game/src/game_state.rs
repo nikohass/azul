@@ -319,9 +319,6 @@ impl GameState {
             .map_err(|_| "Invalid scores")?;
         let mut scores = [0; NUM_PLAYERS];
 
-        /*for player_index in 0..NUM_PLAYERS {
-            scores[player_index] = ((scores_binary >> (player_index * 16)) & 0xFFFF) as i16 - 1000;
-        }*/
         for (player_index, player_score) in scores.iter_mut().enumerate() {
             *player_score = ((scores_binary >> (player_index * 16)) & 0xFFFF) as i16 - 1000;
         }
@@ -332,10 +329,6 @@ impl GameState {
             .map_err(|_| "Invalid floor line progress")?;
 
         let mut floor_line_progress = [0; NUM_PLAYERS];
-        // for player_index in 0..NUM_PLAYERS {
-        //     floor_line_progress[player_index] =
-        //         ((floor_line_progress_binary >> (player_index * 8)) & 0xFF) as u8;
-        // }
         for (player_index, progress) in floor_line_progress.iter_mut().enumerate() {
             *progress = ((floor_line_progress_binary >> (player_index * 8)) & 0xFF) as u8;
         }

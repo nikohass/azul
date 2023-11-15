@@ -4,10 +4,10 @@ use game::{GameState, Move, MoveList, PlayerTrait};
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 
 const C: f32 = 0.0;
-const C_BASE: f32 = 220.0;
+const C_BASE: f32 = 120.0;
 const C_FACTOR: f32 = std::f32::consts::SQRT_2;
 // const B_SQUARED: f32 = 0.8;
-const FPU_R: f32 = 0.1;
+const FPU_R: f32 = 0.3;
 
 pub struct Node {
     pub children: Vec<Node>,
@@ -16,6 +16,7 @@ pub struct Node {
     pub q: f32,
     pub is_game_over: bool,
     pub refill_factories: bool,
+    pub fen: String,
 }
 
 impl Default for Node {
@@ -27,6 +28,7 @@ impl Default for Node {
             q: 0.0,
             is_game_over: false,
             refill_factories: false,
+            fen: String::new(),
         }
     }
 }
@@ -79,12 +81,15 @@ impl Node {
 
     fn expand(&mut self, game_state: &mut GameState, move_list: &mut MoveList) -> bool {
         let (is_game_over, refill_factories) = game_state.get_possible_moves(move_list);
-        println!("{}", refill_factories);
-        if is_game_over {
+        // Cancel if game is over and for now also if we need to refill the factories
+        self.is_game_over = is_game_over;
+        self.refill_factories = refill_factories;
+        if is_game_over || refill_factories {
             self.children = Vec::new();
-            self.is_game_over = true;
             return true;
         }
+
+        // Expand the node
         self.children = Vec::with_capacity(move_list.len());
         for i in 0..move_list.len() {
             self.children.push(Node {
@@ -93,7 +98,8 @@ impl Node {
                 n: 0.,
                 q: 0.,
                 is_game_over: false,
-                refill_factories,
+                refill_factories: false,//refill_factories,
+                fen: game_state.serialize_string(),
             })
         }
         false
@@ -107,7 +113,6 @@ impl Node {
         is_root: bool,
     ) -> f32 {
         game_state.check_integrity();
-
         let delta: f32;
 
         let mut is_game_over = self.is_game_over;
@@ -139,9 +144,9 @@ impl Node {
                 };
             } else if self.n == 0. {
                 let side = if u8::from(game_state.get_current_player()) == 0 {
-                    1
-                } else {
                     -1
+                } else {
+                    1
                 };
                 let result = game_result(game_state) * side;
                 self.q = result_to_value(result);
@@ -154,9 +159,46 @@ impl Node {
             1. - delta
         } else {
             let next_child: &mut Node = self.child_with_max_uct_value(is_root);
+            let move_to_reach = next_child.move_to_reach;
+            if !is_root {
+                let fen = game_state.serialize_string();
+
+                if fen != next_child.fen {
+                    println!(
+                        "Fen mismatch\n{}\n{}\nMove: {}",
+                        fen,
+                        self.fen,
+                        move_to_reach.unwrap()
+                    );
+
+                    println!(
+                        "Expected game state to look like this:\n{}",
+                        GameState::deserialize_string(&self.fen).unwrap()
+                    );
+                    println!("But it looks like this:\n{}", game_state);
+                    game_state.do_move(move_to_reach.unwrap());
+                    println!("State after move:\n");
+                    println!("{}", game_state);
+
+                    panic!("Fen mismatch");
+                }
+            }
+
+            game_state.get_possible_moves(move_list);
+            // Make sure the move is actually legal
+            assert!(
+                move_list.contains(move_to_reach.unwrap()),
+                "Illegal move in state\n{}\nMove: {}",
+                game_state,
+                move_to_reach.unwrap()
+            );
+
             game_state.check_integrity();
+            // println!("Do move: {}", move_to_reach.unwrap());
             game_state.do_move(next_child.move_to_reach.unwrap());
+
             delta = next_child.iteration(move_list, game_state, rng, false);
+
             game_state.check_integrity();
             self.backpropagate(delta);
             1. - delta
@@ -208,7 +250,7 @@ impl Node {
         //     // Make sure the move is actually legal
         //     // assert!(
         //     //     move_list.contains(next_move),
-        //     //     "Illegam move in state\n{}\nMove: {}",
+        //     //     "Illegal move in state\n{}\nMove: {}",
         //     //     game_state,
         //     //     next_move
         //     // );
@@ -416,7 +458,7 @@ impl Default for MonteCarloTreeSearch {
         Self {
             root_node: Node::default(),
             root_state: GameState::default(),
-            time_limit: Some(1000),
+            time_limit: Some(1_000),
             iteration_limit: None,
         }
     }
