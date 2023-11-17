@@ -1,4 +1,4 @@
-use game::{GameState, Move, PlayerTrait};
+use game::{game_manager, GameState, Move, Player};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::{Arc, Mutex};
@@ -43,17 +43,17 @@ impl Client {
 }
 
 #[async_trait::async_trait]
-impl PlayerTrait for Client {
+impl Player for Client {
     fn name(&self) -> &str {
         &self.path
     }
 
-    async fn get_move(&mut self, state: GameState) -> Move {
+    async fn get_move(&mut self, game_state: &GameState) -> Move {
         let name = self.name();
         if self.did_panic() {
             panic!("Client panicked");
         }
-        let mut msg = format!("get_move {}", state.serialize_string());
+        let mut msg = format!("get_move {}", game_state.serialize_string());
         msg.push('\n');
         self.stdin
             .lock()
@@ -104,17 +104,33 @@ impl PlayerTrait for Client {
             .write_all(msg.as_bytes())
             .unwrap();
     }
+
+    async fn set_time(&mut self, time: u64) {
+        let mut msg = format!("time {}", time);
+        msg.push('\n');
+        self.stdin
+            .lock()
+            .unwrap()
+            .write_all(msg.as_bytes())
+            .unwrap();
+    }
 }
 
 #[tokio::main]
 async fn main() {
     let client_one_path = "./target/release/test_client.exe".to_string();
-    let time = 30_000;
+    let client_two_path = "./target/release/test_client.exe".to_string();
+    let time = 600;
     let mut client_one = Client::from_path(client_one_path, time);
-    let mut game_state = GameState::default();
-    // game_state.fill_factories();
-    // let mut move_list = MoveList::new();
-    // game_state.get_possible_moves(&mut move_list);
-    let move_ = client_one.get_move(game_state).await;
-    println!("move_response {}", move_);
+    let mut client_two = Client::from_path(client_two_path, time);
+    let game_state = GameState::default();
+
+    client_one.set_time(time).await;
+    client_two.set_time(time).await;
+
+    let mut players: Vec<Box<dyn Player>> = vec![Box::new(client_one), Box::new(client_two)];
+    let stats = game_manager::run_match(game_state, &mut players)
+        .await
+        .unwrap();
+    println!("{:#?}", stats);
 }

@@ -61,38 +61,17 @@ use player::{mcts::node::*, random_player::RandomPlayer};
 
 #[tokio::main]
 async fn main() {
-    let mut game_state = GameState::with_seed(0);
-    let mut move_list = MoveList::default();
+    let game_state = GameState::with_seed(0);
 
-    let mut random_player = MonteCarloTreeSearch::default(); //RandomPlayer::new("Random player".to_string());
-    let mut mcts_player = MonteCarloTreeSearch::default();
+    let mut player_one = MonteCarloTreeSearch::default(); //RandomPlayer::new("Random player".to_string());
+    let mut player_two = MonteCarloTreeSearch::default();
 
-    let mut is_game_over;
-    // game_state.fill_factories();
-    println!("{}", game_state);
-    loop {
-        game_state.check_integrity();
+    player_one.set_time(400).await;
+    player_two.set_time(400).await;
 
-        loop {
-            is_game_over = game_state.get_possible_moves(&mut move_list).0;
-            if is_game_over {
-                break;
-            }
-            println!("Number of possible moves: {}", move_list.len());
-            let move_ = match usize::from(game_state.get_current_player()) {
-                0 => random_player.get_move(game_state.clone()).await,
-                1 => mcts_player.get_move(game_state.clone()).await,
-                _ => panic!("Invalid player"),
-            };
-
-            game_state.do_move(move_);
-            random_player.notify_move(&game_state, move_).await;
-            mcts_player.notify_move(&game_state, move_).await;
-            println!("{}", game_state);
-        }
-        if is_game_over {
-            break;
-        }
-    }
-    println!("{}", game_state);
+    let mut players: Vec<Box<dyn Player>> = vec![Box::new(player_one), Box::new(player_two)];
+    let stats = game_manager::run_match(game_state, &mut players)
+        .await
+        .unwrap();
+    println!("{:#?}", stats);
 }

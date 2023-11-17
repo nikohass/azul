@@ -2,7 +2,7 @@ use crate::{
     game_manager::game_state_to_json,
     websocket_api::{EventType, WebSocketConnection, WebSocketMessage},
 };
-use game::{GameState, Move, MoveList, PlayerTrait};
+use game::{GameState, Move, MoveList, Player};
 
 pub struct HumanPlayer {
     name: String,
@@ -22,12 +22,13 @@ impl HumanPlayer {
 }
 
 #[async_trait::async_trait]
-impl PlayerTrait for HumanPlayer {
+impl Player for HumanPlayer {
     fn name(&self) -> &str {
         &self.name
     }
 
-    async fn get_move(&mut self, mut game_state: GameState) -> Move {
+    async fn get_move(&mut self, game_state: &GameState) -> Move {
+        let mut game_state = game_state.clone();
         game_state.get_possible_moves(&mut self.move_list);
 
         for _ in 0..10 {

@@ -1,4 +1,4 @@
-use game::{GameState, Move, PlayerTrait as _};
+use game::{GameState, Move, Player as _};
 use player::mcts::node::MonteCarloTreeSearch as Player;
 
 #[tokio::main]
@@ -16,7 +16,7 @@ async fn main() {
         match command_type {
             "get_move" => {
                 let game_state = GameState::deserialize_string(entries.get(1).unwrap()).unwrap();
-                let move_ = player.get_move(game_state.clone()).await;
+                let move_ = player.get_move(&game_state).await;
                 println!("move_response {}", move_.serialize_string());
             }
             "notify_move" => {
@@ -26,6 +26,10 @@ async fn main() {
             }
             "reset" => {
                 player = Player::default();
+            }
+            "time" => {
+                let time = entries.get(1).unwrap().parse::<u64>().unwrap();
+                player.set_time(time).await;
             }
 
             _ => {

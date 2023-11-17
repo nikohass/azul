@@ -1,4 +1,4 @@
-use game::{MoveList, PlayerTrait};
+use game::{MoveList, Player};
 
 pub struct GreedyPlayer {
     name: String,
@@ -13,12 +13,13 @@ impl GreedyPlayer {
 }
 
 #[async_trait::async_trait]
-impl PlayerTrait for GreedyPlayer {
+impl Player for GreedyPlayer {
     fn name(&self) -> &str {
         &self.name
     }
 
-    async fn get_move(&mut self, mut game_state: game::GameState) -> game::Move {
+    async fn get_move(&mut self, game_state: &game::GameState) -> game::Move {
+        let mut game_state = game_state.clone();
         game_state.get_possible_moves(&mut self.move_list);
         let mut best_move = self.move_list[0];
         let mut best_score = -1000;

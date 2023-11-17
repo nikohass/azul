@@ -1,6 +1,6 @@
 use crate::{game_manager::Match, human_player::HumanPlayer, shared_state::SharedState};
 use futures::{SinkExt, StreamExt};
-use game::PlayerTrait;
+use game::Player;
 use player::random_player::RandomPlayer;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
@@ -248,11 +248,11 @@ impl WebSocketConnection {
         let data = message.data;
         println!("{:#?}", data);
 
-        let mut players: Vec<Box<dyn PlayerTrait>> = Vec::new();
+        let mut players: Vec<Box<dyn Player>> = Vec::new();
         for player_json in data["players"].as_array().ok_or("Missing players field")? {
             let name = player_json["name"].as_str().ok_or("Missing name field")?;
             let player_type = player_json["type"].as_str().ok_or("Missing type field")?;
-            let player: Box<dyn PlayerTrait> = match player_type {
+            let player: Box<dyn Player> = match player_type {
                 "human" => Box::new(HumanPlayer::new(name.to_string(), self.clone())),
                 "random" => Box::new(RandomPlayer::new(name.to_string())),
                 "greedy" => Box::new(player::greedy_player::GreedyPlayer::new(name.to_string())),

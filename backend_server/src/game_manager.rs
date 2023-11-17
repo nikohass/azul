@@ -3,8 +3,8 @@ use crate::{
     websocket_api::{EventType, WebSocketConnection, WebSocketMessage},
 };
 use game::{
-    GameState, MoveList, PlayerTrait, TileColor, CENTER_FACTORY_INDEX, FLOOR_LINE_PENALTY,
-    NUM_PLAYERS, NUM_TILE_COLORS,
+    GameState, MoveList, Player, TileColor, CENTER_FACTORY_INDEX, FLOOR_LINE_PENALTY, NUM_PLAYERS,
+    NUM_TILE_COLORS,
 };
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -22,12 +22,12 @@ pub enum MatchState {
 pub struct Match {
     id: String,
     game_state: GameState,
-    players: Vec<Box<dyn PlayerTrait>>,
+    players: Vec<Box<dyn Player>>,
     state: MatchState,
 }
 
 impl Match {
-    pub async fn new_with_players(players: Vec<Box<dyn PlayerTrait>>) -> SharedState<Match> {
+    pub async fn new_with_players(players: Vec<Box<dyn Player>>) -> SharedState<Match> {
         let game_state = GameState::default();
         let id = Uuid::new_v4().to_string();
         let game_manager = Self {
@@ -83,7 +83,7 @@ impl Match {
         let mut round = 0;
         // game_state.fill_factories(); // Fill the factories before every round
         loop {
-            game_state.check_integrity(); // Check the integrity of the game state. If it is not valid, panic and crash the tokio task
+            game_state.check_integrity().unwrap(); // Check the integrity of the game state. If it is not valid, panic and crash the tokio task
             send_game_state_update(game_state, &websocket); // Send the game state to the players
             let mut turn = 0;
             println!("{}", game_state);
@@ -105,9 +105,7 @@ impl Match {
                     self.players[current_player].name()
                 );
                 send_game_state_update(game_state, &websocket);
-                let move_ = self.players[current_player]
-                    .get_move(game_state.clone())
-                    .await;
+                let move_ = self.players[current_player].get_move(game_state).await;
 
                 // Validate the move
                 if !move_list.contains(move_) {
@@ -125,7 +123,7 @@ impl Match {
                 send_game_state_update(game_state, &websocket);
 
                 // Check integrity of the game state after the move
-                game_state.check_integrity();
+                game_state.check_integrity().unwrap();
 
                 turn += 1;
             }

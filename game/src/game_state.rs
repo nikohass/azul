@@ -1,9 +1,10 @@
 use crate::factories::{self, CENTER_FACTORY_INDEX, NUM_FACTORIES};
 use crate::move_::Move;
 use crate::move_list::MoveList;
-use crate::player::Player;
+use crate::player::PlayerMarker;
 use crate::tile_color::{TileColor, NUM_TILE_COLORS};
 use crate::wall::{self, WALL_COLOR_MASKS};
+use crate::RuntimeError;
 use rand::SeedableRng;
 use std::fmt::Write;
 
@@ -55,9 +56,15 @@ pub struct GameState {
     pattern_lines_occupancy: [[u8; 5]; NUM_PLAYERS], // For each player, the occupancy of their pattern lines
     pattern_lines_colors: [[Option<TileColor>; 5]; NUM_PLAYERS], // For each player, the color of their pattern lines. If the pattern line is empty, the color is 255
 
-    current_player: Player,
+    current_player: PlayerMarker,
 
-    next_round_starting_player: Option<Player>,
+    next_round_starting_player: Option<PlayerMarker>,
+}
+
+impl std::fmt::Debug for GameState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.serialize_string())
+    }
 }
 
 impl GameState {
@@ -75,11 +82,11 @@ impl GameState {
         }
     }
 
-    pub fn get_current_player(&self) -> Player {
+    pub fn get_current_player(&self) -> PlayerMarker {
         self.current_player
     }
 
-    pub fn get_next_round_starting_player(&self) -> Option<Player> {
+    pub fn get_next_round_starting_player(&self) -> Option<PlayerMarker> {
         self.next_round_starting_player
     }
 
@@ -245,7 +252,7 @@ impl GameState {
         let current_player = current_player
             .parse::<u8>()
             .map_err(|_| "Invalid current player")?;
-        let current_player = Player::new(current_player);
+        let current_player = PlayerMarker::new(current_player);
 
         let next_round_starting_player = entries.get(2).ok_or("No next round starting player")?;
         let next_round_starting_player = next_round_starting_player
@@ -254,7 +261,7 @@ impl GameState {
         let next_round_starting_player = if next_round_starting_player == 255 {
             None
         } else {
-            Some(Player::new(next_round_starting_player))
+            Some(PlayerMarker::new(next_round_starting_player))
         };
 
         let bag_binary = entries.get(3).ok_or("No bag")?;
@@ -539,7 +546,7 @@ impl GameState {
         self.current_player = self.current_player.next();
 
         #[cfg(debug_assertions)]
-        self.check_integrity();
+        self.check_integrity().unwrap();
     }
 
     pub fn get_possible_moves(&mut self, move_list: &mut MoveList) -> (bool, bool) {
@@ -615,7 +622,7 @@ impl GameState {
         );
     }
 
-    pub fn check_integrity(&self) {
+    pub fn check_integrity(&self) -> Result<(), RuntimeError> {
         let mut is_valid = true;
 
         // Make sure the bag has less or equal than 20 tiles of each color
@@ -764,9 +771,13 @@ impl GameState {
             }
         }
 
-        if !is_valid {
-            println!("{}", self);
-            panic!("Game state is invalid");
+        // if !is_valid {
+        //     println!("{}", self);
+        //     panic!("Game state is invalid");
+        // }
+        match is_valid {
+            true => Ok(()),
+            false => Err(RuntimeError::InvalidGameState),
         }
     }
 
@@ -786,7 +797,7 @@ impl Default for GameState {
             floor_line_progress: [0; NUM_PLAYERS],
             walls: [[0; NUM_TILE_COLORS]; NUM_PLAYERS],
             wall_occupancy: [0; NUM_PLAYERS],
-            current_player: Player::new(0),
+            current_player: PlayerMarker::new(0),
             pattern_lines_occupancy: [[0; 5]; NUM_PLAYERS],
             pattern_lines_colors: [[None; 5]; NUM_PLAYERS],
             rng: rand::rngs::SmallRng::from_entropy(),
@@ -983,7 +994,7 @@ mod tests {
             loop {
                 game_state.fill_factories();
 
-                game_state.check_integrity();
+                game_state.check_integrity().unwrap();
 
                 loop {
                     game_state.get_possible_moves(&mut move_list);
@@ -993,7 +1004,7 @@ mod tests {
                     let move_ = move_list[rng.gen_range(0..move_list.len())];
 
                     game_state.do_move(move_);
-                    game_state.check_integrity();
+                    game_state.check_integrity().unwrap();
 
                     let string = game_state.serialize_string();
                     let reconstructed_game_state =

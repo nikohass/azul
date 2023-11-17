@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use game::{GameState, Move, MoveList, PlayerTrait};
+use game::{GameState, Move, MoveList, Player};
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 
 const C: f32 = 0.0;
@@ -374,13 +374,13 @@ impl MonteCarloTreeSearch {
 }
 
 #[async_trait::async_trait]
-impl PlayerTrait for MonteCarloTreeSearch {
+impl Player for MonteCarloTreeSearch {
     fn name(&self) -> &str {
         "MCTS"
     }
 
-    async fn get_move(&mut self, game_state: GameState) -> Move {
-        self.search_action(&game_state)
+    async fn get_move(&mut self, game_state: &GameState) -> Move {
+        self.search_action(game_state)
     }
 
     async fn notify_move(&mut self, new_game_state: &GameState, move_: Move) {
@@ -396,6 +396,10 @@ impl PlayerTrait for MonteCarloTreeSearch {
         println!("Could not find move in tree. Falling back to the default root node.");
         self.root_node = Node::default();
         self.root_state = new_game_state.clone();
+    }
+
+    async fn set_time(&mut self, time: u64) {
+        self.time_limit = Some(time as i64);
     }
 }
 

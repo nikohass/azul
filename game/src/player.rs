@@ -2,9 +2,9 @@ use super::NUM_PLAYERS;
 use crate::{move_::Move, GameState};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Player(u8);
+pub struct PlayerMarker(u8);
 
-impl Player {
+impl PlayerMarker {
     pub fn new(id: u8) -> Self {
         Self(id)
     }
@@ -14,21 +14,24 @@ impl Player {
     }
 }
 
-impl From<Player> for u8 {
-    fn from(val: Player) -> Self {
+impl From<PlayerMarker> for u8 {
+    fn from(val: PlayerMarker) -> Self {
         val.0
     }
 }
 
-impl From<Player> for usize {
-    fn from(val: Player) -> Self {
+impl From<PlayerMarker> for usize {
+    fn from(val: PlayerMarker) -> Self {
         val.0 as usize
     }
 }
 
 #[async_trait::async_trait]
-pub trait PlayerTrait: Send + Sync {
+pub trait Player: Send + Sync {
     fn name(&self) -> &str;
-    async fn get_move(&mut self, game_state: GameState) -> Move;
+    async fn get_move(&mut self, game_state: &GameState) -> Move;
+
+    // Optional methods for settings and state updates that not all players need
     async fn notify_move(&mut self, _new_game_state: &GameState, _move_: Move) {}
+    async fn set_time(&mut self, _time: u64) {}
 }
