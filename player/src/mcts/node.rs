@@ -241,15 +241,6 @@ impl MonteCarloTreeSearch {
     }
 
     fn set_root(&mut self, game_state: &GameState) {
-        // // let mut move_list = MoveList::default();
-        // // let mut game_state = game_state.clone();
-        // // game_state.get_possible_moves(&mut move_list);
-        // for child in &mut self.root_node.children {
-        //     let mut cloned_game_state = game_state.clone();
-        //     cloned_game_state.do_move(child.move_to_reach.unwrap());
-        //     cloned_game_state.get_possible_moves(&mut MoveList::default());
-        //     // println!("Comparing {} with {}", cloned_game_state.serialize_string(), game_state.serialize_string());
-
         let is_current_player_equal =
             game_state.get_current_player() == self.root_state.get_current_player();
         let is_next_round_starting_player_equal = game_state.get_next_round_starting_player()
@@ -260,28 +251,15 @@ impl MonteCarloTreeSearch {
             && game_state.get_pattern_lines_occupancy()
                 == self.root_state.get_pattern_lines_occupancy();
         let is_bag_equal = game_state.get_bag() == self.root_state.get_bag();
+        let is_factory_equal = game_state.get_factories() == self.root_state.get_factories();
+        let is_discard_equal =
+            game_state.get_floor_line_progress() == self.root_state.get_floor_line_progress();
         let states_equal = is_current_player_equal
             && is_next_round_starting_player_equal
             && is_pattern_line_equal
-            && is_bag_equal;
-        //     println!("{} {} {} {}", is_current_player_equal, is_next_round_starting_player_equal, is_pattern_line_equal, is_bag_equal);
-
-        //     if is_current_player_equal && is_next_round_starting_player_equal && is_pattern_line_equal && is_bag_equal {
-        //         // Take the node and replace it with a default node
-        //         let new_root_node = std::mem::take(child);
-        //         self.root_node = new_root_node;
-        //         self.root_state = cloned_game_state;
-        //         return;
-        //     }
-        // }
-        // println!("Could not find the given game state in the tree. Falling back to the default root node.");
-        // self.root_node = Node::default();
-
-        // if !states_equal {
-        //     println!("WARNING: The given game state is not equal to the root node's game state.");
-        //     println!("ROOT:\n{}", self.root_state);
-        //     println!("GAME:\n{}", game_state);
-        // }
+            && is_bag_equal
+            && is_factory_equal
+            && is_discard_equal;
 
         if self.root_node.children.is_empty() || !states_equal {
             self.root_state = game_state.clone();
@@ -299,6 +277,7 @@ impl MonteCarloTreeSearch {
                 .iteration(&mut move_list, &mut self.root_state.clone(), rng, true);
         }
     }
+
     pub fn search_action(&mut self, game_state: &GameState) -> Move {
         println!(
             "Searching action using MCTS. Fen: {}",
