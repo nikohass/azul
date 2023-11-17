@@ -73,7 +73,7 @@ def on_open(ws):
         "data": {
             "players": [
                 {"name": "Player 1", "type": "random"},
-                {"name": "Player 2", "type": "human"}
+                {"name": "Player 2", "type": "mcts"}
             ]
         }
     })
