@@ -9,3 +9,6 @@ edition = "2021"
 game = { path = "../game" }
 tokio = { version = "1.33", features = ["full"] }
 async-trait = "0.1.51"
+clap = { version = "4.4.8", features = ["derive"] }
+config = "0.13.3"
+serde = { version = "1.0", features = ["derive"] }

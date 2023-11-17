@@ -1,136 +1,120 @@
-use game::{game_manager, GameState, Move, Player};
-use std::io::{BufRead, BufReader, Write};
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
-use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::vec;
 
-pub struct Client {
-    pub path: String,
-    pub stdin: Arc<Mutex<ChildStdin>>,
-    pub stdout: Arc<Mutex<ChildStdout>>,
-    pub child: Arc<Mutex<Child>>,
-    pub time: u64,
+use clap::Parser;
+use config::{Config, File, FileFormat};
+use serde::Deserialize;
+
+mod client;
+use game::{game_manager::{self, MatchStatistcs}, GameState, Player, NUM_PLAYERS, RuntimeError, SharedState};
+use client::Client;
+
+#[derive(Parser, Debug)]
+#[clap(about, version, author)]
+struct Cli {
+    /// Sets a custom config file
+    #[clap(short, long, value_name = "FILE")]
+    config: Option<String>,
 }
 
-impl Client {
-    pub fn from_path(path: String, time: u64) -> Self {
-        let mut process = Command::new(path.clone())
-            // .args(&["--time", &time.to_string()])
-            // .args(&["--test", "true"])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .unwrap();
-        Self {
-            path,
-            stdin: Arc::new(Mutex::new(process.stdin.take().unwrap())),
-            stdout: Arc::new(Mutex::new(process.stdout.take().unwrap())),
-            child: Arc::new(Mutex::new(process)),
-            time,
-        }
-    }
-
-    // Method to check if the child process has panicked
-    pub fn did_panic(&self) -> bool {
-        let mut child = self.child.lock().unwrap();
-        match child.try_wait() {
-            Ok(Some(status)) => !status.success(),
-            Ok(None) => false,
-            Err(_) => true,
-        }
-    }
+#[derive(Debug, Deserialize)]
+struct GameConfig {
+    pub alternate_starting_player: bool,
+    pub num_games: u64,
+    pub num_simultaneous_games: u64,
 }
 
-#[async_trait::async_trait]
-impl Player for Client {
-    fn name(&self) -> &str {
-        &self.path
-    }
+#[derive(Debug, Deserialize)]
+struct PlayerConfig {
+    pub executable: String,
+    pub think_time: u64,
+}
 
-    async fn get_move(&mut self, game_state: &GameState) -> Move {
-        let name = self.name();
-        if self.did_panic() {
-            panic!("Client panicked");
-        }
-        let mut msg = format!("get_move {}", game_state.serialize_string());
-        msg.push('\n');
-        self.stdin
-            .lock()
-            .unwrap()
-            .write_all(msg.as_bytes())
-            .unwrap();
-        let start_time = Instant::now();
-        let mut stdout = self.stdout.lock().unwrap();
-        let mut read = BufReader::new(&mut *stdout);
-        let mut line = String::new();
-        loop {
-            if self.did_panic() {
-                panic!("Client panicked");
-            }
-            read.read_line(&mut line).unwrap();
-            if !line.is_empty() && line.contains("move_response ") {
-                line = line[14..].to_string();
-                break;
-            }
-            if !line.is_empty() {
-                line.pop();
-                println!("{}: {}", name, line);
-            }
-            line.truncate(0);
-            let elapsed = start_time.elapsed().as_millis();
-            if elapsed > self.time as u128 + 2500 {
-                println!("warning: Client {} hard-timeout: {}ms", self.path, elapsed);
-            }
-        }
-        let elapsed = start_time.elapsed().as_millis();
-        if elapsed as u64 > 1990 {
-            println!("warning: Client {} soft-timeout: {}ms", self.path, elapsed);
-        }
-        line.pop();
-        Move::deserialize_string(&line)
-    }
+#[derive(Debug, Deserialize)]
+struct AppConfig {
+    pub game: GameConfig,
+    pub player_one: PlayerConfig,
+    pub player_two: PlayerConfig,
+    pub player_three: Option<PlayerConfig>,
+    pub player_four: Option<PlayerConfig>,
+}
 
-    async fn notify_move(&mut self, new_game_state: &GameState, move_: Move) {
-        let mut msg = format!(
-            "notify_move {} {}",
-            new_game_state.serialize_string(),
-            move_.serialize_string()
-        );
-        msg.push('\n');
-        self.stdin
-            .lock()
-            .unwrap()
-            .write_all(msg.as_bytes())
-            .unwrap();
-    }
-
-    async fn set_time(&mut self, time: u64) {
-        let mut msg = format!("time {}", time);
-        msg.push('\n');
-        self.stdin
-            .lock()
-            .unwrap()
-            .write_all(msg.as_bytes())
-            .unwrap();
-    }
+async fn run_match(players: &mut Vec<Box<dyn Player>>, ) -> Result<MatchStatistcs, RuntimeError> {
+    game_manager::run_match(GameState::default(), players).await
 }
 
 #[tokio::main]
 async fn main() {
-    let client_one_path = "./target/release/test_client.exe".to_string();
-    let client_two_path = "./target/release/test_client.exe".to_string();
-    let time = 600;
-    let mut client_one = Client::from_path(client_one_path, time);
-    let mut client_two = Client::from_path(client_two_path, time);
-    let game_state = GameState::default();
+    let cli = Cli::parse();
 
-    client_one.set_time(time).await;
-    client_two.set_time(time).await;
+    let config_file = cli
+        .config
+        .unwrap_or_else(|| "default_config.toml".to_string());
 
-    let mut players: Vec<Box<dyn Player>> = vec![Box::new(client_one), Box::new(client_two)];
-    let stats = game_manager::run_match(game_state, &mut players)
-        .await
-        .unwrap();
-    println!("{:#?}", stats);
+    let builder = Config::builder()
+        .add_source(File::new(&config_file, FileFormat::Toml))
+        .build()
+        .expect("Failed to build config");
+
+    let app_config: AppConfig = builder
+        .try_deserialize()
+        .expect("Configuration file format error");
+
+    println!("{:#?}", app_config);
+
+    let mut players: Vec<PlayerConfig> = vec![
+        app_config.player_one,
+        app_config.player_two,
+    ];
+    if let Some(player) = app_config.player_three {
+        players.push(player);
+    }
+
+    if let Some(player) = app_config.player_four {
+        players.push(player);
+    }
+
+    if players.len() != NUM_PLAYERS {
+        panic!("Invalid number of players. Expected {}, got {}", NUM_PLAYERS, players.len());
+    }
+
+    let mut clients:Vec<Box<dyn Player>>  = Vec::new();
+    for player in players {
+        let mut client = Client::from_path(player.executable);
+        client.set_time(player.think_time).await;
+        clients.push(Box::new(client));
+    }
+
+    let player_combinations = player_combinations(NUM_PLAYERS);
+    // Set num_games to a multiple of the number of player combinations
+    let remainder = app_config.game.num_games % player_combinations.len() as u64;
+    let num_games = app_config.game.num_games - remainder;
+
+    let mut game_queue: Vec<Vec<usize>> = Vec::new();
+    for _ in 0..num_games / player_combinations.len() as u64 {
+        game_queue.extend(player_combinations.clone());
+    }
+
+    println!("Length of game queue: {}", game_queue.len());
+
+    let game_queue = SharedState::new(game_queue);
+
+}
+
+fn player_combinations(num_players: usize) -> Vec<Vec<usize>> {
+    fn permute(players: &mut Vec<usize>, start: usize, result: &mut Vec<Vec<usize>>) {
+        if start == players.len() {
+            result.push(players.clone());
+            return;
+        }
+        for i in start..players.len() {
+            players.swap(start, i);
+            permute(players, start + 1, result);
+            players.swap(start, i);
+        }
+    }
+
+    let mut players = (1..=num_players).collect::<Vec<_>>();
+    let mut result = Vec::new();
+    permute(&mut players, 0, &mut result);
+    result
 }

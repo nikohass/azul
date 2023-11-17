@@ -7,6 +7,9 @@ mod move_list;
 mod player;
 mod tile_color;
 mod wall;
+mod shared_state;
+
+pub use shared_state::SharedState;
 
 pub use error::RuntimeError;
 pub use factories::CENTER_FACTORY_INDEX;

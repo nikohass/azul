@@ -1,6 +1,6 @@
-use crate::{game_manager::Match, human_player::HumanPlayer, shared_state::SharedState};
+use crate::{game_manager::Match, human_player::HumanPlayer};
 use futures::{SinkExt, StreamExt};
-use game::Player;
+use game::{Player, SharedState};
 use player::random_player::RandomPlayer;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
