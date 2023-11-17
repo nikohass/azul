@@ -68,7 +68,7 @@ async fn main() {
     let mut mcts_player = MonteCarloTreeSearch::default();
 
     let mut is_game_over;
-    game_state.fill_factories();
+    // game_state.fill_factories();
     println!("{}", game_state);
     loop {
         game_state.check_integrity();

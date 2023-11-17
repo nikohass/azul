@@ -4,6 +4,8 @@ members = [
     "playground",
     "backend_server",
     "player",
+    "test_server",
+    "test_client",
 ]
 resolver = "2"
 

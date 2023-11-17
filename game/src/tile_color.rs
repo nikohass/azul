@@ -51,6 +51,19 @@ impl From<TileColor> for char {
     }
 }
 
+impl From<char> for TileColor {
+    fn from(color: char) -> Self {
+        match color {
+            'B' => Self::Blue,
+            'Y' => Self::Yellow,
+            'R' => Self::Red,
+            'K' => Self::Green,
+            'W' => Self::White,
+            _ => panic!("Invalid color: {}", color),
+        }
+    }
+}
+
 impl From<u8> for TileColor {
     fn from(color: u8) -> Self {
         match color {

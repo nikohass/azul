@@ -81,7 +81,7 @@ impl Match {
         let mut move_list = MoveList::default();
 
         let mut round = 0;
-        game_state.fill_factories(); // Fill the factories before every round
+        // game_state.fill_factories(); // Fill the factories before every round
         loop {
             game_state.check_integrity(); // Check the integrity of the game state. If it is not valid, panic and crash the tokio task
             send_game_state_update(game_state, &websocket); // Send the game state to the players

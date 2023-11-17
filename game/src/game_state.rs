@@ -778,7 +778,7 @@ impl GameState {
 
 impl Default for GameState {
     fn default() -> Self {
-        Self {
+        let mut ret = Self {
             bag: [20, 20, 20, 20, 20],
             out_of_bag: [0; NUM_TILE_COLORS],
             factories: [[0; NUM_TILE_COLORS]; NUM_FACTORIES],
@@ -791,7 +791,9 @@ impl Default for GameState {
             pattern_lines_colors: [[None; 5]; NUM_PLAYERS],
             rng: rand::rngs::SmallRng::from_entropy(),
             next_round_starting_player: None,
-        }
+        };
+        ret.fill_factories();
+        ret
     }
 }
 

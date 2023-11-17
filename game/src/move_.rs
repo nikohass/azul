@@ -8,6 +8,36 @@ pub struct Move {
     pub pattern: [u8; 6],
 }
 
+impl Move {
+    pub fn serialize_string(&self) -> String {
+        format!(
+            "{}{}{}",
+            self.take_from_factory_index,
+            char::from(self.color),
+            self.pattern
+                .iter()
+                .map(|&x| x.to_string())
+                .collect::<Vec<_>>()
+                .join("")
+        )
+    }
+
+    pub fn deserialize_string(string: &str) -> Self {
+        let mut chars = string.chars();
+        let take_from_factory_index = chars.next().unwrap().to_digit(10).unwrap() as u8;
+        let color = TileColor::from(chars.next().unwrap());
+        let mut pattern = [0; 6];
+        for p in pattern.iter_mut() {
+            *p = chars.next().unwrap().to_digit(10).unwrap() as u8;
+        }
+        Self {
+            take_from_factory_index,
+            color,
+            pattern,
+        }
+    }
+}
+
 impl std::fmt::Display for Move {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let factory = if self.take_from_factory_index == CENTER_FACTORY_INDEX as u8 {

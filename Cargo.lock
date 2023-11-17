@@ -1090,6 +1090,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "test_client"
+version = "0.1.0"
+dependencies = [
+ "game",
+ "player",
+ "tokio",
+]
+
+[[package]]
+name = "test_server"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "game",
+ "tokio",
+]
+
+[[package]]
 name = "thiserror"
 version = "1.0.50"
 source = "registry+https://github.com/rust-lang/crates.io-index"

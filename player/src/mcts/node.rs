@@ -404,7 +404,7 @@ impl Default for MonteCarloTreeSearch {
         Self {
             root_node: Node::default(),
             root_state: GameState::default(),
-            time_limit: Some(20_000),
+            time_limit: Some(1_900),
             iteration_limit: None,
         }
     }
