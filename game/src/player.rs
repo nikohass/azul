@@ -30,4 +30,5 @@ impl From<Player> for usize {
 pub trait PlayerTrait: Send + Sync {
     fn name(&self) -> &str;
     async fn get_move(&mut self, game_state: GameState) -> Move;
+    async fn notify_move(&mut self, _new_game_state: &GameState, _move_: Move) {}
 }

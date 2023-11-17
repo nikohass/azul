@@ -241,21 +241,55 @@ impl MonteCarloTreeSearch {
     }
 
     fn set_root(&mut self, game_state: &GameState) {
-        for child in &mut self.root_node.children {
-            let mut cloned_game_state = game_state.clone();
-            cloned_game_state.do_move(child.move_to_reach.unwrap());
+        // // let mut move_list = MoveList::default();
+        // // let mut game_state = game_state.clone();
+        // // game_state.get_possible_moves(&mut move_list);
+        // for child in &mut self.root_node.children {
+        //     let mut cloned_game_state = game_state.clone();
+        //     cloned_game_state.do_move(child.move_to_reach.unwrap());
+        //     cloned_game_state.get_possible_moves(&mut MoveList::default());
+        //     // println!("Comparing {} with {}", cloned_game_state.serialize_string(), game_state.serialize_string());
 
-            if cloned_game_state.serialize_string() == *game_state.serialize_string() {
-                // Take the node and replace it with a default node
-                let new_root_node = std::mem::take(child);
-                self.root_node = new_root_node;
-                self.root_state = cloned_game_state;
-                return;
-            }
+        let is_current_player_equal =
+            game_state.get_current_player() == self.root_state.get_current_player();
+        let is_next_round_starting_player_equal = game_state.get_next_round_starting_player()
+            == self.root_state.get_next_round_starting_player();
+        let is_pattern_line_equal =
+            game_state.get_pattern_lines_colors() == self.root_state.get_pattern_lines_colors();
+        let is_pattern_line_equal = is_pattern_line_equal
+            && game_state.get_pattern_lines_occupancy()
+                == self.root_state.get_pattern_lines_occupancy();
+        let is_bag_equal = game_state.get_bag() == self.root_state.get_bag();
+        let states_equal = is_current_player_equal
+            && is_next_round_starting_player_equal
+            && is_pattern_line_equal
+            && is_bag_equal;
+        //     println!("{} {} {} {}", is_current_player_equal, is_next_round_starting_player_equal, is_pattern_line_equal, is_bag_equal);
+
+        //     if is_current_player_equal && is_next_round_starting_player_equal && is_pattern_line_equal && is_bag_equal {
+        //         // Take the node and replace it with a default node
+        //         let new_root_node = std::mem::take(child);
+        //         self.root_node = new_root_node;
+        //         self.root_state = cloned_game_state;
+        //         return;
+        //     }
+        // }
+        // println!("Could not find the given game state in the tree. Falling back to the default root node.");
+        // self.root_node = Node::default();
+
+        // if !states_equal {
+        //     println!("WARNING: The given game state is not equal to the root node's game state.");
+        //     println!("ROOT:\n{}", self.root_state);
+        //     println!("GAME:\n{}", game_state);
+        // }
+
+        if self.root_node.children.is_empty() || !states_equal {
+            self.root_state = game_state.clone();
+            self.root_node = Node::default();
+            println!("Could not find the given game state in the tree. Falling back to the default root node.");
+        } else {
+            println!("Found the given game state in the tree. Setting it as root.");
         }
-        println!("Could not find the given game state in the tree. Falling back to the default root node.");
-        self.root_node = Node::default();
-        self.root_state = game_state.clone();
     }
 
     fn do_iterations(&mut self, n: usize, rng: &mut SmallRng) {
@@ -348,6 +382,21 @@ impl PlayerTrait for MonteCarloTreeSearch {
     async fn get_move(&mut self, game_state: GameState) -> Move {
         self.search_action(&game_state)
     }
+
+    async fn notify_move(&mut self, new_game_state: &GameState, move_: Move) {
+        for child in &mut self.root_node.children {
+            if child.move_to_reach.unwrap() == move_ {
+                let new_root_node = std::mem::take(child);
+                self.root_node = new_root_node;
+                self.root_state = new_game_state.clone();
+                println!("Found move in tree. Setting it as root.");
+                return;
+            }
+        }
+        println!("Could not find move in tree. Falling back to the default root node.");
+        self.root_node = Node::default();
+        self.root_state = new_game_state.clone();
+    }
 }
 
 impl Default for MonteCarloTreeSearch {
@@ -355,7 +404,7 @@ impl Default for MonteCarloTreeSearch {
         Self {
             root_node: Node::default(),
             root_state: GameState::default(),
-            time_limit: Some(10_000),
+            time_limit: Some(20_000),
             iteration_limit: None,
         }
     }

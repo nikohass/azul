@@ -151,20 +151,12 @@ impl GameState {
             .collect::<Vec<_>>()
             .join("-");
 
-        /*let scores = ((self.scores[0] + 1000) as usize)
-        | ((self.scores[1] + 1000) as usize) << 16
-        | ((self.scores[2] + 1000) as usize) << 32
-        | ((self.scores[3] + 1000) as usize) << 48;*/
         let mut scores = 0b0_u64;
         for (player_index, score) in self.scores.iter().enumerate() {
             let score = (*score + 1000) as u64;
             scores |= score << (player_index * 16);
         }
 
-        // let floor_line_progress = (self.floor_line_progress[0] as usize)
-        //     | (self.floor_line_progress[1] as usize) << 8
-        //     | (self.floor_line_progress[2] as usize) << 16
-        //     | (self.floor_line_progress[3] as usize) << 24;
         let mut floor_line_progress = 0b0_u64;
         for (player_index, progress) in self.floor_line_progress.iter().enumerate() {
             let progress = *progress as u64;
@@ -437,10 +429,6 @@ impl GameState {
                 .min(FLOOR_LINE_PENALTY.len() as u8 - 1)
                 as usize;
             let penalty = FLOOR_LINE_PENALTY[floor_line_progress];
-            // println!(
-            //     "Evaluate round: Player {} penalty: {} floor line progress: {}",
-            //     player_index, penalty, self.floor_line_progress[player_index]
-            // );
             score -= penalty as i16;
 
             self.scores[player_index] += score;
@@ -473,7 +461,6 @@ impl GameState {
             let complete_colors = wall::count_full_colors(*wall_occupancy);
             let score =
                 complete_rows as i16 * 2 + complete_colums as i16 * 7 + complete_colors as i16 * 10;
-            // println!("Player {} complete rows: {} complete columns: {} complete colors: {} additional score {}", player, complete_rows, complete_colums, complete_colors, score);
             self.scores[player] += score;
         }
     }
@@ -782,6 +769,11 @@ impl GameState {
             panic!("Game state is invalid");
         }
     }
+
+    // pub fn reconstruct_move_sequence(&mut self, past_state: &GameState, move_list: &mut MoveList) {
+    //     // Given two game states, reconstruct the move sequence that led from the past state to the current state
+
+    // }
 }
 
 impl Default for GameState {

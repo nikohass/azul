@@ -86,6 +86,8 @@ async fn main() {
             };
 
             game_state.do_move(move_);
+            random_player.notify_move(&game_state, move_).await;
+            mcts_player.notify_move(&game_state, move_).await;
             println!("{}", game_state);
         }
         if is_game_over {
