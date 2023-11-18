@@ -4,16 +4,16 @@ use crate::{GameState, Move, MoveList, Player, PlayerMarker, RuntimeError, NUM_P
 pub struct MatchStatistcs {
     pub num_turns: u32,
     pub num_factory_refills: u32,
-    pub num_moves: [u32; NUM_PLAYERS],
-    pub final_scores: [i16; NUM_PLAYERS],
     pub executed_moves: Vec<(GameState, PlayerMarker, Move, u64)>,
+    pub player_statistics: [PlayerStatistics; NUM_PLAYERS],
 }
 
-// #[derive(Debug, Clone)]
-// pub struct PlayerStatisics {
-//     marker: PlayerMarker,
-//     executed_moves: Vec<(GameState, Move, u64)>,
-// }
+#[derive(Debug, Clone, Default)]
+pub struct PlayerStatistics {
+    pub executed_moves: Vec<(GameState, Move, u64)>,
+    pub num_moves: u32,
+    pub final_score: i16,
+}
 
 pub async fn run_match(
     mut game_state: GameState,
@@ -29,7 +29,7 @@ pub async fn run_match(
 
     let mut move_list = MoveList::default();
     loop {
-        println!("{}", game_state);
+        // println!("{}", game_state);
         let (is_game_over, refilled_factories) = game_state.get_possible_moves(&mut move_list);
         if is_game_over {
             break;
@@ -62,8 +62,11 @@ pub async fn run_match(
             players_move,
             response_time,
         ));
+        stats.player_statistics[current_player]
+            .executed_moves
+            .push((game_state.clone(), players_move, response_time));
         game_state.do_move(players_move);
-        stats.num_moves[current_player] += 1;
+        stats.player_statistics[current_player].num_moves += 1;
 
         for player in players.iter_mut() {
             player.notify_move(&game_state, players_move).await;
@@ -71,11 +74,13 @@ pub async fn run_match(
 
         game_state.check_integrity()?;
     }
-    println!("{}", game_state);
+    // println!("{}", game_state);
 
     // The game is over, we can get the scores
     let scores: [i16; NUM_PLAYERS] = game_state.get_scores();
-    stats.final_scores = scores;
+    for (i, score) in scores.iter().enumerate() {
+        stats.player_statistics[i].final_score = *score;
+    }
 
     Ok(stats)
 }

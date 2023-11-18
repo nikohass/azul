@@ -12,8 +12,8 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn from_path(path: String) -> Self {
-        let mut process = Command::new(path.clone())
+    pub fn from_path(path: &str) -> Self {
+        let mut process = Command::new(path)
             // .args(&["--time", &time.to_string()])
             // .args(&["--test", "true"])
             .stdin(Stdio::piped())
@@ -22,7 +22,7 @@ impl Client {
             .spawn()
             .unwrap();
         Self {
-            path,
+            path: path.to_string(),
             stdin: Arc::new(Mutex::new(process.stdin.take().unwrap())),
             stdout: Arc::new(Mutex::new(process.stdout.take().unwrap())),
             child: Arc::new(Mutex::new(process)),
@@ -47,7 +47,7 @@ impl Player for Client {
     }
 
     async fn get_move(&mut self, game_state: &GameState) -> Move {
-        let name = self.name();
+        // let name = self.name();
         if self.did_panic() {
             panic!("Client panicked");
         }
@@ -58,7 +58,7 @@ impl Player for Client {
             .unwrap()
             .write_all(msg.as_bytes())
             .unwrap();
-        let start_time = Instant::now();
+        // let start_time = Instant::now();
         let mut stdout = self.stdout.lock().unwrap();
         let mut read = BufReader::new(&mut *stdout);
         let mut line = String::new();
@@ -73,7 +73,7 @@ impl Player for Client {
             }
             if !line.is_empty() {
                 line.pop();
-                println!("{}: {}", name, line);
+                // println!("{}: {}", name, line);
             }
             line.truncate(0);
             // let elapsed: u128 = start_time.elapsed().as_millis();
@@ -81,10 +81,10 @@ impl Player for Client {
             //     println!("warning: Client {} hard-timeout: {}ms", self.path, elapsed);
             // }
         }
-        let elapsed = start_time.elapsed().as_millis();
-        if elapsed as u64 > 1990 {
-            println!("warning: Client {} soft-timeout: {}ms", self.path, elapsed);
-        }
+        // let elapsed = start_time.elapsed().as_millis();
+        // if elapsed as u64 > 1990 {
+        //     println!("warning: Client {} soft-timeout: {}ms", self.path, elapsed);
+        // }
         line.pop();
         Move::deserialize_string(&line)
     }

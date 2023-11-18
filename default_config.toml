@@ -1,13 +1,12 @@
 
 [game]
-alternate_starting_player = true
 num_games = 100
-num_simultaneous_games = 4
+num_simultaneous_games = 7
 
 [player_one]
 executable = "./target/release/test_client.exe"
-think_time = 1600
+think_time = 1000
 
 [player_two]
-executable = "./target/release/test_client.exe"
-think_time = 600
+executable = "./clients/test_client-2.exe"
+think_time = 1000

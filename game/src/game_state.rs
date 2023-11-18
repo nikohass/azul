@@ -110,6 +110,10 @@ impl GameState {
         &self.walls
     }
 
+    pub fn get_wall_ocupancy(&self) -> [u32; NUM_PLAYERS] {
+        self.wall_occupancy
+    }
+
     pub fn get_pattern_lines_occupancy(&self) -> &[[u8; 5]; NUM_PLAYERS] {
         &self.pattern_lines_occupancy
     }
@@ -551,37 +555,48 @@ impl GameState {
 
     pub fn get_possible_moves(&mut self, move_list: &mut MoveList) -> (bool, bool) {
         // -> (is_game_over, did_fill_factories)
-        move_list.clear();
+        move_list.clear(); // Clear any remaining moves from the previous round
         let current_player: usize = self.current_player.into();
+
+        // Get the pattern lines of the current player, the moves will be placed in the pattern lines
         let player_pattern_lines: [u8; 5] = self.pattern_lines_occupancy[current_player];
         let player_pattern_line_colors: [Option<TileColor>; 5] =
             self.pattern_lines_colors[current_player];
 
+        // Iterate over all factory and all color combinations
         for (factory_index, factory) in self.factories.iter().enumerate() {
             for (color, number) in factory.iter().enumerate() {
                 if *number == 0 {
-                    continue;
+                    continue; // Skip the move gen if there are no tiles of this color in the factory
                 }
 
-                let mut remaining_space: [u8; 6] = [1, 2, 3, 4, 5, 255];
+                // TODO: Can we speed this up by moving it outside the loop, only setting the value to 0 if the color differs in the loop?
+
+                // We will use this to keep track of the remaining space in our pattern lines
+                let mut remaining_space: [u8; 6] = [1, 2, 3, 4, 5, 255]; // 255 is the floor line
                 for (pattern_line_index, number_of_tiles) in player_pattern_lines.iter().enumerate()
                 {
+                    // Subtract the number of tiles already in the pattern line from the total space
                     remaining_space[pattern_line_index] -= *number_of_tiles;
+
                     if let Some(existing_color) = player_pattern_line_colors[pattern_line_index] {
                         if color != usize::from(existing_color) {
+                            // If there are tiles of a different color in the patternline already, we can't put any more tiles in it, so we set the remaining space to 0
                             remaining_space[pattern_line_index] = 0;
                         }
                     } else {
-                        // Make sure the wall has space for the tiles
+                        // the pattern line did not have a color yet: We need to check whether we are allowed to place this color here
+                        // It is not possible to place a tile in a pattern line if the corresponding row in the wall is already full
                         let wall_mask = WALL_COLOR_MASKS[color];
                         let wall_occupancy = self.wall_occupancy[current_player];
-                        let row = wall::get_row_mask(pattern_line_index);
-                        if wall_occupancy & row & wall_mask > 0 {
+                        let row_mask: u32 = wall::get_row_mask(pattern_line_index);
+                        if wall_occupancy & row_mask & wall_mask > 0 {
                             remaining_space[pattern_line_index] = 0;
                         }
                     }
                 }
 
+                // TODO: Speed this up by not allocating a new vector every time
                 let mut possible_patterns = Vec::new();
                 find_tile_combinations(
                     *number,
