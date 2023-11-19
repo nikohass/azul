@@ -1,6 +1,6 @@
 
 [game]
-num_games = 1000
+num_games = 100
 num_simultaneous_games = 7
 
 [player_one]

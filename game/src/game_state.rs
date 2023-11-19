@@ -98,6 +98,18 @@ impl GameState {
         self.bag
     }
 
+    pub fn set_bag(&mut self, bag: [u8; NUM_TILE_COLORS]) {
+        self.bag = bag;
+    }
+
+    pub fn get_out_of_bag(&self) -> [u8; NUM_TILE_COLORS] {
+        self.out_of_bag
+    }
+
+    pub fn set_out_of_bag(&mut self, out_of_bag: [u8; NUM_TILE_COLORS]) {
+        self.out_of_bag = out_of_bag;
+    }
+
     pub fn get_factories(&self) -> &[[u8; NUM_TILE_COLORS]; NUM_FACTORIES] {
         &self.factories
     }
