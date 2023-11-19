@@ -10,7 +10,7 @@ mod tile_color;
 pub mod wall;
 
 pub use error::RuntimeError;
-pub use factories::CENTER_FACTORY_INDEX;
+pub use factories::{CENTER_FACTORY_INDEX, NUM_FACTORIES};
 pub use game_state::GameState;
 pub use game_state::{FLOOR_LINE_PENALTY, NUM_PLAYERS};
 pub use move_::Move;

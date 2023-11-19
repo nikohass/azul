@@ -102,6 +102,10 @@ impl GameState {
         &self.factories
     }
 
+    pub fn set_factories(&mut self, factories: [[u8; NUM_TILE_COLORS]; NUM_FACTORIES]) {
+        self.factories = factories;
+    }
+
     pub fn get_floor_line_progress(&self) -> [u8; NUM_PLAYERS] {
         self.floor_line_progress
     }

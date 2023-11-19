@@ -9,6 +9,12 @@ pub struct Move {
 }
 
 impl Move {
+    pub const DUMMY: Self = Self {
+        take_from_factory_index: 0,
+        color: TileColor::Red,
+        pattern: [255; 6],
+    };
+
     pub fn serialize_string(&self) -> String {
         format!(
             "{}{}{}",

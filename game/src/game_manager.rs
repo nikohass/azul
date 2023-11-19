@@ -29,7 +29,7 @@ pub async fn run_match(
 
     let mut move_list = MoveList::default();
     loop {
-        // println!("{}", game_state);
+        println!("{}", game_state);
         let (is_game_over, refilled_factories) = game_state.get_possible_moves(&mut move_list);
         if is_game_over {
             break;
@@ -74,7 +74,7 @@ pub async fn run_match(
 
         game_state.check_integrity()?;
     }
-    // println!("{}", game_state);
+    println!("{}", game_state);
 
     // The game is over, we can get the scores
     let scores: [i16; NUM_PLAYERS] = game_state.get_scores();

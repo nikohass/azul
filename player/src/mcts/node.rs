@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use game::{GameState, Move, MoveList, Player};
+use game::{GameState, Move, MoveList, Player, NUM_FACTORIES, NUM_TILE_COLORS};
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 
 const C: f32 = 0.0;
@@ -15,6 +15,11 @@ pub struct Node {
     pub q: f32,
     pub is_game_over: bool,
     pub refill_factories: bool,
+}
+
+pub struct ProbabilisticNode {
+    pub expanded_children: Vec<(Node, [[u8; NUM_TILE_COLORS]; NUM_FACTORIES])>, // (Node, factories)
+    pub move_to_reach: Option<Move>,
 }
 
 impl Default for Node {
@@ -204,7 +209,7 @@ impl Node {
 //     }
 // }
 
-fn playout(game_state: &mut GameState, rng: &mut SmallRng, move_list: &mut MoveList) -> f32 {
+pub fn playout(game_state: &mut GameState, rng: &mut SmallRng, move_list: &mut MoveList) -> f32 {
     loop {
         match get_random_move(game_state, rng, move_list) {
             None => {
@@ -418,7 +423,7 @@ impl Default for MonteCarloTreeSearch {
 
 // }
 
-fn get_random_move(
+pub fn get_random_move(
     game_state: &mut GameState,
     rng: &mut SmallRng,
     move_list: &mut MoveList,
