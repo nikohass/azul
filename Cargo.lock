@@ -1377,6 +1377,7 @@ dependencies = [
  "clap",
  "config",
  "game",
+ "rand",
  "serde",
  "tokio",
 ]

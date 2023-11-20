@@ -1,5 +1,5 @@
 use game::{GameState, Move, Player as _};
-use player::mcts::node2::MonteCarloTreeSearch as Player;
+use player::mcts::node::MonteCarloTreeSearch as Player;
 
 #[tokio::main]
 async fn main() {

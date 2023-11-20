@@ -2,6 +2,7 @@ use std::vec;
 
 use clap::Parser;
 use config::{Config, File, FileFormat};
+use rand::{rngs::SmallRng, SeedableRng};
 use serde::Deserialize;
 
 mod client;
@@ -41,7 +42,7 @@ struct AppConfig {
 }
 
 async fn run_match(players: &mut Vec<Box<dyn Player>>) -> Result<MatchStatistcs, RuntimeError> {
-    game_manager::run_match(GameState::default(), players).await
+    game_manager::run_match(GameState::new(&mut SmallRng::from_entropy()), players).await
 }
 
 #[tokio::main]

@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use game::{GameState, Move, MoveList, Player, TileColor, NUM_FACTORIES, NUM_TILE_COLORS};
-use rand::{rngs::SmallRng, SeedableRng};
+use rand::{rngs::SmallRng, Rng, SeedableRng};
 
 #[derive(Debug, Clone, Default, Copy)] // TODO: Default just for swapping root
 struct ProbabilisticOutcome {
@@ -140,13 +140,18 @@ impl Node {
         &mut self.children[best_child_index]
     }
 
+    fn probabilistic_child_with_max_uct_value(&mut self, rng: &mut SmallRng) -> &mut Node {
+        let num_children = self.children.len();
+        &mut self.children[rng.gen_range(0..num_children)]
+    }
+
     fn backpropagate(&mut self, value: f32) {
         self.n += 1.;
         self.q += value;
     }
 
-    fn expand(&mut self, game_state: &mut GameState, move_list: &mut MoveList) {
-        let (is_game_over, probabilistic_event) = game_state.get_possible_moves(move_list);
+    fn expand(&mut self, game_state: &mut GameState, move_list: &mut MoveList, rng: &mut SmallRng) {
+        let (is_game_over, probabilistic_event) = game_state.get_possible_moves(move_list, rng);
         self.is_game_over = is_game_over;
 
         if is_game_over {
@@ -162,16 +167,16 @@ impl Node {
         if probabilistic_event {
             // // If we have a probabilistic event, create a child for this outcome.
             // // We do not expand all possible outcomes, because that would be too expensive.
-            // let outcome = ProbabilisticOutcome {
-            //     factories: *game_state.get_factories(),
-            //     out_of_bag: game_state.get_out_of_bag(),
-            //     bag: game_state.get_bag(),
-            // };
-            // let mut child = Node::new_probabilistic(outcome);
-            // self.has_probabilistic_children = true;
-            // // We have already generated the moves for this outcome, so we can just copy them over
-            // child.children.append(&mut children);
-            // self.children.push(child);
+            let outcome = ProbabilisticOutcome {
+                factories: *game_state.get_factories(),
+                out_of_bag: game_state.get_out_of_bag(),
+                bag: game_state.get_bag(),
+            };
+            let mut child = Node::new_probabilistic(outcome);
+            self.has_probabilistic_children = true;
+            // We have already generated the moves for this outcome, so we can just copy them over
+            child.children.append(&mut children);
+            self.children.push(child);
         } else {
             // Otherwise, just add the children we generated
             std::mem::swap(&mut self.children, &mut children);
@@ -196,46 +201,48 @@ impl Node {
             // If we expand a new child every time we iterate this node, we would never visit the same child twice. This would cause our estimations of the value of the child to be very inaccurate.
 
             // // Let's just try this:
-            // let desired_number_of_children = self.n.sqrt().ceil() as usize;
-            // if desired_number_of_children > self.children.len() {
-            //     // println!(
-            //     //     "Expanding a new child. Desired number of children: {}",
-            //     //     desired_number_of_children
-            //     // );
-            //     // We will expand a new child
-            //     let mut game_state_clone = game_state.clone(); // Clone here because we don't want to modify the game state
-            //     let (_is_game_over, probabilistic_event) =
-            //         game_state_clone.get_possible_moves(move_list);
-            //     assert!(probabilistic_event); // A probabilistic event must have happened, otherwise we wouldn't have any probabilistic children
+            let desired_number_of_children = self.n.sqrt().ceil() as usize;
+            if desired_number_of_children > self.children.len() {
+                // println!(
+                //     "Expanding a new child. Desired number of children: {}",
+                //     desired_number_of_children
+                // );
+                // We will expand a new child
+                let mut game_state_clone = game_state.clone(); // Clone here because we don't want to modify the game state
+                                                               // let (_is_game_over, probabilistic_event) =
+                                                               //     game_state_clone.get_possible_moves(move_list);
 
-            //     // Create a child for each possible move
-            //     let mut children: Vec<Node> = Vec::with_capacity(move_list.len());
-            //     for i in 0..move_list.len() {
-            //         children.push(Node::new_deterministic(move_list[i]))
-            //     }
+                game_state_clone.fill_factories(rng);
+                // assert!(probabilistic_event); // A probabilistic event must have happened, otherwise we wouldn't have any probabilistic children
 
-            //     let outcome = ProbabilisticOutcome {
-            //         factories: *game_state_clone.get_factories(),
-            //         out_of_bag: game_state_clone.get_out_of_bag(),
-            //         bag: game_state_clone.get_bag(),
-            //     };
-            //     let mut child = Node::new_probabilistic(outcome);
-            //     // self.has_probabilistic_children = true;
-            //     child.children.append(&mut children);
-            //     self.children.push(child);
-            // }
-            let result = playout(&mut game_state.clone(), rng, move_list);
-            let delta = if u8::from(game_state.get_current_player()) == 0 {
-                1. - result
-            } else {
-                result
-            };
-            self.backpropagate(delta);
-            return 1. - delta;
+                // Create a child for each possible move
+                let mut children: Vec<Node> = Vec::with_capacity(move_list.len());
+                for i in 0..move_list.len() {
+                    children.push(Node::new_deterministic(move_list[i]))
+                }
+
+                let outcome = ProbabilisticOutcome {
+                    factories: *game_state_clone.get_factories(),
+                    out_of_bag: game_state_clone.get_out_of_bag(),
+                    bag: game_state_clone.get_bag(),
+                };
+                let mut child = Node::new_probabilistic(outcome);
+                // self.has_probabilistic_children = true;
+                child.children.append(&mut children);
+                self.children.push(child);
+            }
+            // let result: f32 = playout(&mut game_state.clone(), rng, move_list);
+            // let delta = if u8::from(game_state.get_current_player()) == 0 {
+            //     1. - result
+            // } else {
+            //     result
+            // };
+            // self.backpropagate(delta);
+            // return 1. - delta;
         }
 
         let delta = if self.children.is_empty() {
-            self.expand(game_state, move_list);
+            self.expand(game_state, move_list, rng);
             if !self.is_game_over {
                 let playout_result = playout(&mut game_state.clone(), rng, move_list); // Playout returns 1 if player 1 wins, 0 if player 2 wins, and 0.5 if it's a draw
                 if current_player == 0 {
@@ -257,7 +264,11 @@ impl Node {
                 self.q / self.n
             }
         } else {
-            let next_child: &mut Node = self.child_with_max_uct_value(is_root);
+            let next_child: &mut Node = if !self.has_probabilistic_children {
+                self.child_with_max_uct_value(is_root)
+            } else {
+                self.probabilistic_child_with_max_uct_value(rng)
+            };
             match next_child.previous_event {
                 Event::Deterministic(move_) => {
                     game_state.do_move(move_);
@@ -468,9 +479,10 @@ impl MonteCarloTreeSearch {
 
 impl Default for MonteCarloTreeSearch {
     fn default() -> Self {
+        let mut rng = SmallRng::from_entropy();
         Self {
             root_node: Node::new_deterministic(Move::DUMMY),
-            root_game_state: GameState::default(),
+            root_game_state: GameState::new(&mut rng),
             time_limit: 1000,
         }
     }
@@ -487,6 +499,7 @@ impl Player for MonteCarloTreeSearch {
     }
 
     async fn notify_move(&mut self, new_game_state: &GameState, move_: Move) {
+        let mut invalid = false;
         for child in &mut self.root_node.children {
             match child.previous_event.clone() {
                 Event::Deterministic(child_move) => {
@@ -501,10 +514,16 @@ impl Player for MonteCarloTreeSearch {
                     }
                 }
                 Event::Probabilistic(_) => {
-                    let mut move_list = MoveList::default();
-                    self.root_game_state.get_possible_moves(&mut move_list); // Get all possible moves to trigger the refilling of the factories
+                    invalid = true;
+                    // let mut move_list = MoveList::default();
+                    // self.root_node = Node::new_deterministic(Move::DUMMY); // Assuming a new method for creating a Node
+                    // self.root_game_state.get_possible_moves(&mut move_list, rng);
+                    // Get all possible moves to trigger the refilling of the factories
                 }
             }
+        }
+        if invalid {
+            self.root_node = Node::new_deterministic(Move::DUMMY); // Assuming a new method for creating a Node
         }
         self.root_game_state = new_game_state.clone();
     }

@@ -1,3 +1,5 @@
+use rand::{rngs::SmallRng, SeedableRng};
+
 use crate::{GameState, Move, MoveList, Player, PlayerMarker, RuntimeError, NUM_PLAYERS};
 
 #[derive(Default, Debug, Clone)]
@@ -28,9 +30,11 @@ pub async fn run_match(
     let mut stats = MatchStatistcs::default();
 
     let mut move_list = MoveList::default();
+    let mut rng = SmallRng::from_entropy();
     loop {
         println!("{}", game_state);
-        let (is_game_over, refilled_factories) = game_state.get_possible_moves(&mut move_list);
+        let (is_game_over, refilled_factories) =
+            game_state.get_possible_moves(&mut move_list, &mut rng);
         if is_game_over {
             break;
         }

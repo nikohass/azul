@@ -1,4 +1,5 @@
 use game::{MoveList, Player};
+use rand::{rngs::SmallRng, SeedableRng};
 
 pub struct GreedyPlayer {
     name: String,
@@ -20,7 +21,7 @@ impl Player for GreedyPlayer {
 
     async fn get_move(&mut self, game_state: &game::GameState) -> game::Move {
         let mut game_state = game_state.clone();
-        game_state.get_possible_moves(&mut self.move_list);
+        game_state.get_possible_moves(&mut self.move_list, &mut SmallRng::from_entropy());
         let mut best_move = self.move_list[0];
         let mut best_score = -1000;
         let me = usize::from(game_state.get_current_player());
