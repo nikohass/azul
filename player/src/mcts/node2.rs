@@ -204,14 +204,24 @@ impl Node {
         is_root: bool,
     ) -> f32 {
         let current_player = u8::from(game_state.get_current_player());
+        let mut invert_delta = false;
 
         if self.has_probabilistic_children {
+            invert_delta = true; // This node doesnt change the current player, so we need to invert the delta
+
             // All children of this node are probabilistic. When this node was "expanded", we only expanded one probabilistic outcome.
             // There would be too many possible outcomes to expand all of them, so we just expanded one.
             // Now we need to adjust for this and dynamically expand the other outcomes.
             // Here we also need to balance exploration and exploitation.
             // If we only visit the only child and never expand further, our strategy will be quite bad because we basically assume that the probabilistic event will always happen.
             // If we expand a new child every time we iterate this node, we would never visit the same child twice. This would cause our estimations of the value of the child to be very inaccurate.
+
+            let next_round_starting_player = game_state.get_next_round_starting_player();
+            let next_round_starting_player = u8::from(next_round_starting_player);
+            if next_round_starting_player != current_player {
+                // The next round will start with the other player, so we need to invert the delta
+                invert_delta = !invert_delta;
+            }
 
             // Let's just try this:
             let desired_number_of_children = self.n.sqrt().ceil() as usize;
@@ -292,6 +302,12 @@ impl Node {
                 }
             }
             next_child.iteration(game_state, move_list, rng, false)
+        };
+
+        let delta = if invert_delta {
+            1. - delta
+        } else {
+            delta
         };
 
         self.backpropagate(delta);
