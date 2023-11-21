@@ -12,8 +12,11 @@ struct ProbabilisticOutcome {
 
 impl ProbabilisticOutcome {
     pub fn apply_to_game_state(&self, game_state: &mut GameState) {
+        let orig = game_state.clone();
         // Before each factory refill, the last round ends, so evaluate the round
         game_state.evaluate_round();
+        let orig_out_of_bag = game_state.get_out_of_bag();
+        let after_eval = game_state.clone();
 
         // Overwrite the factories with the outcome of the event
         game_state.set_factories(self.factories);
@@ -23,6 +26,16 @@ impl ProbabilisticOutcome {
 
         // For debugging purposes, check the integrity of the game state
         if game_state.check_integrity().is_err() {
+            println!("Original game state:");
+            println!("{}", orig);
+            println!("After evaluation:");
+            println!("{:?}", orig_out_of_bag);
+            println!("{}", after_eval);
+            println!("Probabilistic outcome:");
+            println!("{:?}", game_state.get_out_of_bag());
+            println!("{}", game_state);
+
+            println!("Out of bag would have been {:?}", self.out_of_bag);
             panic!("Probabilistic outcome was applied to an invalid game state.");
         }
     }
@@ -165,8 +178,8 @@ impl Node {
         }
 
         if probabilistic_event {
-            // // If we have a probabilistic event, create a child for this outcome.
-            // // We do not expand all possible outcomes, because that would be too expensive.
+            // If we have a probabilistic event, create a child for this outcome.
+            // We do not expand all possible outcomes, because that would be too expensive.
             let outcome = ProbabilisticOutcome {
                 factories: *game_state.get_factories(),
                 out_of_bag: game_state.get_out_of_bag(),
@@ -200,7 +213,7 @@ impl Node {
             // If we only visit the only child and never expand further, our strategy will be quite bad because we basically assume that the probabilistic event will always happen.
             // If we expand a new child every time we iterate this node, we would never visit the same child twice. This would cause our estimations of the value of the child to be very inaccurate.
 
-            // // Let's just try this:
+            // Let's just try this:
             let desired_number_of_children = self.n.sqrt().ceil() as usize;
             if desired_number_of_children > self.children.len() {
                 // println!(
@@ -209,11 +222,10 @@ impl Node {
                 // );
                 // We will expand a new child
                 let mut game_state_clone = game_state.clone(); // Clone here because we don't want to modify the game state
-                                                               // let (_is_game_over, probabilistic_event) =
-                                                               //     game_state_clone.get_possible_moves(move_list);
+                let (_is_game_over, probabilistic_event) =
+                    game_state_clone.get_possible_moves(move_list, rng);
 
-                game_state_clone.fill_factories(rng);
-                // assert!(probabilistic_event); // A probabilistic event must have happened, otherwise we wouldn't have any probabilistic children
+                assert!(probabilistic_event); // A probabilistic event must have happened, otherwise we wouldn't have any probabilistic children
 
                 // Create a child for each possible move
                 let mut children: Vec<Node> = Vec::with_capacity(move_list.len());
@@ -432,7 +444,7 @@ impl MonteCarloTreeSearch {
             self.root_node
                 .build_pv(&mut self.root_game_state.clone(), &mut pv);
 
-            let time_left = self.time_limit - start_time.elapsed().as_millis() as u64;
+            let time_left: i64 = self.time_limit as i64 - start_time.elapsed().as_millis() as i64;
 
             println!(
                 "{:6}ms {:5} {:10} {:4.0}% {}",
@@ -516,8 +528,9 @@ impl Player for MonteCarloTreeSearch {
                 Event::Probabilistic(_) => {
                     invalid = true;
                     // let mut move_list = MoveList::default();
-                    // self.root_node = Node::new_deterministic(Move::DUMMY); // Assuming a new method for creating a Node
-                    // self.root_game_state.get_possible_moves(&mut move_list, rng);
+                    // let mut rng = SmallRng::from_entropy();
+                    // // self.root_node = Node::new_deterministic(Move::DUMMY); // Assuming a new method for creating a Node
+                    // self.root_game_state.get_possible_moves(&mut move_list, &mut rng);
                     // Get all possible moves to trigger the refilling of the factories
                 }
             }

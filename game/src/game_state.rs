@@ -57,7 +57,9 @@ pub struct GameState {
 
     current_player: PlayerMarker,
 
-    next_round_starting_player: Option<PlayerMarker>,
+    next_round_starting_player: PlayerMarker,
+
+    tile_taken_from_center: bool,
 }
 
 impl std::fmt::Debug for GameState {
@@ -71,7 +73,7 @@ impl GameState {
         self.current_player
     }
 
-    pub fn get_next_round_starting_player(&self) -> Option<PlayerMarker> {
+    pub fn get_next_round_starting_player(&self) -> PlayerMarker {
         self.next_round_starting_player
     }
 
@@ -218,13 +220,10 @@ impl GameState {
             .collect::<Vec<_>>()
             .join("-");
 
-        let next_round_starting_player = match self.next_round_starting_player {
-            None => 255,
-            Some(player) => usize::from(player),
-        };
+        let next_round_starting_player = usize::from(self.next_round_starting_player);
 
         format!(
-            "{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}",
+            "{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}",
             number_of_players,
             usize::from(self.current_player),
             next_round_starting_player,
@@ -236,6 +235,7 @@ impl GameState {
             walls_string,
             pattern_line_string,
             pattern_line_colors_string,
+            self.tile_taken_from_center as u8
         )
     }
 
@@ -263,11 +263,7 @@ impl GameState {
         let next_round_starting_player = next_round_starting_player
             .parse::<u8>()
             .map_err(|_| "Invalid next round starting player")?;
-        let next_round_starting_player = if next_round_starting_player == 255 {
-            None
-        } else {
-            Some(PlayerMarker::new(next_round_starting_player))
-        };
+        let next_round_starting_player = PlayerMarker::new(next_round_starting_player);
 
         let bag_binary = entries.get(3).ok_or("No bag")?;
         let bag_binary = bag_binary.parse::<usize>().map_err(|_| "Invalid bag")?;
@@ -380,6 +376,12 @@ impl GameState {
             }
         }
 
+        let tile_taken_from_center = entries.get(11).ok_or("No tile taken from center")?;
+        let tile_taken_from_center = tile_taken_from_center
+            .parse::<u8>()
+            .map_err(|_| "Invalid tile taken from center")?;
+        let tile_taken_from_center = tile_taken_from_center == 1;
+
         println!("Bag: {:?}", bag);
         println!("Out of bag: {:?}", out_of_bag);
 
@@ -395,6 +397,7 @@ impl GameState {
             pattern_lines_occupancy,
             pattern_lines_colors,
             next_round_starting_player,
+            tile_taken_from_center
         })
     }
 
@@ -412,6 +415,14 @@ impl GameState {
                     continue;
                 }
                 let row_mask = wall::get_row_mask(pattern_line_index);
+
+                if self.pattern_lines_colors[player_index][pattern_line_index].is_none() {
+                    // If the pattern line is empty, we can't place a tile in it
+                    println!("{}", self);
+                    println!("Player {} pattern line {} is empty", player_index, pattern_line_index);
+                    panic!("Player {} pattern line {} is empty", player_index, pattern_line_index)
+                }
+
                 let pattern_line_color =
                     self.pattern_lines_colors[player_index][pattern_line_index].unwrap(); // Must be Some because the pattern line is full
                 let color_mask = wall::WALL_COLOR_MASKS[pattern_line_color as usize];
@@ -454,8 +465,8 @@ impl GameState {
             }
         }
 
-        self.current_player = self.next_round_starting_player.unwrap(); // Must be Some because the round is over
-        self.next_round_starting_player = None;
+        self.current_player = self.next_round_starting_player; // Must be Some because the round is over
+        self.tile_taken_from_center = false;
 
         if is_game_over {
             self.evaluate_end_of_game();
@@ -486,10 +497,11 @@ impl GameState {
             // If we took tiles from the center, we only remove the color we took
             self.factories[take_from_factory_index][color] = 0;
             // If we are the first player to take tiles from the center in this round, we become the starting player for the next round
-            if self.next_round_starting_player.is_none() {
-                self.next_round_starting_player = Some(self.current_player);
+            if !self.tile_taken_from_center {
+                self.next_round_starting_player = self.current_player;
                 // Floor line progress + 1
                 self.floor_line_progress[current_player] += 1;
+                self.tile_taken_from_center = true;
             }
         } else {
             // Only put the tiles in the center if we are not taking from the center
@@ -816,7 +828,8 @@ impl GameState {
             current_player: PlayerMarker::new(0),
             pattern_lines_occupancy: [[0; 5]; NUM_PLAYERS],
             pattern_lines_colors: [[None; 5]; NUM_PLAYERS],
-            next_round_starting_player: None,
+            next_round_starting_player: PlayerMarker::new(0),
+            tile_taken_from_center: false,
         };
         ret.fill_factories(rng);
         ret
