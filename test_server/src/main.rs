@@ -24,6 +24,7 @@ struct Cli {
 struct GameConfig {
     pub num_games: u64,
     pub num_simultaneous_games: u64,
+    pub verbose: bool,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -41,8 +42,16 @@ struct AppConfig {
     pub player_four: Option<PlayerConfig>,
 }
 
-async fn run_match(players: &mut Vec<Box<dyn Player>>) -> Result<MatchStatistcs, RuntimeError> {
-    game_manager::run_match(GameState::new(&mut SmallRng::from_entropy()), players).await
+async fn run_match(
+    players: &mut Vec<Box<dyn Player>>,
+    verbose: bool,
+) -> Result<MatchStatistcs, RuntimeError> {
+    game_manager::run_match(
+        GameState::new(&mut SmallRng::from_entropy()),
+        players,
+        verbose,
+    )
+    .await
 }
 
 #[tokio::main]
@@ -96,6 +105,8 @@ async fn main() {
     let game_queue = SharedState::new(game_queue);
     let game_results: SharedState<Vec<MatchStatistcs>> = SharedState::new(Vec::new());
 
+    let verbose = app_config.game.verbose;
+
     let mut handles = Vec::new();
     for _ in 0..app_config.game.num_simultaneous_games {
         let game_queue_clone = game_queue.clone();
@@ -116,12 +127,12 @@ async fn main() {
 
                 let mut ordered_clients: Vec<Box<dyn Player>> = Vec::new();
                 for &i in &next_order {
-                    let mut client = Client::from_path(&players_clone[i - 1].executable);
+                    let mut client = Client::from_path(&players_clone[i - 1].executable, verbose);
                     client.set_time(players_clone[i - 1].think_time).await;
                     ordered_clients.push(Box::new(client));
                 }
 
-                let stats = run_match(&mut ordered_clients).await;
+                let stats = run_match(&mut ordered_clients, verbose).await;
                 let mut stats = match stats {
                     Ok(stats) => stats,
                     Err(e) => {

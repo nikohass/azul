@@ -2,17 +2,17 @@ use game::{GameState, Move, Player};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
 
 pub struct Client {
     pub path: String,
     pub stdin: Arc<Mutex<ChildStdin>>,
     pub stdout: Arc<Mutex<ChildStdout>>,
     pub child: Arc<Mutex<Child>>,
+    pub verbose: bool,
 }
 
 impl Client {
-    pub fn from_path(path: &str) -> Self {
+    pub fn from_path(path: &str, verbose: bool) -> Self {
         let mut process = Command::new(path)
             // .args(&["--time", &time.to_string()])
             // .args(&["--test", "true"])
@@ -26,6 +26,7 @@ impl Client {
             stdin: Arc::new(Mutex::new(process.stdin.take().unwrap())),
             stdout: Arc::new(Mutex::new(process.stdout.take().unwrap())),
             child: Arc::new(Mutex::new(process)),
+            verbose,
         }
     }
 
@@ -73,7 +74,9 @@ impl Player for Client {
             }
             if !line.is_empty() {
                 line.pop();
-                // println!("{}: {}", name, line);
+                if self.verbose {
+                    println!("{}: {}", self.path, line);
+                }
             }
             line.truncate(0);
             // let elapsed: u128 = start_time.elapsed().as_millis();

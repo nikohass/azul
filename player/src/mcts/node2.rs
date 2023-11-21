@@ -224,7 +224,7 @@ impl Node {
             }
 
             // Let's just try this:
-            let desired_number_of_children = self.n.sqrt().ceil() as usize;
+            let desired_number_of_children = self.n.sqrt().ceil() as usize / 2;
             if desired_number_of_children > self.children.len() {
                 // println!(
                 //     "Expanding a new child. Desired number of children: {}",
@@ -304,11 +304,7 @@ impl Node {
             next_child.iteration(game_state, move_list, rng, false)
         };
 
-        let delta = if invert_delta {
-            1. - delta
-        } else {
-            delta
-        };
+        let delta = if invert_delta { 1. - delta } else { delta };
 
         self.backpropagate(delta);
 
@@ -511,7 +507,7 @@ impl Default for MonteCarloTreeSearch {
         Self {
             root_node: Node::new_deterministic(Move::DUMMY),
             root_game_state: GameState::new(&mut rng),
-            time_limit: 1000,
+            time_limit: 7000,
         }
     }
 }

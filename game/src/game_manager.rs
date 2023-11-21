@@ -20,6 +20,7 @@ pub struct PlayerStatistics {
 pub async fn run_match(
     mut game_state: GameState,
     players: &mut Vec<Box<dyn Player>>,
+    verbose: bool,
 ) -> Result<MatchStatistcs, RuntimeError> {
     let num_players = players.len();
     if num_players != NUM_PLAYERS {
@@ -32,11 +33,17 @@ pub async fn run_match(
     let mut move_list = MoveList::default();
     let mut rng = SmallRng::from_entropy();
     loop {
-        println!("{}", game_state);
+        if verbose {
+            println!("{}", game_state);
+        }
         let (is_game_over, refilled_factories) =
             game_state.get_possible_moves(&mut move_list, &mut rng);
         if is_game_over {
             break;
+        }
+        if refilled_factories && verbose {
+            println!("Factories refilled");
+            println!("{}", game_state);
         }
         stats.num_factory_refills += refilled_factories as u32;
         stats.num_turns += 1;
@@ -78,7 +85,9 @@ pub async fn run_match(
 
         game_state.check_integrity()?;
     }
-    println!("{}", game_state);
+    if verbose {
+        println!("{}", game_state);
+    }
 
     // The game is over, we can get the scores
     let scores: [i16; NUM_PLAYERS] = game_state.get_scores();

@@ -75,7 +75,7 @@ async fn main() {
     player_two.set_time(800).await;
 
     let mut players: Vec<Box<dyn Player>> = vec![Box::new(player_one), Box::new(player_two)];
-    let _stats = game_manager::run_match(game_state, &mut players)
+    let _stats = game_manager::run_match(game_state, &mut players, true)
         .await
         .unwrap();
     // println!("{:#?}", stats);

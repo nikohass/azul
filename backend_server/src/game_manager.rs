@@ -3,6 +3,7 @@ use game::{
     GameState, MoveList, Player, SharedState, TileColor, CENTER_FACTORY_INDEX, FLOOR_LINE_PENALTY,
     NUM_PLAYERS, NUM_TILE_COLORS,
 };
+use rand::{rngs::SmallRng, SeedableRng};
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -25,7 +26,8 @@ pub struct Match {
 
 impl Match {
     pub async fn new_with_players(players: Vec<Box<dyn Player>>) -> SharedState<Match> {
-        let game_state = GameState::default();
+        let mut rng = SmallRng::from_entropy();
+        let game_state = GameState::new(&mut rng);
         let id = Uuid::new_v4().to_string();
         let game_manager = Self {
             id: id.clone(),
@@ -76,7 +78,7 @@ impl Match {
     pub async fn start_match(&mut self, websocket: WebSocketConnection) {
         let game_state = &mut self.game_state;
         let mut move_list = MoveList::default();
-
+        let mut rng = SmallRng::from_entropy();
         let mut round = 0;
         // game_state.fill_factories(); // Fill the factories before every round
         loop {
@@ -86,7 +88,7 @@ impl Match {
             println!("{}", game_state);
             let mut is_game_over;
             loop {
-                is_game_over = game_state.get_possible_moves(&mut move_list).0;
+                is_game_over = game_state.get_possible_moves(&mut move_list, &mut rng).0;
                 if is_game_over {
                     // If there are no legal moves we end the game
                     break;
@@ -191,7 +193,7 @@ pub fn game_state_to_json(game_state: &GameState) -> serde_json::Value {
         "factories": factories_json,
         "players": players,
         "current_player": usize::from(game_state.get_current_player()),
-        "next_round_starting_player": game_state.get_next_round_starting_player().map(usize::from),
+        "next_round_starting_player": usize::from(game_state.get_next_round_starting_player()),
     });
     ret
 }
