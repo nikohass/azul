@@ -31,3 +31,9 @@ impl Player for RandomPlayer {
         self.move_list[self.rng.gen_range(0..self.move_list.len())]
     }
 }
+
+impl Default for RandomPlayer {
+    fn default() -> Self {
+        Self::new("RandomPlayer".to_string())
+    }
+}

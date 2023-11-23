@@ -525,6 +525,7 @@ dependencies = [
  "async-mutex",
  "async-trait",
  "rand",
+ "tokio",
 ]
 
 [[package]]
