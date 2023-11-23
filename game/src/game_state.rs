@@ -5,7 +5,7 @@ use crate::player::PlayerMarker;
 use crate::tile_color::{TileColor, NUM_TILE_COLORS};
 use crate::wall::{self, WALL_COLOR_MASKS};
 use crate::RuntimeError;
-use rand::SeedableRng;
+use rand::rngs::SmallRng;
 use std::fmt::Write;
 
 pub const NUM_PLAYERS: usize = 2;
@@ -45,7 +45,6 @@ pub struct GameState {
     bag: [u8; NUM_TILE_COLORS], // For each color, how many tiles are left in the bag
     out_of_bag: [u8; NUM_TILE_COLORS],
     factories: [[u8; NUM_TILE_COLORS]; NUM_FACTORIES], // For each factory, how many tiles of each color are in it (including the center)
-    rng: rand::rngs::SmallRng,
 
     scores: [i16; NUM_PLAYERS], // For each player, how many points they have
     floor_line_progress: [u8; NUM_PLAYERS], // For each player, how many tiles they have in their penalty
@@ -58,7 +57,9 @@ pub struct GameState {
 
     current_player: PlayerMarker,
 
-    next_round_starting_player: Option<PlayerMarker>,
+    next_round_starting_player: PlayerMarker,
+
+    tile_taken_from_center: bool,
 }
 
 impl std::fmt::Debug for GameState {
@@ -68,25 +69,11 @@ impl std::fmt::Debug for GameState {
 }
 
 impl GameState {
-    pub fn with_seed(seed: u64) -> Self {
-        Self {
-            rng: rand::rngs::SmallRng::seed_from_u64(seed),
-            ..Default::default()
-        }
-    }
-
-    pub fn with_rng(rng: rand::rngs::SmallRng) -> Self {
-        Self {
-            rng,
-            ..Default::default()
-        }
-    }
-
     pub fn get_current_player(&self) -> PlayerMarker {
         self.current_player
     }
 
-    pub fn get_next_round_starting_player(&self) -> Option<PlayerMarker> {
+    pub fn get_next_round_starting_player(&self) -> PlayerMarker {
         self.next_round_starting_player
     }
 
@@ -233,13 +220,10 @@ impl GameState {
             .collect::<Vec<_>>()
             .join("-");
 
-        let next_round_starting_player = match self.next_round_starting_player {
-            None => 255,
-            Some(player) => usize::from(player),
-        };
+        let next_round_starting_player = usize::from(self.next_round_starting_player);
 
         format!(
-            "{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}",
+            "{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}",
             number_of_players,
             usize::from(self.current_player),
             next_round_starting_player,
@@ -251,6 +235,7 @@ impl GameState {
             walls_string,
             pattern_line_string,
             pattern_line_colors_string,
+            self.tile_taken_from_center as u8
         )
     }
 
@@ -278,11 +263,7 @@ impl GameState {
         let next_round_starting_player = next_round_starting_player
             .parse::<u8>()
             .map_err(|_| "Invalid next round starting player")?;
-        let next_round_starting_player = if next_round_starting_player == 255 {
-            None
-        } else {
-            Some(PlayerMarker::new(next_round_starting_player))
-        };
+        let next_round_starting_player = PlayerMarker::new(next_round_starting_player);
 
         let bag_binary = entries.get(3).ok_or("No bag")?;
         let bag_binary = bag_binary.parse::<usize>().map_err(|_| "Invalid bag")?;
@@ -395,6 +376,12 @@ impl GameState {
             }
         }
 
+        let tile_taken_from_center = entries.get(11).ok_or("No tile taken from center")?;
+        let tile_taken_from_center = tile_taken_from_center
+            .parse::<u8>()
+            .map_err(|_| "Invalid tile taken from center")?;
+        let tile_taken_from_center = tile_taken_from_center == 1;
+
         println!("Bag: {:?}", bag);
         println!("Out of bag: {:?}", out_of_bag);
 
@@ -410,8 +397,7 @@ impl GameState {
             pattern_lines_occupancy,
             pattern_lines_colors,
             next_round_starting_player,
-
-            ..Default::default()
+            tile_taken_from_center
         })
     }
 
@@ -429,6 +415,14 @@ impl GameState {
                     continue;
                 }
                 let row_mask = wall::get_row_mask(pattern_line_index);
+
+                if self.pattern_lines_colors[player_index][pattern_line_index].is_none() {
+                    // If the pattern line is empty, we can't place a tile in it
+                    println!("{}", self);
+                    println!("Player {} pattern line {} is empty", player_index, pattern_line_index);
+                    panic!("Player {} pattern line {} is empty", player_index, pattern_line_index)
+                }
+
                 let pattern_line_color =
                     self.pattern_lines_colors[player_index][pattern_line_index].unwrap(); // Must be Some because the pattern line is full
                 let color_mask = wall::WALL_COLOR_MASKS[pattern_line_color as usize];
@@ -471,8 +465,8 @@ impl GameState {
             }
         }
 
-        self.current_player = self.next_round_starting_player.unwrap(); // Must be Some because the round is over
-        self.next_round_starting_player = None;
+        self.current_player = self.next_round_starting_player; // Must be Some because the round is over
+        self.tile_taken_from_center = false;
 
         if is_game_over {
             self.evaluate_end_of_game();
@@ -503,10 +497,11 @@ impl GameState {
             // If we took tiles from the center, we only remove the color we took
             self.factories[take_from_factory_index][color] = 0;
             // If we are the first player to take tiles from the center in this round, we become the starting player for the next round
-            if self.next_round_starting_player.is_none() {
-                self.next_round_starting_player = Some(self.current_player);
+            if !self.tile_taken_from_center {
+                self.next_round_starting_player = self.current_player;
                 // Floor line progress + 1
                 self.floor_line_progress[current_player] += 1;
+                self.tile_taken_from_center = true;
             }
         } else {
             // Only put the tiles in the center if we are not taking from the center
@@ -569,7 +564,11 @@ impl GameState {
         self.check_integrity().unwrap();
     }
 
-    pub fn get_possible_moves(&mut self, move_list: &mut MoveList) -> (bool, bool) {
+    pub fn get_possible_moves(
+        &mut self,
+        move_list: &mut MoveList,
+        rng: &mut SmallRng,
+    ) -> (bool, bool) {
         // -> (is_game_over, did_fill_factories)
         move_list.clear(); // Clear any remaining moves from the previous round
         let current_player: usize = self.current_player.into();
@@ -635,8 +634,8 @@ impl GameState {
         if move_list.is_empty() {
             let is_game_over = self.evaluate_round();
             if !is_game_over {
-                self.fill_factories();
-                self.get_possible_moves(move_list);
+                self.fill_factories(rng);
+                self.get_possible_moves(move_list, rng);
             }
             (is_game_over, true)
         } else {
@@ -644,12 +643,12 @@ impl GameState {
         }
     }
 
-    pub fn fill_factories(&mut self) {
+    pub fn fill_factories(&mut self, rng: &mut SmallRng) {
         factories::fill_factories(
             &mut self.factories,
             &mut self.bag,
             &mut self.out_of_bag,
-            &mut self.rng,
+            rng,
         );
     }
 
@@ -816,10 +815,8 @@ impl GameState {
     //     // Given two game states, reconstruct the move sequence that led from the past state to the current state
 
     // }
-}
 
-impl Default for GameState {
-    fn default() -> Self {
+    pub fn new(rng: &mut SmallRng) -> Self {
         let mut ret = Self {
             bag: [20, 20, 20, 20, 20],
             out_of_bag: [0; NUM_TILE_COLORS],
@@ -831,13 +828,33 @@ impl Default for GameState {
             current_player: PlayerMarker::new(0),
             pattern_lines_occupancy: [[0; 5]; NUM_PLAYERS],
             pattern_lines_colors: [[None; 5]; NUM_PLAYERS],
-            rng: rand::rngs::SmallRng::from_entropy(),
-            next_round_starting_player: None,
+            next_round_starting_player: PlayerMarker::new(0),
+            tile_taken_from_center: false,
         };
-        ret.fill_factories();
+        ret.fill_factories(rng);
         ret
     }
 }
+
+// impl Default for GameState {
+//     fn default() -> Self {
+//         let mut ret = Self {
+//             bag: [20, 20, 20, 20, 20],
+//             out_of_bag: [0; NUM_TILE_COLORS],
+//             factories: [[0; NUM_TILE_COLORS]; NUM_FACTORIES],
+//             scores: [0; NUM_PLAYERS],
+//             floor_line_progress: [0; NUM_PLAYERS],
+//             walls: [[0; NUM_TILE_COLORS]; NUM_PLAYERS],
+//             wall_occupancy: [0; NUM_PLAYERS],
+//             current_player: PlayerMarker::new(0),
+//             pattern_lines_occupancy: [[0; 5]; NUM_PLAYERS],
+//             pattern_lines_colors: [[None; 5]; NUM_PLAYERS],
+//             next_round_starting_player: None,
+//         };
+//         ret.fill_factories();
+//         ret
+//     }
+// }
 
 fn bag_to_string(game_state: &GameState) -> String {
     let mut string = String::from("BAG       ");
@@ -1021,14 +1038,12 @@ mod tests {
         let mut move_list = MoveList::default();
         for _ in 0..20 {
             let mut rng: rand::rngs::SmallRng = SeedableRng::seed_from_u64(0);
-            let mut game_state = GameState::default();
+            let mut game_state = GameState::new(&mut rng);
             loop {
-                game_state.fill_factories();
-
                 game_state.check_integrity().unwrap();
 
                 loop {
-                    game_state.get_possible_moves(&mut move_list);
+                    game_state.get_possible_moves(&mut move_list, &mut rng);
                     if move_list.is_empty() {
                         break;
                     }

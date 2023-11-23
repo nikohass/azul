@@ -4,13 +4,13 @@ use rand::{Rng, SeedableRng};
 pub struct RandomPlayer {
     name: String,
     move_list: MoveList,
-    rng: rand::rngs::StdRng,
+    rng: rand::rngs::SmallRng,
 }
 
 impl RandomPlayer {
     pub fn new(name: String) -> Self {
         let move_list = MoveList::default();
-        let rng = rand::rngs::StdRng::from_entropy();
+        let rng = rand::rngs::SmallRng::from_entropy();
         Self {
             name,
             move_list,
@@ -27,7 +27,13 @@ impl Player for RandomPlayer {
 
     async fn get_move(&mut self, game_state: &GameState) -> Move {
         let mut game_state = game_state.clone();
-        game_state.get_possible_moves(&mut self.move_list);
+        game_state.get_possible_moves(&mut self.move_list, &mut self.rng);
         self.move_list[self.rng.gen_range(0..self.move_list.len())]
+    }
+}
+
+impl Default for RandomPlayer {
+    fn default() -> Self {
+        Self::new("RandomPlayer".to_string())
     }
 }

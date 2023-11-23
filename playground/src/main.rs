@@ -15,24 +15,24 @@ use rand::{rngs::SmallRng, Rng, SeedableRng};
 //         let mut rng: SmallRng = SeedableRng::seed_from_u64(0);
 //         for _ in 0..num_runs {
 //             // println!("Starting new game");
-//             let mut game_state = GameState::with_seed(0);
-//             game_state.check_integrity();
+//             let mut game_state = GameState::new(&mut rng);
+//             game_state.check_integrity().unwrap();
 
 //             let start_time = std::time::Instant::now();
 //             let mut moves_made = 0;
-//             game_state.fill_factories();
 //             loop {
-//                 let (is_game_over, _) = game_state.get_possible_moves(&mut move_list);
-//                 println!("{}", game_state);
+//                 let (is_game_over, _) = game_state.get_possible_moves(&mut move_list, &mut rng);
+//                 // println!("{}", game_state);
 //                 if is_game_over {
 //                     break;
 //                 }
 //                 // println!("Number of possible moves: {}", move_list.len());
 //                 let move_ = move_list[rng.gen_range(0..move_list.len())];
-//                 println!("{}", move_);
+//                 // println!("{}", move_);
 //                 game_state.do_move(move_);
 //                 moves_made += 1;
-//                 game_state.check_integrity();
+//                 // println!("{}", game_state);
+//                 game_state.check_integrity().unwrap();
 //             }
 //             // println!("Done with game");
 
@@ -64,7 +64,9 @@ use player::{
 
 #[tokio::main]
 async fn main() {
-    let game_state = GameState::with_seed(0);
+    // perft();
+    let mut rng = SmallRng::from_entropy();
+    let game_state = GameState::new(&mut rng);
 
     let mut player_one = node::MonteCarloTreeSearch::default(); //RandomPlayer::new("Random player".to_string());
     let mut player_two = node2::MonteCarloTreeSearch::default();
@@ -73,7 +75,7 @@ async fn main() {
     player_two.set_time(800).await;
 
     let mut players: Vec<Box<dyn Player>> = vec![Box::new(player_one), Box::new(player_two)];
-    let stats = game_manager::run_match(game_state, &mut players)
+    let _stats = game_manager::run_match(game_state, &mut players, true)
         .await
         .unwrap();
     // println!("{:#?}", stats);

@@ -34,4 +34,10 @@ pub trait Player: Send + Sync {
     // Optional methods for settings and state updates that not all players need
     async fn notify_move(&mut self, _new_game_state: &GameState, _move_: Move) {}
     async fn set_time(&mut self, _time: u64) {}
+    // async fn ponder(
+    //     &mut self,
+    //     _game_state: &GameState,
+    //     _stop_sender: tokio::sync::oneshot::Sender<()>,
+    // ) {
+    // }
 }

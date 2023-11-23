@@ -141,6 +141,7 @@ dependencies = [
  "log",
  "log4rs",
  "player",
+ "rand",
  "serde",
  "serde_json",
  "tokio",
@@ -524,6 +525,7 @@ dependencies = [
  "async-mutex",
  "async-trait",
  "rand",
+ "tokio",
 ]
 
 [[package]]
@@ -1377,6 +1379,7 @@ dependencies = [
  "clap",
  "config",
  "game",
+ "rand",
  "serde",
  "tokio",
 ]

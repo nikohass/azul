@@ -81,8 +81,13 @@ impl Node {
         self.q += q;
     }
 
-    fn expand(&mut self, game_state: &mut GameState, move_list: &mut MoveList) -> bool {
-        let (is_game_over, refill_factories) = game_state.get_possible_moves(move_list);
+    fn expand(
+        &mut self,
+        game_state: &mut GameState,
+        move_list: &mut MoveList,
+        rng: &mut SmallRng,
+    ) -> bool {
+        let (is_game_over, refill_factories) = game_state.get_possible_moves(move_list, rng);
         // Cancel if game is over and for now also if we need to refill the factories
         self.is_game_over = is_game_over;
         self.refill_factories = refill_factories;
@@ -133,14 +138,15 @@ impl Node {
 
         if self.children.is_empty() {
             is_game_over |= if self.n == 1. {
-                self.expand(game_state, move_list)
+                self.expand(game_state, move_list, rng)
             } else {
                 self.is_game_over
             };
             if !is_game_over {
-                let result = playout(&mut game_state.clone(), rng, move_list);
+                let current_player = game_state.get_current_player();
+                let result = playout(game_state, rng, move_list);
                 // Invert the score based on the player
-                delta = if u8::from(game_state.get_current_player()) == 0 {
+                delta = if u8::from(current_player) == 0 {
                     1. - result
                 } else {
                     result
@@ -400,9 +406,10 @@ impl Player for MonteCarloTreeSearch {
 
 impl Default for MonteCarloTreeSearch {
     fn default() -> Self {
+        let mut rng: SmallRng = SmallRng::from_entropy();
         Self {
             root_node: Node::default(),
-            root_state: GameState::default(),
+            root_state: GameState::new(&mut rng),
             time_limit: Some(1_900),
             iteration_limit: None,
         }
@@ -573,7 +580,7 @@ pub fn get_random_move(
     }
 
     // Fallback to default move generation
-    let (is_game_over, _) = game_state.get_possible_moves(move_list);
+    let (is_game_over, _) = game_state.get_possible_moves(move_list, rng);
     if is_game_over {
         None
     } else {

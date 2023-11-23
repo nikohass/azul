@@ -3,6 +3,7 @@ use crate::{
     websocket_api::{EventType, WebSocketConnection, WebSocketMessage},
 };
 use game::{GameState, Move, MoveList, Player};
+use rand::{rngs::SmallRng, SeedableRng};
 
 pub struct HumanPlayer {
     name: String,
@@ -29,7 +30,8 @@ impl Player for HumanPlayer {
 
     async fn get_move(&mut self, game_state: &GameState) -> Move {
         let mut game_state = game_state.clone();
-        game_state.get_possible_moves(&mut self.move_list);
+        let mut rng = SmallRng::from_entropy();
+        game_state.get_possible_moves(&mut self.move_list, &mut rng);
 
         for _ in 0..10 {
             let request_id = uuid::Uuid::new_v4().to_string();
