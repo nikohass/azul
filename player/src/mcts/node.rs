@@ -1,43 +1,135 @@
+use game::{
+    GameState, Move, MoveList, Player, SharedState, TileColor, NUM_FACTORIES, NUM_TILE_COLORS,
+};
+use rand::{rngs::SmallRng, Rng, SeedableRng};
 use std::time::Instant;
 
-use game::{GameState, Move, MoveList, Player, NUM_FACTORIES, NUM_TILE_COLORS};
-use rand::{rngs::SmallRng, Rng, SeedableRng};
+/*
+Average factory refills per game: 4.0235295
+Player 1 - Average score: 25.4, Wins: 49, Draws: 0, Losses: 36
+Player 2 - Average score: 24.84706, Wins: 35, Draws: 0, Losses: 50
+Player 1 made an illegal move: Move { take_from_factory_index: 5, color: Yellow, pattern: [0, 0, 0, 0, 0, 1] }
+Move list: [Move { take_from_factory_index: 5, color: Yellow, pattern: [0, 0, 0, 0, 0, 11] }]
+Game state: BAG       B 15      Y 5     R 14    G 6     W 13
+FACTORIES 1-.... 2-.... 3-.... 4-.... 5-.... Center-YYYYYYYYYYY
+PLAYER 0               23 |  PLAYER 1              -18 |
+1         B  -> . . R G W |  1         .  -> . Y R G W |
+2       B B  -> W . Y R G |  2       . .  -> W . Y R G |
+3     G G G  -> . . B . . |  3     G G G  -> . . . . . |
+4   . . . .  -> . . W B . |  4   G G G G  -> . . . . Y |
+5 . . . . .  -> . R . . . |  5 . . . W W  -> . R . . . |
+Floor line:  0            |  Floor line:  0            |
+2_1_0_55936156943_0_0-0-0-0-0-2816_64357375_0_36718428-37750622_197121-8657240064_1099495047168-17230462975_0
+*/
 
-const C: f32 = 0.0;
-const C_BASE: f32 = 120.0;
+#[derive(Debug, Clone, Default, Copy)] // TODO: Default just for swapping root
+struct ProbabilisticOutcome {
+    pub factories: [[u8; NUM_TILE_COLORS]; NUM_FACTORIES],
+    pub out_of_bag: [u8; NUM_TILE_COLORS],
+    pub bag: [u8; NUM_TILE_COLORS],
+}
+
+impl ProbabilisticOutcome {
+    pub fn apply_to_game_state(&self, game_state: &mut GameState) {
+        // let orig = game_state.clone();
+        // Before each factory refill, the last round ends, so evaluate the round
+        game_state.evaluate_round();
+        // let orig_out_of_bag = game_state.get_out_of_bag();
+        // let after_eval = game_state.clone();
+
+        // Overwrite the factories with the outcome of the event
+        game_state.set_factories(self.factories);
+        // The number of tiles in and out of bag also changes when the factories are refilled, so overwrite those as well
+        game_state.set_out_of_bag(self.out_of_bag);
+        game_state.set_bag(self.bag);
+
+        // For debugging purposes, check the integrity of the game state
+        // if game_state.check_integrity().is_err() {
+        //     println!("Original game state:");
+        //     println!("{}", orig);
+        //     println!("After evaluation:");
+        //     println!("{:?}", orig_out_of_bag);
+        //     println!("{}", after_eval);
+        //     println!("Probabilistic outcome:");
+        //     println!("{:?}", game_state.get_out_of_bag());
+        //     println!("{}", game_state);
+
+        //     println!("Out of bag would have been {:?}", self.out_of_bag);
+        //     panic!("Probabilistic outcome was applied to an invalid game state.");
+        // }
+    }
+}
+
+const C: f32 = 0.2;
+const C_BASE: f32 = 6120.0;
 const C_FACTOR: f32 = std::f32::consts::SQRT_2;
-const FPU_R: f32 = 0.3;
 
-pub struct Node {
-    pub children: Vec<Node>,
-    pub move_to_reach: Option<Move>,
-    pub n: f32,
-    pub q: f32,
-    pub is_game_over: bool,
-    pub refill_factories: bool,
+#[derive(Debug, Clone)]
+enum Event {
+    Deterministic(Move),
+    Probabilistic(ProbabilisticOutcome),
 }
 
-pub struct ProbabilisticNode {
-    pub expanded_children: Vec<(Node, [[u8; NUM_TILE_COLORS]; NUM_FACTORIES])>, // (Node, factories)
-    pub move_to_reach: Option<Move>,
-}
-
-impl Default for Node {
-    fn default() -> Self {
-        Self {
-            children: Vec::new(),
-            move_to_reach: None,
-            n: 0.0,
-            q: 0.0,
-            is_game_over: false,
-            refill_factories: false,
+impl std::fmt::Display for Event {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Event::Deterministic(move_) => write!(f, "{}", move_),
+            Event::Probabilistic(outcome) => {
+                let mut string = String::new();
+                for (factory_index, factory) in
+                    outcome.factories.iter().take(NUM_FACTORIES - 1).enumerate()
+                {
+                    if factory_index > 0 {
+                        string.push(' ');
+                    }
+                    for (color, number_of_tiles) in factory.iter().enumerate() {
+                        string.push_str(
+                            &TileColor::from(color)
+                                .to_string()
+                                .repeat(*number_of_tiles as usize),
+                        );
+                    }
+                }
+                write!(f, "{}", string)
+            }
         }
     }
 }
 
+struct Node {
+    children: Vec<Node>,   // The children of this node
+    previous_event: Event, // The edge from the parent to this node
+    n: f32,
+    q: f32,
+    is_game_over: bool,
+    has_probabilistic_children: bool,
+}
+
 impl Node {
+    pub fn new_deterministic(previous_move: Move) -> Self {
+        Node {
+            children: Vec::new(),
+            previous_event: Event::Deterministic(previous_move),
+            n: 0.,
+            q: 0.,
+            is_game_over: false,
+            has_probabilistic_children: false,
+        }
+    }
+
+    pub fn new_probabilistic(outcome: ProbabilisticOutcome) -> Self {
+        Node {
+            children: Vec::new(),
+            previous_event: Event::Probabilistic(outcome),
+            n: 0.,
+            q: 0.,
+            is_game_over: false,
+            has_probabilistic_children: false,
+        }
+    }
+
     #[inline]
-    pub fn get_value(&self) -> f32 {
+    fn get_value(&self) -> f32 {
         if self.n > 0. {
             self.q / self.n
         } else {
@@ -45,390 +137,235 @@ impl Node {
         }
     }
 
-    fn get_uct_value(&self, parent_n: f32, c: f32, fpu_base: f32, is_root: bool) -> f32 {
-        if is_root {
-            return if self.n > 0. {
-                self.q / self.n + c * (parent_n.ln() / self.n).sqrt()
-            } else {
-                std::f32::INFINITY
-            };
-        }
+    fn get_uct_value(&self, parent_n: f32, c: f32) -> f32 {
         if self.n > 0. {
-            self.q / self.n + c * (parent_n.ln() / self.n).sqrt()
+            (self.q / self.n) + c * (parent_n.ln() / self.n).sqrt()
         } else {
-            fpu_base + c * parent_n.ln().sqrt()
+            std::f32::INFINITY
         }
     }
 
-    fn child_with_max_uct_value(&mut self, is_root: bool) -> &mut Node {
+    fn child_with_max_uct_value(&mut self) -> &mut Node {
         let c_adjusted = C + C_FACTOR * ((1. + self.n + C_BASE) / C_BASE).ln();
-        let fpu_base = (self.n - self.q) / self.n - FPU_R;
-        let mut best_child = 0;
-        let mut best_value = std::f32::NEG_INFINITY;
+
+        let mut best_child_index = 0;
+        let mut best_chuld_uct_value = std::f32::NEG_INFINITY;
+
         for (i, child) in self.children.iter().enumerate() {
-            let value = child.get_uct_value(self.n, c_adjusted, fpu_base, is_root);
-            if value > best_value {
-                best_value = value;
-                best_child = i;
+            let value = child.get_uct_value(self.n, c_adjusted);
+            if value > best_chuld_uct_value {
+                best_child_index = i;
+                best_chuld_uct_value = value;
             }
         }
-        &mut self.children[best_child]
+
+        &mut self.children[best_child_index]
     }
 
-    #[inline]
-    fn backpropagate(&mut self, q: f32) {
+    fn backpropagate(&mut self, value: f32) {
         self.n += 1.;
-        self.q += q;
+        self.q += value;
     }
 
-    fn expand(
-        &mut self,
-        game_state: &mut GameState,
-        move_list: &mut MoveList,
-        rng: &mut SmallRng,
-    ) -> bool {
-        let (is_game_over, refill_factories) = game_state.get_possible_moves(move_list, rng);
-        // Cancel if game is over and for now also if we need to refill the factories
+    fn expand(&mut self, game_state: &mut GameState, move_list: &mut MoveList, rng: &mut SmallRng) {
+        let (is_game_over, probabilistic_event) = game_state.get_possible_moves(move_list, rng);
         self.is_game_over = is_game_over;
-        self.refill_factories = refill_factories;
-        if is_game_over || refill_factories {
-            self.children = Vec::new();
-            return true;
+
+        if is_game_over {
+            return;
         }
 
-        // Expand the node
-        self.children = Vec::with_capacity(move_list.len());
+        // Create a child for each possible move
+        let mut children: Vec<Node> = Vec::with_capacity(move_list.len());
         for i in 0..move_list.len() {
-            self.children.push(Node {
-                children: Vec::new(),
-                move_to_reach: Some(move_list[i]),
-                n: 0.,
-                q: 0.,
-                is_game_over: false,
-                refill_factories: false,
-            })
-        }
-        false
-    }
-
-    pub fn iteration(
-        &mut self,
-        move_list: &mut MoveList,
-        game_state: &mut GameState,
-        rng: &mut SmallRng,
-        is_root: bool,
-    ) -> f32 {
-        let delta: f32;
-
-        let mut is_game_over = self.is_game_over;
-        let random_event = self.refill_factories;
-
-        // For now just do the playout
-        if random_event {
-            let result = playout(&mut game_state.clone(), rng, move_list);
-            // Invert the score based on the player
-            let delta = if u8::from(game_state.get_current_player()) == 0 {
-                1. - result
-            } else {
-                result
-            };
-            self.backpropagate(delta);
-            return 1. - delta;
+            children.push(Node::new_deterministic(move_list[i]))
         }
 
-        if self.children.is_empty() {
-            is_game_over |= if self.n == 1. {
-                self.expand(game_state, move_list, rng)
-            } else {
-                self.is_game_over
+        if probabilistic_event {
+            // If we have a probabilistic event, create a child for this outcome.
+            // We do not expand all possible outcomes, because that would be too expensive.
+            let outcome = ProbabilisticOutcome {
+                factories: *game_state.get_factories(),
+                out_of_bag: game_state.get_out_of_bag(),
+                bag: game_state.get_bag(),
             };
-            if !is_game_over {
-                let current_player = game_state.get_current_player();
-                let result = playout(game_state, rng, move_list);
-                // Invert the score based on the player
-                delta = if u8::from(current_player) == 0 {
-                    1. - result
-                } else {
-                    result
-                };
-            } else if self.n == 0. {
-                let side = if u8::from(game_state.get_current_player()) == 0 {
-                    -1
-                } else {
-                    1
-                };
-                let result = game_result(game_state) * side;
-                self.q = result_to_value(result);
-                self.n = 1.;
-                delta = self.q;
-            } else {
-                delta = self.q / self.n;
-            }
-            self.backpropagate(delta);
-            1. - delta
+            let mut child = Node::new_probabilistic(outcome);
+            self.has_probabilistic_children = true;
+            // We have already generated the moves for this outcome, so we can just copy them over
+            child.children.append(&mut children);
+            self.children.push(child);
         } else {
-            let next_child: &mut Node = self.child_with_max_uct_value(is_root);
-            game_state.do_move(next_child.move_to_reach.unwrap());
-            delta = next_child.iteration(move_list, game_state, rng, false);
-            self.backpropagate(delta);
-            1. - delta
+            // Otherwise, just add the children we generated
+            std::mem::swap(&mut self.children, &mut children);
         }
     }
 
-    pub fn pv(&mut self, game_state: &mut GameState, move_list: &mut MoveList) {
+    fn iteration(
+        &mut self,
+        game_state: &mut GameState,
+        move_list: &mut MoveList,
+        rng: &mut SmallRng,
+    ) -> f32 {
+        let current_player = u8::from(game_state.get_current_player());
+        let mut invert_delta = false;
+
+        if self.has_probabilistic_children {
+            invert_delta = true; // This node doesnt change the current player, so we need to invert the delta
+
+            // All children of this node are probabilistic. When this node was "expanded", we only expanded one probabilistic outcome.
+            // There would be too many possible outcomes to expand all of them, so we just expanded one.
+            // Now we need to adjust for this and dynamically expand the other outcomes.
+            // Here we also need to balance exploration and exploitation.
+            // If we only visit the only child and never expand further, our strategy will be quite bad because we basically assume that the probabilistic event will always happen.
+            // If we expand a new child every time we iterate this node, we would never visit the same child twice. This would cause our estimations of the value of the child to be very inaccurate.
+
+            let next_round_starting_player = game_state.get_next_round_starting_player();
+            let next_round_starting_player = u8::from(next_round_starting_player);
+            if next_round_starting_player != current_player {
+                // The next round will start with the other player, so we need to invert the delta
+                invert_delta = !invert_delta;
+            }
+
+            // Let's just try this:
+            let desired_number_of_children = self.n.sqrt().ceil() as usize / 2;
+            if desired_number_of_children > self.children.len() {
+                // We will expand a new child
+                let mut game_state_clone = game_state.clone(); // Clone here because we don't want to modify the game state
+                let (_is_game_over, probabilistic_event) =
+                    game_state_clone.get_possible_moves(move_list, rng);
+
+                assert!(probabilistic_event); // A probabilistic event must have happened, otherwise we wouldn't have any probabilistic children
+
+                // Create a child for each possible move
+                let mut children: Vec<Node> = Vec::with_capacity(move_list.len());
+                for i in 0..move_list.len() {
+                    children.push(Node::new_deterministic(move_list[i]))
+                }
+
+                let outcome = ProbabilisticOutcome {
+                    factories: *game_state_clone.get_factories(),
+                    out_of_bag: game_state_clone.get_out_of_bag(),
+                    bag: game_state_clone.get_bag(),
+                };
+                let mut child = Node::new_probabilistic(outcome);
+                child.children.append(&mut children);
+                self.children.push(child);
+            }
+        }
+
+        let delta = if self.children.is_empty() {
+            self.expand(game_state, move_list, rng);
+            if !self.is_game_over {
+                let playout_result = playout(&mut game_state.clone(), rng, move_list); // Playout returns 1 if player 1 wins, 0 if player 2 wins, and 0.5 if it's a draw
+                if current_player == 0 {
+                    1. - playout_result
+                } else {
+                    playout_result
+                }
+            } else if self.n == 0. {
+                let mut game_result = get_game_result(game_state);
+                game_result = if current_player == 0 {
+                    1. - game_result
+                } else {
+                    game_result
+                };
+                self.q = game_result;
+                self.n = 1.;
+                game_result
+            } else {
+                self.q / self.n
+            }
+        } else {
+            let next_child: &mut Node = self.child_with_max_uct_value();
+            match next_child.previous_event {
+                Event::Deterministic(move_) => {
+                    game_state.do_move(move_);
+                }
+                Event::Probabilistic(outcome) => {
+                    outcome.apply_to_game_state(game_state);
+                }
+            }
+            next_child.iteration(game_state, move_list, rng)
+        };
+
+        let delta = if invert_delta { 1. - delta } else { delta };
+
+        self.backpropagate(delta);
+
+        1. - delta
+    }
+
+    fn build_pv(&mut self, game_state: &mut GameState, pv: &mut Vec<Event>) {
         if self.children.is_empty() {
             return;
         }
-        let child = self.best_child();
-        let move_to_reach = child.move_to_reach.unwrap();
-        move_list.push(move_to_reach);
-        game_state.do_move(move_to_reach);
-        child.pv(game_state, move_list);
-    }
-
-    pub fn best_child(&mut self) -> &mut Node {
-        let mut best_child: usize = 0;
-        let mut best_value = std::f32::NEG_INFINITY;
-        for (i, child) in self.children.iter().enumerate() {
-            let child_value = child.get_value();
-            if child_value > best_value {
-                best_value = child_value;
-                best_child = i;
+        let child: &mut Node = self.best_child();
+        match child.previous_event {
+            Event::Deterministic(move_) => {
+                game_state.do_move(move_);
+            }
+            Event::Probabilistic(outcome) => {
+                outcome.apply_to_game_state(game_state);
             }
         }
-        &mut self.children[best_child]
+        pv.push(child.previous_event.clone());
+        child.build_pv(game_state, pv);
+    }
+
+    fn best_child(&mut self) -> &mut Node {
+        let mut best_child_index = 0;
+        let mut best_child_value = std::f32::NEG_INFINITY;
+
+        for (i, child) in self.children.iter().enumerate() {
+            let value = child.get_value();
+            if value > best_child_value {
+                best_child_index = i;
+                best_child_value = value;
+            }
+        }
+
+        &mut self.children[best_child_index]
     }
 
     pub fn best_move(&mut self) -> Option<Move> {
-        self.best_child().move_to_reach
+        if self.children.is_empty() {
+            return None;
+        }
+
+        let child: &mut Node = self.best_child();
+        match child.previous_event {
+            Event::Deterministic(move_) => Some(move_),
+            Event::Probabilistic(_) => None,
+        }
     }
 }
 
-// fn playout(game_state: &mut GameState, rng: &mut SmallRng, move_list: &mut MoveList) -> f32 {
-//     loop {
-//         if game_state.get_possible_moves(move_list).0 {
-//             let result = game_result(game_state);
-//             return result_to_value(result);
-//         }
-//         let move_ = move_list[rng.gen_range(0..move_list.len())];
-//         game_state.do_move(move_);
-//     }
-// }
+const MAX_SCORE_DIFFERENCE: f32 = 100.;
+const BASE_SCORE_ADJUSTMENT: f32 = 0.001;
+const COMPLEMENTARY_SCORE_ADJUSTMENT: f32 = 1. - BASE_SCORE_ADJUSTMENT;
+
+fn get_game_result(game_state: &GameState) -> f32 {
+    let scores = game_state.get_scores();
+    let score_difference = scores[0] as f32 - scores[1] as f32;
+    let normalized_score_difference =
+        score_difference.abs() / MAX_SCORE_DIFFERENCE * BASE_SCORE_ADJUSTMENT;
+    match score_difference {
+        x if x > 0. => COMPLEMENTARY_SCORE_ADJUSTMENT + normalized_score_difference, // Basically 1 + normalized_score_difference
+        x if x < 0. => BASE_SCORE_ADJUSTMENT - normalized_score_difference, // Basically 0 - normalized_score_difference
+        _ => 0.5,
+    }
+}
 
 pub fn playout(game_state: &mut GameState, rng: &mut SmallRng, move_list: &mut MoveList) -> f32 {
     loop {
         match get_random_move(game_state, rng, move_list) {
             None => {
-                return result_to_value(game_result(game_state));
+                return get_game_result(game_state);
             }
             Some(move_) => game_state.do_move(move_),
         }
     }
 }
-
-fn game_result(game_state: &GameState) -> i16 {
-    let scores = game_state.get_scores();
-    scores[0] - scores[1]
-}
-
-pub fn result_to_value(result: i16) -> f32 {
-    let abs = result.abs() as f32 / 100_000.; // Encourages the player to win with a large score difference
-    match result {
-        r if r > 0 => 0.999 + abs,
-        r if r < 0 => 0.001 - abs,
-        _ => 0.5,
-    }
-}
-
-/*
-    Completing a row on my board.
-    Preventing my opponent from completing a high-scoring row.
-    The likelihood that certain tiles will be available in later turns.
-*/
-
-pub struct MonteCarloTreeSearch {
-    root_node: Node,
-    root_state: GameState,
-    time_limit: Option<i64>,
-    iteration_limit: Option<usize>,
-}
-
-impl MonteCarloTreeSearch {
-    pub fn get_value(&self) -> f32 {
-        1. - self.root_node.get_value()
-    }
-
-    pub fn get_root_node(&mut self) -> &mut Node {
-        &mut self.root_node
-    }
-
-    fn set_root(&mut self, game_state: &GameState) {
-        let is_current_player_equal =
-            game_state.get_current_player() == self.root_state.get_current_player();
-        let is_next_round_starting_player_equal = game_state.get_next_round_starting_player()
-            == self.root_state.get_next_round_starting_player();
-        let is_pattern_line_equal =
-            game_state.get_pattern_lines_colors() == self.root_state.get_pattern_lines_colors();
-        let is_pattern_line_equal = is_pattern_line_equal
-            && game_state.get_pattern_lines_occupancy()
-                == self.root_state.get_pattern_lines_occupancy();
-        let is_bag_equal = game_state.get_bag() == self.root_state.get_bag();
-        let is_factory_equal = game_state.get_factories() == self.root_state.get_factories();
-        let is_discard_equal =
-            game_state.get_floor_line_progress() == self.root_state.get_floor_line_progress();
-        let states_equal = is_current_player_equal
-            && is_next_round_starting_player_equal
-            && is_pattern_line_equal
-            && is_bag_equal
-            && is_factory_equal
-            && is_discard_equal;
-
-        if self.root_node.children.is_empty() || !states_equal {
-            self.root_state = game_state.clone();
-            self.root_node = Node::default();
-            println!("Could not find the given game state in the tree. Falling back to the default root node.");
-        } else {
-            println!("Found the given game state in the tree. Setting it as root.");
-        }
-    }
-
-    fn do_iterations(&mut self, n: usize, rng: &mut SmallRng) {
-        let mut move_list = MoveList::default();
-        for _ in 0..n {
-            self.root_node
-                .iteration(&mut move_list, &mut self.root_state.clone(), rng, true);
-        }
-    }
-
-    pub fn search_action(&mut self, game_state: &GameState) -> Move {
-        println!(
-            "Searching action using MCTS. Fen: {}",
-            game_state.serialize_string()
-        );
-        println!("    Left Depth Iterations Value PV");
-        let start_time = Instant::now();
-        self.set_root(game_state);
-        let mut rng = SmallRng::from_entropy();
-        let mut pv = MoveList::default();
-        let mut iterations_per_ms = 5.;
-        let mut iterations: usize = 0;
-
-        let search_start_time = Instant::now();
-        loop {
-            pv.clear();
-            self.root_node.pv(&mut self.root_state.clone(), &mut pv);
-
-            let (next_iterations, stop) = if let Some(time_limit) = self.time_limit {
-                let time_left = time_limit - start_time.elapsed().as_millis() as i64;
-                // println!(
-                //     "{:6}ms {:5} {:10} {:4.0}% {}",
-                //     time_left,
-                //     pv.len(),
-                //     iterations,
-                //     (1. - self.root_node.get_value()).min(1.0) * 100.,
-                //     pv
-                // );
-                let next_iterations =
-                    ((time_left as f64 / 6.).min(5000.) * iterations_per_ms).max(1.) as usize;
-                (next_iterations, time_left < 30)
-            } else if let Some(iteration_limit) = self.iteration_limit {
-                if iterations >= iteration_limit {
-                    (0, true)
-                } else {
-                    let iterations_left = iteration_limit - iterations;
-                    // println!(
-                    //     "{:6}it {:5} {:10} {:4.0}% {}",
-                    //     iterations_left,
-                    //     pv.len(),
-                    //     iterations,
-                    //     (1. - self.root_node.get_value()).min(1.0) * 100.,
-                    //     pv
-                    // );
-                    let next_iterations = iterations_left / 2;
-                    (next_iterations, next_iterations < 100)
-                }
-            } else {
-                panic!("Mcts has neither a time limit nor a node limit");
-            };
-            if stop {
-                break;
-            }
-            self.do_iterations(next_iterations, &mut rng);
-            iterations += next_iterations;
-            let elapsed = search_start_time.elapsed().as_micros() as f64;
-            if elapsed > 0. {
-                iterations_per_ms = iterations as f64 / elapsed * 1000.;
-            }
-        }
-
-        // println!(
-        //     "Search finished after {}ms. Value: {:.0}% PV-Depth: {} Iterations: {} Iterations/s: {:.2} PV: {}",
-        //     start_time.elapsed().as_millis(),
-        //     (1. - self.root_node.get_value()).min(1.0) * 100.,
-        //     pv.len(),
-        //     iterations,
-        //     iterations_per_ms * 1000.,
-        //     pv,
-        // );
-        self.root_node.best_move().unwrap()
-    }
-}
-
-#[async_trait::async_trait]
-impl Player for MonteCarloTreeSearch {
-    fn name(&self) -> &str {
-        "MCTS"
-    }
-
-    async fn get_move(&mut self, game_state: &GameState) -> Move {
-        self.search_action(game_state)
-    }
-
-    async fn notify_move(&mut self, new_game_state: &GameState, move_: Move) {
-        for child in &mut self.root_node.children {
-            if child.move_to_reach.unwrap() == move_ {
-                let new_root_node = std::mem::take(child);
-                self.root_node = new_root_node;
-                self.root_state = new_game_state.clone();
-                println!("Found move in tree. Setting it as root.");
-                return;
-            }
-        }
-        println!("Could not find move in tree. Falling back to the default root node.");
-        self.root_node = Node::default();
-        self.root_state = new_game_state.clone();
-    }
-
-    async fn set_time(&mut self, time: u64) {
-        self.time_limit = Some(time as i64);
-    }
-}
-
-impl Default for MonteCarloTreeSearch {
-    fn default() -> Self {
-        let mut rng: SmallRng = SmallRng::from_entropy();
-        Self {
-            root_node: Node::default(),
-            root_state: GameState::new(&mut rng),
-            time_limit: Some(1_900),
-            iteration_limit: None,
-        }
-    }
-}
-
-// // pub struct RapidActionValueEstimationTable {
-
-// // }
-
-// const MAX_FACTORY_INDEX: usize = 256; // Assuming u8 for factory index
-// const NUM_TILE_COLORS: usize = 5; // Replace with the actual number of tile colors
-// const PATTERN_SIZE: usize = 6;
-// const MAX_PATTERN_VALUE: usize = 5; // Replace with the maximum value in pattern + 1
-
-// #[allow(clippy::type_complexity)]
-// pub struct RapidActionValueEstimationTable {
-
-// }
 
 pub fn get_random_move(
     game_state: &mut GameState,
@@ -436,34 +373,28 @@ pub fn get_random_move(
     move_list: &mut MoveList,
 ) -> Option<Move> {
     // Returns (Move, is_game_over)
-
     // We use the game state to generate one possible random move.
     // In case we fail N times, we fall back to the entire move generation and pick a random move from there.
-
-    let factories: &[[u8; 5]; 6] = game_state.get_factories();
+    let factories: &[[u8; 5]; NUM_FACTORIES] = game_state.get_factories();
     let not_empty_factories: Vec<u8> = factories
         .iter()
         .enumerate()
         .filter(|(_, factory)| factory.iter().any(|&tile| tile != 0))
         .map(|(i, _)| i as u8)
         .collect();
-
     if !not_empty_factories.is_empty() {
         // There are non-empty factories, we can proceed to pick a random move
         // By doing this kind of move generation we will alter the probabilities of the moves
         // we should make sure that the probabilities are altered in a way that is beneficial to us
         // e.g. we should pick moves that are more likely to be good for us, to make the playout more realistic
-
         // First, take a look at our pattern lines
         let current_player: usize = usize::from(game_state.get_current_player());
         let pattern_lines: [u8; 5] = game_state.get_pattern_lines_occupancy()[current_player];
         let pattern_line_colors: [Option<game::TileColor>; 5] =
             game_state.get_pattern_lines_colors()[current_player];
         let wall_occupancy: u32 = game_state.get_wall_ocupancy()[current_player];
-
         for _ in 0..5 {
             // Retry up to 5 times
-
             // Select a random factory and color to take
             let factory_index =
                 not_empty_factories[rng.gen_range(0..not_empty_factories.len())] as usize;
@@ -471,16 +402,13 @@ pub fn get_random_move(
             while factories[factory_index][tile_color] == 0 {
                 tile_color = rng.gen_range(0..5);
             }
-
             let number_of_tiles_to_distribute = factories[factory_index][tile_color];
-
             // Calculate the remaining space in our pattern lines for each color
             let mut remaining_space: [u8; 6] = [1, 2, 3, 4, 5, 255]; // 255 is a placeholder for the floor line
             let mut total_remaining_space = 0;
             for (pattern_line_index, number_of_tiles) in pattern_lines.iter().enumerate() {
                 remaining_space[pattern_line_index] -= *number_of_tiles; // We subtract the number of tiles already in the pattern line from the total space
-
-                // If there are tiles of a different color in the patternline already, we can't put any more tiles in it, so we set the remaining space to 0
+                                                                         // If there are tiles of a different color in the patternline already, we can't put any more tiles in it, so we set the remaining space to 0
                 if let Some(existing_color) = pattern_line_colors[pattern_line_index] {
                     if tile_color != usize::from(existing_color) {
                         remaining_space[pattern_line_index] = 0;
@@ -494,7 +422,6 @@ pub fn get_random_move(
                         remaining_space[pattern_line_index] = 0;
                     }
                 }
-
                 if remaining_space[pattern_line_index] == number_of_tiles_to_distribute {
                     // Heuristic: If we find a pattern line that we can fill completely, we will do that
                     let mut pattern = [0; 6];
@@ -507,22 +434,18 @@ pub fn get_random_move(
                 }
                 total_remaining_space += remaining_space[pattern_line_index];
             }
-
             if total_remaining_space < number_of_tiles_to_distribute {
                 // We do not want to be in this situation, because it means that we will have to put tiles on the floor line
                 continue; // Skip this iteration and try again
             }
-
             // let mut best_pattern_index: Option<usize> = None;
             // let mut best_pattern_fit: u8 = 255; // Arbitrary high number
-
             // for (index, &space) in remaining_space.iter().enumerate() {
             //     if space >= number_of_tiles_to_distribute && space < best_pattern_fit {
             //         best_pattern_fit = space;
             //         best_pattern_index = Some(index);
             //     }
             // }
-
             // if let Some(index) = best_pattern_index {
             //     let mut pattern: [u8; 6] = [0; 6];
             //     pattern[index] = number_of_tiles_to_distribute;
@@ -532,10 +455,8 @@ pub fn get_random_move(
             //         pattern,
             //     });
             // }
-
             // TODO: Distribute the tiles over the pattern lines in a smart way
         }
-
         // // We will use this to keep track of the remaining space in our pattern lines for each color
         // let mut remaining_space: [[u8; 6]; game::NUM_TILE_COLORS] = [
         //     [1, 2, 3, 4, 5, 255],
@@ -544,11 +465,9 @@ pub fn get_random_move(
         //     [1, 2, 3, 4, 5, 255],
         //     [1, 2, 3, 4, 5, 255],
         // ]; // 255 is a placeholder for the floor line
-
         // for (tile_color, remaining_space_for_color) in remaining_space.iter_mut().enumerate() {
         //     for (pattern_line_index, number_of_tiles) in pattern_lines.iter().enumerate() {
         //         remaining_space_for_color[pattern_line_index] -= *number_of_tiles; // We subtract the number of tiles already in the pattern line from the total space
-
         //         // If there are tiles of a different color in the patternline already, we can't put any more tiles in it, so we set the remaining space to 0
         //         if let Some(existing_color) = pattern_line_colors[pattern_line_index] {
         //             if tile_color != usize::from(existing_color) {
@@ -565,20 +484,16 @@ pub fn get_random_move(
         //         }
         //     }
         // }
-
         // Now we know how many tiles of each color we can place in each pattern line.
         // We will use this information to generate a reasonable move.
-
         // At this point we basically need a heuristic to select a:
         // - Factory index
         // - Color to take from the factory
         // - Pattern line(s) to place the tiles in
-
         // Generally it is better to put tiles in the same pattern line and not distribute them over multiple pattern lines
         // because this would block other pattern lines. By placing them in a single pattern line we can complete it faster.
         // Avoiding Negative Points: Try to avoid moves that would result in a significant number of tiles being placed on the floor line.
     }
-
     // Fallback to default move generation
     let (is_game_over, _) = game_state.get_possible_moves(move_list, rng);
     if is_game_over {
@@ -588,36 +503,293 @@ pub fn get_random_move(
     }
 }
 
-/*
-// There are non-empty factories, pick one of them
-        let factory_index = not_empty_factories[rng.gen_range(0..not_empty_factories.len())];
-        let colors: &[u8; 5] = &factories[factory_index as usize];
-        // Pick one color that is not 0 at random
-        let mut color_index = rng.gen_range(0..colors.len());
-        while colors[color_index] == 0 {
-            color_index = rng.gen_range(0..colors.len());
+pub struct MonteCarloTreeSearch {
+    root_node: SharedState<Node>,
+    root_game_state: SharedState<GameState>,
+    time_limit: u64,
+    stop_pondering: Option<tokio::sync::oneshot::Sender<()>>,
+    use_pondering: bool,
+}
+
+fn do_iterations(
+    root_node: &mut Node,
+    root_game_state: &GameState,
+    iterations: usize,
+    rng: &mut SmallRng,
+) {
+    let mut move_list = MoveList::new();
+    for _ in 0..iterations {
+        root_node.iteration(&mut root_game_state.clone(), &mut move_list, rng);
+    }
+}
+
+impl MonteCarloTreeSearch {
+    async fn set_root(&mut self, game_state: &GameState) {
+        let mut root_game_state = self.root_game_state.lock().await;
+        let mut root_node = self.root_node.lock().await;
+        // Check game state for equality. TODO: Implement PartialEq for GameState
+        let is_current_player_equal =
+            game_state.get_current_player() == root_game_state.get_current_player();
+        let is_next_round_starting_player_equal = game_state.get_next_round_starting_player()
+            == root_game_state.get_next_round_starting_player();
+        let is_pattern_line_equal =
+            game_state.get_pattern_lines_colors() == root_game_state.get_pattern_lines_colors();
+        let is_pattern_line_equal = is_pattern_line_equal
+            && game_state.get_pattern_lines_occupancy()
+                == root_game_state.get_pattern_lines_occupancy();
+        let is_bag_equal = game_state.get_bag() == root_game_state.get_bag();
+        let is_factory_equal = game_state.get_factories() == root_game_state.get_factories();
+        let is_discard_equal =
+            game_state.get_floor_line_progress() == root_game_state.get_floor_line_progress();
+        let states_equal = is_current_player_equal
+            && is_next_round_starting_player_equal
+            && is_pattern_line_equal
+            && is_bag_equal
+            && is_factory_equal
+            && is_discard_equal;
+
+        if root_node.children.is_empty() || !states_equal {
+            println!("Could not find the given game state in the tree. Falling back to the default root node.");
+            //root_node = Node::new_deterministic(Move::DUMMY);
+            *root_node = Node::new_deterministic(Move::DUMMY);
+        } else {
+            println!("Found the given game state in the tree. Setting it as the new root node.");
         }
-        let color = colors[color_index];
+        // self.root_node = Node::new_deterministic(Move::DUMMY);
+        *root_game_state = game_state.clone();
+    }
 
-        let current_player = usize::from(game_state.get_current_player());
-        let player_pattern_lines = game_state.get_pattern_lines_occupancy()[current_player];
-        let player_pattern_line_colors: [Option<game::TileColor>; 5] =
-            game_state.get_pattern_lines_colors()[current_player];
+    async fn search(&mut self, game_state: &GameState) -> Move {
+        println!(
+            "Searching move using MCTS. Fen: {}",
+            game_state.serialize_string()
+        );
+        println!("    Left Depth Iterations Value PV");
+        let start_time = Instant::now();
+        self.set_root(game_state).await;
+        let mut rng = SmallRng::from_entropy();
+        let mut pv: Vec<Event> = Vec::with_capacity(100);
+        let mut iterations_per_ms = 5.;
+        let mut completed_iterations: usize = 0;
+        let search_start_time = Instant::now();
 
-        let mut remaining_space: [u8; 6] = [1, 2, 3, 4, 5, 255];
-        for (pattern_line_index, number_of_tiles) in player_pattern_lines.iter().enumerate() {
-            remaining_space[pattern_line_index] -= *number_of_tiles;
-            if let Some(existing_color) = player_pattern_line_colors[pattern_line_index] {
-                if current_player != usize::from(existing_color) {
-                    remaining_space[pattern_line_index] = 0;
+        let factories: &[[u8; 5]; NUM_FACTORIES] = game_state.get_factories();
+        let all_empty = factories
+            .iter()
+            .all(|factory| factory.iter().all(|&tile| tile == 0));
+        if all_empty {
+            panic!("Monte Carlo Tree search was started in a position where it is not possible to make a move.");
+        }
+
+        let mut root_node = self.root_node.lock().await;
+        let root_game_state = self.root_game_state.lock().await;
+
+        loop {
+            pv.truncate(0);
+            root_node.build_pv(&mut root_game_state.clone(), &mut pv);
+
+            let time_left: i64 = self.time_limit as i64 - start_time.elapsed().as_millis() as i64;
+
+            println!(
+                "{:6}ms {:5} {:10} {:4.0}% {}",
+                time_left,
+                pv.len(),
+                completed_iterations,
+                (1. - root_node.get_value()).min(1.0) * 100.,
+                pv.iter()
+                    .map(|event| event.to_string())
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            );
+
+            if time_left < 30 {
+                break;
+            }
+
+            let iterations =
+                ((time_left as f32 / 6.).min(5000.) * iterations_per_ms).max(1.) as usize;
+            do_iterations(&mut root_node, &root_game_state, iterations, &mut rng);
+            completed_iterations += iterations;
+
+            let elapsed_time = search_start_time.elapsed().as_micros() as f32 / 1000.;
+            if elapsed_time > 0. {
+                iterations_per_ms = completed_iterations as f32 / elapsed_time
+            }
+        }
+
+        println!(
+            "Search finished after {}ms. Value: {:.0}% PV-Depth: {} Iterations: {} Iterations/s: {:.2} PV: {}",
+            start_time.elapsed().as_millis(),
+            (1. - root_node.get_value()).min(1.0) * 100.,
+            pv.len(),
+            completed_iterations,
+            iterations_per_ms * 1000.,
+            pv.iter()
+                .map(|event| event.to_string())
+                .collect::<Vec<_>>()
+                .join(" "),
+        );
+        root_node.best_move().unwrap()
+    }
+
+    async fn start_pondering(&mut self) {
+        if !self.use_pondering {
+            return;
+        }
+        let (stop_sender, mut stop_receiver) = tokio::sync::oneshot::channel();
+        let root_node_mutex = self.root_node.clone();
+        let root_game_state_mutex = self.root_game_state.clone();
+        println!("Pondering...");
+
+        tokio::spawn(async move {
+            let mut rng = SmallRng::from_entropy();
+            let start_time = Instant::now();
+            let pv: &mut Vec<Event> = &mut Vec::with_capacity(100);
+            println!("  Elapsed Depth Iterations Value PV");
+
+            let mut root_node = root_node_mutex.lock().await;
+            let root_game_state = root_game_state_mutex.lock().await;
+
+            let mut completed_iterations: usize = 0;
+            let mut iterations_per_ms = 5.;
+
+            let mut last_print_time = Instant::now();
+            loop {
+                if stop_receiver.try_recv().is_ok() {
+                    println!(
+                        "{:6}ms {:5} {:10} {:4.0}% {}",
+                        "",
+                        pv.len(),
+                        completed_iterations,
+                        root_node.get_value().min(1.0) * 100.,
+                        pv.iter()
+                            .map(|event| event.to_string())
+                            .collect::<Vec<_>>()
+                            .join(" ")
+                    );
+                    println!("Pondering stopped.");
+                    break; // Stop if a message has been received
                 }
-            } else {
-                // Make sure the wall has space for the tiles
-                let wall_mask = game::wall::WALL_COLOR_MASKS[current_player];
-                let wall_occupancy = game_state.get_wall_ocupancy()[current_player];
-                let row = game::wall::get_row_mask(pattern_line_index);
-                if wall_occupancy & row & wall_mask > 0 {
-                    remaining_space[pattern_line_index] = 0;
+
+                pv.truncate(0);
+                let new_iterations = (iterations_per_ms * 10.) as usize; // Do 10ms worth of iterations
+                do_iterations(&mut root_node, &root_game_state, new_iterations, &mut rng);
+                completed_iterations += new_iterations;
+                root_node.build_pv(&mut root_game_state.clone(), pv);
+
+                let elapsed_time = start_time.elapsed().as_micros() as f32 / 1000.;
+                if elapsed_time > 0. && last_print_time.elapsed().as_millis() > 300 {
+                    last_print_time = Instant::now();
+                    println!(
+                        "{:6}ms {:5} {:10} {:4.0}% {}",
+                        elapsed_time as i64,
+                        pv.len(),
+                        completed_iterations,
+                        root_node.get_value().min(1.0) * 100.,
+                        pv.iter()
+                            .map(|event| event.to_string())
+                            .collect::<Vec<_>>()
+                            .join(" ")
+                    );
+                }
+                if elapsed_time > 0. {
+                    iterations_per_ms = completed_iterations as f32 / elapsed_time;
                 }
             }
-        } */
+        });
+
+        self.stop_pondering = Some(stop_sender);
+    }
+
+    async fn stop_pondering(&mut self) {
+        println!("Stopping pondering...");
+        if let Some(stop_sender) = self.stop_pondering.take() {
+            let result = stop_sender.send(());
+            if result.is_err() {
+                println!("Failed to stop pondering.");
+            }
+        }
+    }
+}
+
+impl Default for MonteCarloTreeSearch {
+    fn default() -> Self {
+        let mut rng = SmallRng::from_entropy();
+        Self {
+            root_node: SharedState::new(Node::new_deterministic(Move::DUMMY)),
+            root_game_state: SharedState::new(GameState::new(&mut rng)),
+            time_limit: 2000,
+            stop_pondering: None,
+            use_pondering: true,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl Player for MonteCarloTreeSearch {
+    fn name(&self) -> &str {
+        "MCTS"
+    }
+
+    async fn get_move(&mut self, game_state: &GameState) -> Move {
+        println!("Stopping pondering, it's my turn now.");
+        self.stop_pondering().await;
+        let move_ = self.search(game_state).await;
+        self.root_game_state.lock().await.do_move(move_);
+        let mut root_node = self.root_node.lock().await;
+        let new_root_node =
+            std::mem::replace(root_node.best_child(), Node::new_deterministic(Move::DUMMY));
+        *root_node = new_root_node;
+        drop(root_node);
+        println!("Turn finished, starting pondering again.");
+        self.start_pondering().await;
+        move_
+    }
+
+    async fn notify_move(&mut self, new_game_state: &GameState, move_: Move) {
+        println!("Stopping pondering, opponent made a move.");
+        self.stop_pondering().await;
+        let mut invalid = false;
+        let mut root_node = self.root_node.lock().await;
+        let mut root_game_state = self.root_game_state.lock().await;
+        for child in &mut root_node.children {
+            match child.previous_event.clone() {
+                Event::Deterministic(child_move) => {
+                    if child_move == move_ {
+                        let mut temp_node =
+                            Node::new_probabilistic(ProbabilisticOutcome::default()); // Assuming a new method for creating a Node
+                        std::mem::swap(child, &mut temp_node);
+                        let new_root_node = temp_node;
+                        *root_node = new_root_node;
+                        *root_game_state = new_game_state.clone();
+                        return;
+                    }
+                }
+                Event::Probabilistic(_) => {
+                    invalid = true;
+                    // let mut move_list = MoveList::default();
+                    // let mut rng = SmallRng::from_entropy();
+                    // // self.root_node = Node::new_deterministic(Move::DUMMY); // Assuming a new method for creating a Node
+                    // self.root_game_state.get_possible_moves(&mut move_list, &mut rng);
+                    // Get all possible moves to trigger the refilling of the factories
+                }
+            }
+        }
+        if invalid {
+            *root_node = Node::new_deterministic(Move::DUMMY); // Assuming a new method for creating a Node
+        }
+        *root_game_state = new_game_state.clone();
+        drop(root_node);
+        drop(root_game_state);
+        println!("Turn finished, starting pondering again.");
+        self.start_pondering().await;
+    }
+
+    async fn set_time(&mut self, time: u64) {
+        self.time_limit = time;
+    }
+
+    async fn set_pondering(&mut self, pondering: bool) {
+        self.use_pondering = pondering;
+    }
+}
