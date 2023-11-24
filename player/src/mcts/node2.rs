@@ -1,4 +1,6 @@
-use game::{GameState, Move, MoveList, Player, TileColor, NUM_FACTORIES, NUM_TILE_COLORS};
+use game::{
+    GameState, Move, MoveList, Player, SharedState, TileColor, NUM_FACTORIES, NUM_TILE_COLORS,
+};
 use rand::{rngs::SmallRng, SeedableRng};
 use std::time::Instant;
 
@@ -29,11 +31,11 @@ struct ProbabilisticOutcome {
 
 impl ProbabilisticOutcome {
     pub fn apply_to_game_state(&self, game_state: &mut GameState) {
-        let orig = game_state.clone();
+        // let orig = game_state.clone();
         // Before each factory refill, the last round ends, so evaluate the round
         game_state.evaluate_round();
-        let orig_out_of_bag = game_state.get_out_of_bag();
-        let after_eval = game_state.clone();
+        // let orig_out_of_bag = game_state.get_out_of_bag();
+        // let after_eval = game_state.clone();
 
         // Overwrite the factories with the outcome of the event
         game_state.set_factories(self.factories);
@@ -42,19 +44,19 @@ impl ProbabilisticOutcome {
         game_state.set_bag(self.bag);
 
         // For debugging purposes, check the integrity of the game state
-        if game_state.check_integrity().is_err() {
-            println!("Original game state:");
-            println!("{}", orig);
-            println!("After evaluation:");
-            println!("{:?}", orig_out_of_bag);
-            println!("{}", after_eval);
-            println!("Probabilistic outcome:");
-            println!("{:?}", game_state.get_out_of_bag());
-            println!("{}", game_state);
+        // if game_state.check_integrity().is_err() {
+        //     println!("Original game state:");
+        //     println!("{}", orig);
+        //     println!("After evaluation:");
+        //     println!("{:?}", orig_out_of_bag);
+        //     println!("{}", after_eval);
+        //     println!("Probabilistic outcome:");
+        //     println!("{:?}", game_state.get_out_of_bag());
+        //     println!("{}", game_state);
 
-            println!("Out of bag would have been {:?}", self.out_of_bag);
-            panic!("Probabilistic outcome was applied to an invalid game state.");
-        }
+        //     println!("Out of bag would have been {:?}", self.out_of_bag);
+        //     panic!("Probabilistic outcome was applied to an invalid game state.");
+        // }
     }
 }
 
@@ -366,35 +368,43 @@ pub fn playout(game_state: &mut GameState, rng: &mut SmallRng, move_list: &mut M
 }
 
 pub struct MonteCarloTreeSearch {
-    root_node: Node,
-    root_game_state: GameState,
+    root_node: SharedState<Node>,
+    root_game_state: SharedState<GameState>,
     time_limit: u64,
+    stop_pondering: Option<tokio::sync::oneshot::Sender<()>>,
+    use_pondering: bool,
+}
+
+fn do_iterations(
+    root_node: &mut Node,
+    root_game_state: &GameState,
+    iterations: usize,
+    rng: &mut SmallRng,
+) {
+    let mut move_list = MoveList::new();
+    for _ in 0..iterations {
+        root_node.iteration(&mut root_game_state.clone(), &mut move_list, rng);
+    }
 }
 
 impl MonteCarloTreeSearch {
-    fn do_iterations(&mut self, iterations: usize, rng: &mut SmallRng) {
-        let mut move_list = MoveList::new();
-        for _ in 0..iterations {
-            self.root_node
-                .iteration(&mut self.root_game_state.clone(), &mut move_list, rng);
-        }
-    }
-
-    fn set_root(&mut self, game_state: &GameState) {
+    async fn set_root(&mut self, game_state: &GameState) {
+        let mut root_game_state = self.root_game_state.lock().await;
+        let mut root_node = self.root_node.lock().await;
         // Check game state for equality. TODO: Implement PartialEq for GameState
         let is_current_player_equal =
-            game_state.get_current_player() == self.root_game_state.get_current_player();
+            game_state.get_current_player() == root_game_state.get_current_player();
         let is_next_round_starting_player_equal = game_state.get_next_round_starting_player()
-            == self.root_game_state.get_next_round_starting_player();
-        let is_pattern_line_equal = game_state.get_pattern_lines_colors()
-            == self.root_game_state.get_pattern_lines_colors();
+            == root_game_state.get_next_round_starting_player();
+        let is_pattern_line_equal =
+            game_state.get_pattern_lines_colors() == root_game_state.get_pattern_lines_colors();
         let is_pattern_line_equal = is_pattern_line_equal
             && game_state.get_pattern_lines_occupancy()
-                == self.root_game_state.get_pattern_lines_occupancy();
-        let is_bag_equal = game_state.get_bag() == self.root_game_state.get_bag();
-        let is_factory_equal = game_state.get_factories() == self.root_game_state.get_factories();
+                == root_game_state.get_pattern_lines_occupancy();
+        let is_bag_equal = game_state.get_bag() == root_game_state.get_bag();
+        let is_factory_equal = game_state.get_factories() == root_game_state.get_factories();
         let is_discard_equal =
-            game_state.get_floor_line_progress() == self.root_game_state.get_floor_line_progress();
+            game_state.get_floor_line_progress() == root_game_state.get_floor_line_progress();
         let states_equal = is_current_player_equal
             && is_next_round_starting_player_equal
             && is_pattern_line_equal
@@ -402,24 +412,25 @@ impl MonteCarloTreeSearch {
             && is_factory_equal
             && is_discard_equal;
 
-        if self.root_node.children.is_empty() || !states_equal {
+        if root_node.children.is_empty() || !states_equal {
             println!("Could not find the given game state in the tree. Falling back to the default root node.");
-            self.root_node = Node::new_deterministic(Move::DUMMY);
+            //root_node = Node::new_deterministic(Move::DUMMY);
+            *root_node = Node::new_deterministic(Move::DUMMY);
         } else {
             println!("Found the given game state in the tree. Setting it as the new root node.");
         }
         // self.root_node = Node::new_deterministic(Move::DUMMY);
-        self.root_game_state = game_state.clone();
+        *root_game_state = game_state.clone();
     }
 
-    fn search(&mut self, game_state: &GameState) -> Move {
+    async fn search(&mut self, game_state: &GameState) -> Move {
         println!(
             "Searching move using MCTS. Fen: {}",
             game_state.serialize_string()
         );
         println!("    Left Depth Iterations Value PV");
         let start_time = Instant::now();
-        self.set_root(game_state);
+        self.set_root(game_state).await;
         let mut rng = SmallRng::from_entropy();
         let mut pv: Vec<Event> = Vec::with_capacity(100);
         let mut iterations_per_ms = 5.;
@@ -434,10 +445,12 @@ impl MonteCarloTreeSearch {
             panic!("Monte Carlo Tree search was started in a position where it is not possible to make a move.");
         }
 
+        let mut root_node = self.root_node.lock().await;
+        let root_game_state = self.root_game_state.lock().await;
+
         loop {
             pv.truncate(0);
-            self.root_node
-                .build_pv(&mut self.root_game_state.clone(), &mut pv);
+            root_node.build_pv(&mut root_game_state.clone(), &mut pv);
 
             let time_left: i64 = self.time_limit as i64 - start_time.elapsed().as_millis() as i64;
 
@@ -446,7 +459,7 @@ impl MonteCarloTreeSearch {
                 time_left,
                 pv.len(),
                 completed_iterations,
-                (1. - self.root_node.get_value()).min(1.0) * 100.,
+                (1. - root_node.get_value()).min(1.0) * 100.,
                 pv.iter()
                     .map(|event| event.to_string())
                     .collect::<Vec<_>>()
@@ -459,7 +472,7 @@ impl MonteCarloTreeSearch {
 
             let iterations =
                 ((time_left as f32 / 6.).min(5000.) * iterations_per_ms).max(1.) as usize;
-            self.do_iterations(iterations, &mut rng);
+            do_iterations(&mut root_node, &root_game_state, iterations, &mut rng);
             completed_iterations += iterations;
 
             let elapsed_time = search_start_time.elapsed().as_micros() as f32 / 1000.;
@@ -471,7 +484,7 @@ impl MonteCarloTreeSearch {
         println!(
             "Search finished after {}ms. Value: {:.0}% PV-Depth: {} Iterations: {} Iterations/s: {:.2} PV: {}",
             start_time.elapsed().as_millis(),
-            (1. - self.root_node.get_value()).min(1.0) * 100.,
+            (1. - root_node.get_value()).min(1.0) * 100.,
             pv.len(),
             completed_iterations,
             iterations_per_ms * 1000.,
@@ -480,7 +493,86 @@ impl MonteCarloTreeSearch {
                 .collect::<Vec<_>>()
                 .join(" "),
         );
-        self.root_node.best_move().unwrap()
+        root_node.best_move().unwrap()
+    }
+
+    async fn start_pondering(&mut self) {
+        if !self.use_pondering {
+            return;
+        }
+        let (stop_sender, mut stop_receiver) = tokio::sync::oneshot::channel();
+        let root_node_mutex = self.root_node.clone();
+        let root_game_state_mutex = self.root_game_state.clone();
+        println!("Pondering...");
+
+        tokio::spawn(async move {
+            let mut rng = SmallRng::from_entropy();
+            let start_time = Instant::now();
+            let pv: &mut Vec<Event> = &mut Vec::with_capacity(100);
+            println!("  Elapsed Depth Iterations Value PV");
+
+            let mut root_node = root_node_mutex.lock().await;
+            let root_game_state = root_game_state_mutex.lock().await;
+
+            let mut completed_iterations: usize = 0;
+            let mut iterations_per_ms = 5.;
+
+            let mut last_print_time = Instant::now();
+            loop {
+                if stop_receiver.try_recv().is_ok() {
+                    println!(
+                        "{:6}ms {:5} {:10} {:4.0}% {}",
+                        "",
+                        pv.len(),
+                        completed_iterations,
+                        root_node.get_value().min(1.0) * 100.,
+                        pv.iter()
+                            .map(|event| event.to_string())
+                            .collect::<Vec<_>>()
+                            .join(" ")
+                    );
+                    println!("Pondering stopped.");
+                    break; // Stop if a message has been received
+                }
+
+                pv.truncate(0);
+                let new_iterations = (iterations_per_ms * 10.) as usize; // Do 10ms worth of iterations
+                do_iterations(&mut root_node, &root_game_state, new_iterations, &mut rng);
+                completed_iterations += new_iterations;
+                root_node.build_pv(&mut root_game_state.clone(), pv);
+
+                let elapsed_time = start_time.elapsed().as_micros() as f32 / 1000.;
+                if elapsed_time > 0. && last_print_time.elapsed().as_millis() > 300 {
+                    last_print_time = Instant::now();
+                    println!(
+                        "{:6}ms {:5} {:10} {:4.0}% {}",
+                        elapsed_time as i64,
+                        pv.len(),
+                        completed_iterations,
+                        root_node.get_value().min(1.0) * 100.,
+                        pv.iter()
+                            .map(|event| event.to_string())
+                            .collect::<Vec<_>>()
+                            .join(" ")
+                    );
+                }
+                if elapsed_time > 0. {
+                    iterations_per_ms = completed_iterations as f32 / elapsed_time;
+                }
+            }
+        });
+
+        self.stop_pondering = Some(stop_sender);
+    }
+
+    async fn stop_pondering(&mut self) {
+        println!("Stopping pondering...");
+        if let Some(stop_sender) = self.stop_pondering.take() {
+            let result = stop_sender.send(());
+            if result.is_err() {
+                println!("Failed to stop pondering.");
+            }
+        }
     }
 }
 
@@ -488,9 +580,11 @@ impl Default for MonteCarloTreeSearch {
     fn default() -> Self {
         let mut rng = SmallRng::from_entropy();
         Self {
-            root_node: Node::new_deterministic(Move::DUMMY),
-            root_game_state: GameState::new(&mut rng),
+            root_node: SharedState::new(Node::new_deterministic(Move::DUMMY)),
+            root_game_state: SharedState::new(GameState::new(&mut rng)),
             time_limit: 2000,
+            stop_pondering: None,
+            use_pondering: true,
         }
     }
 }
@@ -502,12 +596,27 @@ impl Player for MonteCarloTreeSearch {
     }
 
     async fn get_move(&mut self, game_state: &GameState) -> Move {
-        self.search(game_state)
+        println!("Stopping pondering, it's my turn now.");
+        self.stop_pondering().await;
+        let move_ = self.search(game_state).await;
+        self.root_game_state.lock().await.do_move(move_);
+        let mut root_node = self.root_node.lock().await;
+        let new_root_node =
+            std::mem::replace(root_node.best_child(), Node::new_deterministic(Move::DUMMY));
+        *root_node = new_root_node;
+        drop(root_node);
+        println!("Turn finished, starting pondering again.");
+        self.start_pondering().await;
+        move_
     }
 
     async fn notify_move(&mut self, new_game_state: &GameState, move_: Move) {
+        println!("Stopping pondering, opponent made a move.");
+        self.stop_pondering().await;
         let mut invalid = false;
-        for child in &mut self.root_node.children {
+        let mut root_node = self.root_node.lock().await;
+        let mut root_game_state = self.root_game_state.lock().await;
+        for child in &mut root_node.children {
             match child.previous_event.clone() {
                 Event::Deterministic(child_move) => {
                     if child_move == move_ {
@@ -515,8 +624,8 @@ impl Player for MonteCarloTreeSearch {
                             Node::new_probabilistic(ProbabilisticOutcome::default()); // Assuming a new method for creating a Node
                         std::mem::swap(child, &mut temp_node);
                         let new_root_node = temp_node;
-                        self.root_node = new_root_node;
-                        self.root_game_state = new_game_state.clone();
+                        *root_node = new_root_node;
+                        *root_game_state = new_game_state.clone();
                         return;
                     }
                 }
@@ -531,9 +640,13 @@ impl Player for MonteCarloTreeSearch {
             }
         }
         if invalid {
-            self.root_node = Node::new_deterministic(Move::DUMMY); // Assuming a new method for creating a Node
+            *root_node = Node::new_deterministic(Move::DUMMY); // Assuming a new method for creating a Node
         }
-        self.root_game_state = new_game_state.clone();
+        *root_game_state = new_game_state.clone();
+        drop(root_node);
+        drop(root_game_state);
+        println!("Turn finished, starting pondering again.");
+        self.start_pondering().await;
     }
 
     async fn set_time(&mut self, time: u64) {

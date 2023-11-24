@@ -320,14 +320,14 @@ impl MonteCarloTreeSearch {
 
             let (next_iterations, stop) = if let Some(time_limit) = self.time_limit {
                 let time_left = time_limit - start_time.elapsed().as_millis() as i64;
-                println!(
-                    "{:6}ms {:5} {:10} {:4.0}% {}",
-                    time_left,
-                    pv.len(),
-                    iterations,
-                    (1. - self.root_node.get_value()).min(1.0) * 100.,
-                    pv
-                );
+                // println!(
+                //     "{:6}ms {:5} {:10} {:4.0}% {}",
+                //     time_left,
+                //     pv.len(),
+                //     iterations,
+                //     (1. - self.root_node.get_value()).min(1.0) * 100.,
+                //     pv
+                // );
                 let next_iterations =
                     ((time_left as f64 / 6.).min(5000.) * iterations_per_ms).max(1.) as usize;
                 (next_iterations, time_left < 30)
@@ -336,14 +336,14 @@ impl MonteCarloTreeSearch {
                     (0, true)
                 } else {
                     let iterations_left = iteration_limit - iterations;
-                    println!(
-                        "{:6}it {:5} {:10} {:4.0}% {}",
-                        iterations_left,
-                        pv.len(),
-                        iterations,
-                        (1. - self.root_node.get_value()).min(1.0) * 100.,
-                        pv
-                    );
+                    // println!(
+                    //     "{:6}it {:5} {:10} {:4.0}% {}",
+                    //     iterations_left,
+                    //     pv.len(),
+                    //     iterations,
+                    //     (1. - self.root_node.get_value()).min(1.0) * 100.,
+                    //     pv
+                    // );
                     let next_iterations = iterations_left / 2;
                     (next_iterations, next_iterations < 100)
                 }
@@ -361,15 +361,15 @@ impl MonteCarloTreeSearch {
             }
         }
 
-        println!(
-            "Search finished after {}ms. Value: {:.0}% PV-Depth: {} Iterations: {} Iterations/s: {:.2} PV: {}",
-            start_time.elapsed().as_millis(),
-            (1. - self.root_node.get_value()).min(1.0) * 100.,
-            pv.len(),
-            iterations,
-            iterations_per_ms * 1000.,
-            pv,
-        );
+        // println!(
+        //     "Search finished after {}ms. Value: {:.0}% PV-Depth: {} Iterations: {} Iterations/s: {:.2} PV: {}",
+        //     start_time.elapsed().as_millis(),
+        //     (1. - self.root_node.get_value()).min(1.0) * 100.,
+        //     pv.len(),
+        //     iterations,
+        //     iterations_per_ms * 1000.,
+        //     pv,
+        // );
         self.root_node.best_move().unwrap()
     }
 }

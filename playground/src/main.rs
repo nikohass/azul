@@ -71,8 +71,8 @@ async fn main() {
     let mut player_one = node::MonteCarloTreeSearch::default(); //RandomPlayer::new("Random player".to_string());
     let mut player_two = node2::MonteCarloTreeSearch::default();
 
-    player_one.set_time(800).await;
-    player_two.set_time(800).await;
+    player_one.set_time(8000).await;
+    player_two.set_time(8000).await;
 
     let mut players: Vec<Box<dyn Player>> = vec![Box::new(player_one), Box::new(player_two)];
     let _stats = game_manager::run_match(game_state, &mut players, true)

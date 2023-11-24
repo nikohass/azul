@@ -1,7 +1,7 @@
 
 [game]
 num_games = 200
-num_simultaneous_games = 14
+num_simultaneous_games = 2
 verbose = false
 
 [player_one]
@@ -9,5 +9,5 @@ executable = "./target/release/test_client.exe"
 think_time = 450
 
 [player_two]
-executable = "./clients/test_client-1.exe"
+executable = "./clients/no-ponder.exe"
 think_time = 450
