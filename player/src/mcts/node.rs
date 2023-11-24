@@ -1,5 +1,5 @@
 use game::{
-    GameState, Move, MoveList, Player, SharedState, TileColor, NUM_FACTORIES, NUM_TILE_COLORS,
+    GameState, Move, MoveList, Player, SharedState, TileColor, NUM_FACTORIES, NUM_TILE_COLORS, NUM_PLAYERS,
 };
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 use std::time::Instant;
@@ -60,6 +60,84 @@ impl ProbabilisticOutcome {
     }
 }
 
+// fn get_game_result(game_state: &GameState) -> f32 {
+//     let scores = game_state.get_scores();
+//     let score_difference = scores[0] as f32 - scores[1] as f32;
+//     let normalized_score_difference =
+//         score_difference.abs() / MAX_SCORE_DIFFERENCE * BASE_SCORE_ADJUSTMENT;
+//     match score_difference {
+//         x if x > 0. => COMPLEMENTARY_SCORE_ADJUSTMENT + normalized_score_difference, // Basically 1 + normalized_score_difference
+//         x if x < 0. => BASE_SCORE_ADJUSTMENT - normalized_score_difference, // Basically 0 - normalized_score_difference
+//         _ => 0.5,
+//     }
+// }
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Value([f32; NUM_PLAYERS]);
+
+impl Value {
+    pub fn from_game_scores(game_scores: [i16; NUM_PLAYERS]) -> Self {
+        let max_score = game_scores.iter().cloned().fold(i16::MIN, i16::max);
+        let min_score = game_scores.iter().cloned().fold(i16::MAX, i16::min);
+
+        let score_range = max_score - min_score;
+        if score_range == 0 {
+            // If all scores are the same, return 1 / NUM_PLAYERS for each player
+            // e.g. if there are 2 players, return [0.5, 0.5] for each player
+            return Self([1.0 / NUM_PLAYERS as f32; NUM_PLAYERS]);
+        }
+
+        let mut value = [0.0; NUM_PLAYERS];
+        let score_range = score_range as f32;
+        for (i, &score) in game_scores.iter().enumerate() {
+            let normalized_score = (score - min_score) as f32 / score_range;
+            value[i] = normalized_score;
+        }
+
+        // // Divide by the sum of all values to normalize them
+        // let sum: f32 = value.iter().sum();
+        // for value in value.iter_mut() {
+        //     *value /= sum;
+        // }
+
+        Self(value)
+    }
+}
+
+// Add two values together
+impl std::ops::AddAssign for Value {
+    fn add_assign(&mut self, rhs: Self) {
+        for (lhs, rhs) in self.0.iter_mut().zip(rhs.0.iter()) {
+            *lhs += *rhs;
+        }
+    }
+}
+
+impl std::ops::DivAssign<f32> for Value {
+    fn div_assign(&mut self, rhs: f32) {
+        for value in self.0.iter_mut() {
+            *value /= rhs;
+        }
+    }
+}
+
+impl std::ops::Div<f32> for Value {
+    type Output = Self;
+
+    fn div(mut self, rhs: f32) -> Self::Output {
+        self /= rhs;
+        self
+    }
+}
+
+impl std::ops::Index<usize> for Value {
+    type Output = f32;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.0[index]
+    }
+}
+
 const C: f32 = 0.2;
 const C_BASE: f32 = 6120.0;
 const C_FACTOR: f32 = std::f32::consts::SQRT_2;
@@ -100,7 +178,7 @@ struct Node {
     children: Vec<Node>,   // The children of this node
     previous_event: Event, // The edge from the parent to this node
     n: f32,
-    q: f32,
+    q: Value, // Value can handle 2 to 4 players
     is_game_over: bool,
     has_probabilistic_children: bool,
 }
@@ -111,7 +189,7 @@ impl Node {
             children: Vec::new(),
             previous_event: Event::Deterministic(previous_move),
             n: 0.,
-            q: 0.,
+            q: Value::default(),
             is_game_over: false,
             has_probabilistic_children: false,
         }
@@ -122,37 +200,38 @@ impl Node {
             children: Vec::new(),
             previous_event: Event::Probabilistic(outcome),
             n: 0.,
-            q: 0.,
+            q: Value::default(),
             is_game_over: false,
             has_probabilistic_children: false,
         }
     }
 
     #[inline]
-    fn get_value(&self) -> f32 {
+    fn get_value(&self) -> Option<Value> {
         if self.n > 0. {
-            self.q / self.n
+            Some(self.q / self.n)
         } else {
-            std::f32::NEG_INFINITY
+            None
         }
     }
 
-    fn get_uct_value(&self, parent_n: f32, c: f32) -> f32 {
+    fn get_uct_value(&self, player_index: usize, parent_n: f32, c: f32) -> f32 {
         if self.n > 0. {
-            (self.q / self.n) + c * (parent_n.ln() / self.n).sqrt()
+            let mean_value = self.q[player_index] / self.n;
+            mean_value + c * (parent_n.ln() / self.n).sqrt()
         } else {
             std::f32::INFINITY
         }
     }
 
-    fn child_with_max_uct_value(&mut self) -> &mut Node {
+    fn child_with_max_uct_value(&mut self, player_index: usize) -> &mut Node {
         let c_adjusted = C + C_FACTOR * ((1. + self.n + C_BASE) / C_BASE).ln();
 
         let mut best_child_index = 0;
         let mut best_chuld_uct_value = std::f32::NEG_INFINITY;
 
         for (i, child) in self.children.iter().enumerate() {
-            let value = child.get_uct_value(self.n, c_adjusted);
+            let value = child.get_uct_value(player_index, self.n, c_adjusted);
             if value > best_chuld_uct_value {
                 best_child_index = i;
                 best_chuld_uct_value = value;
@@ -162,7 +241,7 @@ impl Node {
         &mut self.children[best_child_index]
     }
 
-    fn backpropagate(&mut self, value: f32) {
+    fn backpropagate(&mut self, value: Value) {
         self.n += 1.;
         self.q += value;
     }
@@ -205,12 +284,10 @@ impl Node {
         game_state: &mut GameState,
         move_list: &mut MoveList,
         rng: &mut SmallRng,
-    ) -> f32 {
+    ) -> Value {
         let current_player = u8::from(game_state.get_current_player());
-        let mut invert_delta = false;
 
         if self.has_probabilistic_children {
-            invert_delta = true; // This node doesnt change the current player, so we need to invert the delta
 
             // All children of this node are probabilistic. When this node was "expanded", we only expanded one probabilistic outcome.
             // There would be too many possible outcomes to expand all of them, so we just expanded one.
@@ -218,13 +295,6 @@ impl Node {
             // Here we also need to balance exploration and exploitation.
             // If we only visit the only child and never expand further, our strategy will be quite bad because we basically assume that the probabilistic event will always happen.
             // If we expand a new child every time we iterate this node, we would never visit the same child twice. This would cause our estimations of the value of the child to be very inaccurate.
-
-            let next_round_starting_player = game_state.get_next_round_starting_player();
-            let next_round_starting_player = u8::from(next_round_starting_player);
-            if next_round_starting_player != current_player {
-                // The next round will start with the other player, so we need to invert the delta
-                invert_delta = !invert_delta;
-            }
 
             // Let's just try this:
             let desired_number_of_children = self.n.sqrt().ceil() as usize / 2;
@@ -253,30 +323,20 @@ impl Node {
             }
         }
 
-        let delta = if self.children.is_empty() {
+        let delta: Value = if self.children.is_empty() {
             self.expand(game_state, move_list, rng);
             if !self.is_game_over {
-                let playout_result = playout(&mut game_state.clone(), rng, move_list); // Playout returns 1 if player 1 wins, 0 if player 2 wins, and 0.5 if it's a draw
-                if current_player == 0 {
-                    1. - playout_result
-                } else {
-                    playout_result
-                }
+                playout(&mut game_state.clone(), rng, move_list)
             } else if self.n == 0. {
-                let mut game_result = get_game_result(game_state);
-                game_result = if current_player == 0 {
-                    1. - game_result
-                } else {
-                    game_result
-                };
-                self.q = game_result;
+                let game_result = Value::from_game_scores(game_state.get_scores());
+                self.q = Value::from_game_scores(game_state.get_scores());
                 self.n = 1.;
                 game_result
             } else {
                 self.q / self.n
             }
         } else {
-            let next_child: &mut Node = self.child_with_max_uct_value();
+            let next_child: &mut Node = self.child_with_max_uct_value(current_player as usize);
             match next_child.previous_event {
                 Event::Deterministic(move_) => {
                     game_state.do_move(move_);
@@ -288,18 +348,19 @@ impl Node {
             next_child.iteration(game_state, move_list, rng)
         };
 
-        let delta = if invert_delta { 1. - delta } else { delta };
+        // let delta = if invert_delta { 1. - delta } else { delta };
 
         self.backpropagate(delta);
 
-        1. - delta
+        delta
     }
 
     fn build_pv(&mut self, game_state: &mut GameState, pv: &mut Vec<Event>) {
         if self.children.is_empty() {
             return;
         }
-        let child: &mut Node = self.best_child();
+        let player_index = usize::from(game_state.get_current_player());
+        let child: &mut Node = self.best_child(player_index);
         match child.previous_event {
             Event::Deterministic(move_) => {
                 game_state.do_move(move_);
@@ -312,27 +373,31 @@ impl Node {
         child.build_pv(game_state, pv);
     }
 
-    fn best_child(&mut self) -> &mut Node {
+    fn best_child(&mut self, player_index: usize) -> &mut Node {
         let mut best_child_index = 0;
         let mut best_child_value = std::f32::NEG_INFINITY;
 
         for (i, child) in self.children.iter().enumerate() {
-            let value = child.get_value();
-            if value > best_child_value {
+            let value: Option<Value> = child.get_value();
+            let value = match value {
+                Some(value) => value,
+                None => continue,
+            };
+            if value[player_index] > best_child_value {
                 best_child_index = i;
-                best_child_value = value;
+                best_child_value = value[player_index];
             }
         }
 
         &mut self.children[best_child_index]
     }
 
-    pub fn best_move(&mut self) -> Option<Move> {
+    pub fn best_move(&mut self, player_index: usize) -> Option<Move> {
         if self.children.is_empty() {
             return None;
         }
 
-        let child: &mut Node = self.best_child();
+        let child: &mut Node = self.best_child(player_index);
         match child.previous_event {
             Event::Deterministic(move_) => Some(move_),
             Event::Probabilistic(_) => None,
@@ -340,27 +405,11 @@ impl Node {
     }
 }
 
-const MAX_SCORE_DIFFERENCE: f32 = 100.;
-const BASE_SCORE_ADJUSTMENT: f32 = 0.001;
-const COMPLEMENTARY_SCORE_ADJUSTMENT: f32 = 1. - BASE_SCORE_ADJUSTMENT;
-
-fn get_game_result(game_state: &GameState) -> f32 {
-    let scores = game_state.get_scores();
-    let score_difference = scores[0] as f32 - scores[1] as f32;
-    let normalized_score_difference =
-        score_difference.abs() / MAX_SCORE_DIFFERENCE * BASE_SCORE_ADJUSTMENT;
-    match score_difference {
-        x if x > 0. => COMPLEMENTARY_SCORE_ADJUSTMENT + normalized_score_difference, // Basically 1 + normalized_score_difference
-        x if x < 0. => BASE_SCORE_ADJUSTMENT - normalized_score_difference, // Basically 0 - normalized_score_difference
-        _ => 0.5,
-    }
-}
-
-pub fn playout(game_state: &mut GameState, rng: &mut SmallRng, move_list: &mut MoveList) -> f32 {
+pub fn playout(game_state: &mut GameState, rng: &mut SmallRng, move_list: &mut MoveList) -> Value {
     loop {
         match get_random_move(game_state, rng, move_list) {
             None => {
-                return get_game_result(game_state);
+                return Value::from_game_scores(game_state.get_scores());
             }
             Some(move_) => game_state.do_move(move_),
         }
@@ -591,11 +640,11 @@ impl MonteCarloTreeSearch {
             let time_left: i64 = self.time_limit as i64 - start_time.elapsed().as_millis() as i64;
 
             println!(
-                "{:6}ms {:5} {:10} {:4.0}% {}",
+                "{:6}ms {:5} {:10} {:?} {}",
                 time_left,
                 pv.len(),
                 completed_iterations,
-                (1. - root_node.get_value()).min(1.0) * 100.,
+                root_node.get_value(),
                 pv.iter()
                     .map(|event| event.to_string())
                     .collect::<Vec<_>>()
@@ -618,9 +667,9 @@ impl MonteCarloTreeSearch {
         }
 
         println!(
-            "Search finished after {}ms. Value: {:.0}% PV-Depth: {} Iterations: {} Iterations/s: {:.2} PV: {}",
+            "Search finished after {}ms. Value: {:?}% PV-Depth: {} Iterations: {} Iterations/s: {:.2} PV: {}",
             start_time.elapsed().as_millis(),
-            (1. - root_node.get_value()).min(1.0) * 100.,
+            root_node.get_value(),
             pv.len(),
             completed_iterations,
             iterations_per_ms * 1000.,
@@ -629,17 +678,18 @@ impl MonteCarloTreeSearch {
                 .collect::<Vec<_>>()
                 .join(" "),
         );
-        root_node.best_move().unwrap()
+        let player_index = usize::from(game_state.get_current_player());
+        root_node.best_move(player_index).unwrap()
     }
 
     async fn start_pondering(&mut self) {
         if !self.use_pondering {
             return;
         }
+        println!("Pondering...");
         let (stop_sender, mut stop_receiver) = tokio::sync::oneshot::channel();
         let root_node_mutex = self.root_node.clone();
         let root_game_state_mutex = self.root_game_state.clone();
-        println!("Pondering...");
 
         tokio::spawn(async move {
             let mut rng = SmallRng::from_entropy();
@@ -657,11 +707,11 @@ impl MonteCarloTreeSearch {
             loop {
                 if stop_receiver.try_recv().is_ok() {
                     println!(
-                        "{:6}ms {:5} {:10} {:4.0}% {}",
+                        "{:6}ms {:5} {:10} {:?} {}",
                         "",
                         pv.len(),
                         completed_iterations,
-                        root_node.get_value().min(1.0) * 100.,
+                        root_node.get_value(),
                         pv.iter()
                             .map(|event| event.to_string())
                             .collect::<Vec<_>>()
@@ -681,11 +731,11 @@ impl MonteCarloTreeSearch {
                 if elapsed_time > 0. && last_print_time.elapsed().as_millis() > 300 {
                     last_print_time = Instant::now();
                     println!(
-                        "{:6}ms {:5} {:10} {:4.0}% {}",
+                        "{:6}ms {:5} {:10} {:?} {}",
                         elapsed_time as i64,
                         pv.len(),
                         completed_iterations,
-                        root_node.get_value().min(1.0) * 100.,
+                        root_node.get_value(),
                         pv.iter()
                             .map(|event| event.to_string())
                             .collect::<Vec<_>>()
@@ -702,7 +752,6 @@ impl MonteCarloTreeSearch {
     }
 
     async fn stop_pondering(&mut self) {
-        println!("Stopping pondering...");
         if let Some(stop_sender) = self.stop_pondering.take() {
             let result = stop_sender.send(());
             if result.is_err() {
@@ -720,7 +769,7 @@ impl Default for MonteCarloTreeSearch {
             root_game_state: SharedState::new(GameState::new(&mut rng)),
             time_limit: 2000,
             stop_pondering: None,
-            use_pondering: true,
+            use_pondering: false,
         }
     }
 }
@@ -732,22 +781,29 @@ impl Player for MonteCarloTreeSearch {
     }
 
     async fn get_move(&mut self, game_state: &GameState) -> Move {
-        println!("Stopping pondering, it's my turn now.");
+        if self.use_pondering {
+            println!("Stopping pondering, it's my turn now.");
+        }
         self.stop_pondering().await;
         let move_ = self.search(game_state).await;
         self.root_game_state.lock().await.do_move(move_);
         let mut root_node = self.root_node.lock().await;
+        let player_index = usize::from(game_state.get_current_player());
         let new_root_node =
-            std::mem::replace(root_node.best_child(), Node::new_deterministic(Move::DUMMY));
+            std::mem::replace(root_node.best_child(player_index), Node::new_deterministic(Move::DUMMY));
         *root_node = new_root_node;
         drop(root_node);
-        println!("Turn finished, starting pondering again.");
-        self.start_pondering().await;
+        if self.use_pondering {
+            println!("Turn finished, starting pondering again.");
+            self.start_pondering().await;
+        }
         move_
     }
 
     async fn notify_move(&mut self, new_game_state: &GameState, move_: Move) {
-        println!("Stopping pondering, opponent made a move.");
+        if self.use_pondering {
+            println!("Stopping pondering, opponent made a move.");
+        }
         self.stop_pondering().await;
         let mut invalid = false;
         let mut root_node = self.root_node.lock().await;
@@ -781,8 +837,10 @@ impl Player for MonteCarloTreeSearch {
         *root_game_state = new_game_state.clone();
         drop(root_node);
         drop(root_game_state);
-        println!("Turn finished, starting pondering again.");
-        self.start_pondering().await;
+        if self.use_pondering {
+            println!("Turn finished, starting pondering again.");
+            self.start_pondering().await;
+        }
     }
 
     async fn set_time(&mut self, time: u64) {

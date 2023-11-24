@@ -70,10 +70,10 @@ async fn main() {
     let mut player_three = node::MonteCarloTreeSearch::default();
     let mut player_four = node::MonteCarloTreeSearch::default();
 
-    player_one.set_time(1000).await;
-    player_two.set_time(1000).await;
-    player_three.set_time(1000).await;
-    player_four.set_time(1000).await;
+    player_one.set_time(10000).await;
+    player_two.set_time(10000).await;
+    player_three.set_time(10000).await;
+    player_four.set_time(10000).await;
 
     player_one.set_pondering(false).await;
     player_two.set_pondering(false).await;
