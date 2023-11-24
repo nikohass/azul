@@ -1,5 +1,6 @@
 use game::{
-    GameState, Move, MoveList, Player, SharedState, TileColor, NUM_FACTORIES, NUM_TILE_COLORS, NUM_PLAYERS,
+    GameState, Move, MoveList, Player, SharedState, TileColor, NUM_FACTORIES, NUM_PLAYERS,
+    NUM_TILE_COLORS,
 };
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 use std::time::Instant;
@@ -288,7 +289,6 @@ impl Node {
         let current_player = u8::from(game_state.get_current_player());
 
         if self.has_probabilistic_children {
-
             // All children of this node are probabilistic. When this node was "expanded", we only expanded one probabilistic outcome.
             // There would be too many possible outcomes to expand all of them, so we just expanded one.
             // Now we need to adjust for this and dynamically expand the other outcomes.
@@ -746,6 +746,18 @@ impl MonteCarloTreeSearch {
                     iterations_per_ms = completed_iterations as f32 / elapsed_time;
                 }
             }
+            println!(
+                "Pondering finished after {}ms. Value: {:?}% PV-Depth: {} Iterations: {} Iterations/s: {:.2} PV: {}",
+                start_time.elapsed().as_millis(),
+                root_node.get_value(),
+                pv.len(),
+                completed_iterations,
+                iterations_per_ms * 1000.,
+                pv.iter()
+                    .map(|event| event.to_string())
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            );
         });
 
         self.stop_pondering = Some(stop_sender);
@@ -789,8 +801,10 @@ impl Player for MonteCarloTreeSearch {
         self.root_game_state.lock().await.do_move(move_);
         let mut root_node = self.root_node.lock().await;
         let player_index = usize::from(game_state.get_current_player());
-        let new_root_node =
-            std::mem::replace(root_node.best_child(player_index), Node::new_deterministic(Move::DUMMY));
+        let new_root_node = std::mem::replace(
+            root_node.best_child(player_index),
+            Node::new_deterministic(Move::DUMMY),
+        );
         *root_node = new_root_node;
         drop(root_node);
         if self.use_pondering {

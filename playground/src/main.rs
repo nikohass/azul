@@ -67,20 +67,20 @@ async fn main() {
 
     let mut player_one = node::MonteCarloTreeSearch::default(); //RandomPlayer::new("Random player".to_string());
     let mut player_two = node::MonteCarloTreeSearch::default();
-    let mut player_three = node::MonteCarloTreeSearch::default();
-    let mut player_four = node::MonteCarloTreeSearch::default();
+    // let mut player_three = node::MonteCarloTreeSearch::default();
+    // let mut player_four = node::MonteCarloTreeSearch::default();
 
-    player_one.set_time(10000).await;
-    player_two.set_time(10000).await;
-    player_three.set_time(10000).await;
-    player_four.set_time(10000).await;
+    player_one.set_time(1000).await;
+    player_two.set_time(1000).await;
+    // player_three.set_time(10000).await;
+    // player_four.set_time(10000).await;
 
-    player_one.set_pondering(false).await;
-    player_two.set_pondering(false).await;
-    player_three.set_pondering(false).await;
-    player_four.set_pondering(false).await;
+    player_one.set_pondering(true).await;
+    player_two.set_pondering(true).await;
+    // player_three.set_pondering(false).await;
+    // player_four.set_pondering(false).await;
 
-    let mut players: Vec<Box<dyn Player>> = vec![Box::new(player_one), Box::new(player_two), Box::new(player_three), Box::new(player_four)];
+    let mut players: Vec<Box<dyn Player>> = vec![Box::new(player_one), Box::new(player_two)]; //, Box::new(player_three), Box::new(player_four)];
     let _stats = game_manager::run_match(game_state, &mut players, true)
         .await
         .unwrap();
