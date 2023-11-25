@@ -5,25 +5,13 @@ use game::{
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 use std::time::Instant;
 
-/*
-Average factory refills per game: 4.0235295
-Player 1 - Average score: 25.4, Wins: 49, Draws: 0, Losses: 36
-Player 2 - Average score: 24.84706, Wins: 35, Draws: 0, Losses: 50
-Player 1 made an illegal move: Move { take_from_factory_index: 5, color: Yellow, pattern: [0, 0, 0, 0, 0, 1] }
-Move list: [Move { take_from_factory_index: 5, color: Yellow, pattern: [0, 0, 0, 0, 0, 11] }]
-Game state: BAG       B 15      Y 5     R 14    G 6     W 13
-FACTORIES 1-.... 2-.... 3-.... 4-.... 5-.... Center-YYYYYYYYYYY
-PLAYER 0               23 |  PLAYER 1              -18 |
-1         B  -> . . R G W |  1         .  -> . Y R G W |
-2       B B  -> W . Y R G |  2       . .  -> W . Y R G |
-3     G G G  -> . . B . . |  3     G G G  -> . . . . . |
-4   . . . .  -> . . W B . |  4   G G G G  -> . . . . Y |
-5 . . . . .  -> . R . . . |  5 . . . W W  -> . R . . . |
-Floor line:  0            |  Floor line:  0            |
-2_1_0_55936156943_0_0-0-0-0-0-2816_64357375_0_36718428-37750622_197121-8657240064_1099495047168-17230462975_0
-*/
+const C: f32 = 0.2;
+const C_BASE: f32 = 6120.0;
+const C_FACTOR: f32 = std::f32::consts::SQRT_2;
 
-#[derive(Debug, Clone, Default, Copy)] // TODO: Default just for swapping root
+const MOVE_GENERATION_RETRIES: usize = 5;
+
+#[derive(Debug, Clone, Copy)] // TODO: Default just for swapping root
 struct ProbabilisticOutcome {
     pub factories: [[u8; NUM_TILE_COLORS]; NUM_FACTORIES],
     pub out_of_bag: [u8; NUM_TILE_COLORS],
@@ -31,47 +19,21 @@ struct ProbabilisticOutcome {
 }
 
 impl ProbabilisticOutcome {
-    pub fn apply_to_game_state(&self, game_state: &mut GameState) {
-        // let orig = game_state.clone();
-        // Before each factory refill, the last round ends, so evaluate the round
-        game_state.evaluate_round();
-        // let orig_out_of_bag = game_state.get_out_of_bag();
-        // let after_eval = game_state.clone();
+    pub const DUMMY: Self = Self {
+        factories: [[0; NUM_TILE_COLORS]; NUM_FACTORIES],
+        out_of_bag: [0; NUM_TILE_COLORS],
+        bag: [0; NUM_TILE_COLORS],
+    }; // For mem swap of root node
 
-        // Overwrite the factories with the outcome of the event
-        game_state.set_factories(self.factories);
+    pub fn apply_to_game_state(&self, game_state: &mut GameState) {
+        game_state.evaluate_round(); // This will move the tiles from the factories to the pattern lines
+        game_state.set_factories(self.factories); // Overwrite the factories with the outcome of the event
+
         // The number of tiles in and out of bag also changes when the factories are refilled, so overwrite those as well
         game_state.set_out_of_bag(self.out_of_bag);
         game_state.set_bag(self.bag);
-
-        // For debugging purposes, check the integrity of the game state
-        // if game_state.check_integrity().is_err() {
-        //     println!("Original game state:");
-        //     println!("{}", orig);
-        //     println!("After evaluation:");
-        //     println!("{:?}", orig_out_of_bag);
-        //     println!("{}", after_eval);
-        //     println!("Probabilistic outcome:");
-        //     println!("{:?}", game_state.get_out_of_bag());
-        //     println!("{}", game_state);
-
-        //     println!("Out of bag would have been {:?}", self.out_of_bag);
-        //     panic!("Probabilistic outcome was applied to an invalid game state.");
-        // }
     }
 }
-
-// fn get_game_result(game_state: &GameState) -> f32 {
-//     let scores = game_state.get_scores();
-//     let score_difference = scores[0] as f32 - scores[1] as f32;
-//     let normalized_score_difference =
-//         score_difference.abs() / MAX_SCORE_DIFFERENCE * BASE_SCORE_ADJUSTMENT;
-//     match score_difference {
-//         x if x > 0. => COMPLEMENTARY_SCORE_ADJUSTMENT + normalized_score_difference, // Basically 1 + normalized_score_difference
-//         x if x < 0. => BASE_SCORE_ADJUSTMENT - normalized_score_difference, // Basically 0 - normalized_score_difference
-//         _ => 0.5,
-//     }
-// }
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Value([f32; NUM_PLAYERS]);
@@ -95,13 +57,26 @@ impl Value {
             value[i] = normalized_score;
         }
 
-        // // Divide by the sum of all values to normalize them
-        // let sum: f32 = value.iter().sum();
-        // for value in value.iter_mut() {
-        //     *value /= sum;
-        // }
+        // Divide by the sum of all values to normalize them
+        let sum: f32 = value.iter().sum();
+        for value in value.iter_mut() {
+            *value /= sum;
+        }
 
         Self(value)
+    }
+}
+
+impl std::fmt::Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut string = String::new();
+        for (i, &value) in self.0.iter().enumerate() {
+            if i > 0 {
+                string.push(' ');
+            }
+            string.push_str(&format!("{:.2}", value));
+        }
+        write!(f, "{}", string)
     }
 }
 
@@ -139,14 +114,19 @@ impl std::ops::Index<usize> for Value {
     }
 }
 
-const C: f32 = 0.2;
-const C_BASE: f32 = 6120.0;
-const C_FACTOR: f32 = std::f32::consts::SQRT_2;
-
 #[derive(Debug, Clone)]
 enum Event {
     Deterministic(Move),
     Probabilistic(ProbabilisticOutcome),
+}
+
+impl Event {
+    pub fn apply_to_game_state(&self, game_state: &mut GameState) {
+        match self {
+            Event::Deterministic(move_) => game_state.do_move(*move_),
+            Event::Probabilistic(outcome) => outcome.apply_to_game_state(game_state),
+        }
+    }
 }
 
 impl std::fmt::Display for Event {
@@ -154,21 +134,26 @@ impl std::fmt::Display for Event {
         match self {
             Event::Deterministic(move_) => write!(f, "{}", move_),
             Event::Probabilistic(outcome) => {
-                let mut string = String::new();
-                for (factory_index, factory) in
-                    outcome.factories.iter().take(NUM_FACTORIES - 1).enumerate()
-                {
-                    if factory_index > 0 {
-                        string.push(' ');
-                    }
-                    for (color, number_of_tiles) in factory.iter().enumerate() {
-                        string.push_str(
-                            &TileColor::from(color)
-                                .to_string()
-                                .repeat(*number_of_tiles as usize),
-                        );
-                    }
-                }
+                let string = outcome
+                    .factories
+                    .iter()
+                    .take(NUM_FACTORIES - 1)
+                    .enumerate()
+                    .map(|(_factory_index, factory)| {
+                        factory
+                            .iter()
+                            .enumerate()
+                            .map(|(color, number_of_tiles)| {
+                                TileColor::from(color)
+                                    .to_string()
+                                    .repeat(*number_of_tiles as usize)
+                            })
+                            .collect::<Vec<String>>()
+                            .join("")
+                    })
+                    .collect::<Vec<String>>()
+                    .join(" ");
+
                 write!(f, "{}", string)
             }
         }
@@ -176,10 +161,10 @@ impl std::fmt::Display for Event {
 }
 
 struct Node {
-    children: Vec<Node>,   // The children of this node
+    children: Vec<Node>,
     previous_event: Event, // The edge from the parent to this node
     n: f32,
-    q: Value, // Value can handle 2 to 4 players
+    q: Value,
     is_game_over: bool,
     has_probabilistic_children: bool,
 }
@@ -208,11 +193,11 @@ impl Node {
     }
 
     #[inline]
-    fn get_value(&self) -> Option<Value> {
+    fn get_value(&self) -> Value {
         if self.n > 0. {
-            Some(self.q / self.n)
+            self.q / self.n
         } else {
-            None
+            Value([std::f32::NEG_INFINITY; NUM_PLAYERS])
         }
     }
 
@@ -252,32 +237,37 @@ impl Node {
         self.is_game_over = is_game_over;
 
         if is_game_over {
+            // If the game is over, we don't need to expand any children
             return;
         }
 
-        // Create a child for each possible move
+        // Create children nodes for each possible move
         let mut children: Vec<Node> = Vec::with_capacity(move_list.len());
         for i in 0..move_list.len() {
             children.push(Node::new_deterministic(move_list[i]))
         }
 
         if probabilistic_event {
-            // If we have a probabilistic event, create a child for this outcome.
-            // We do not expand all possible outcomes, because that would be too expensive.
-            let outcome = ProbabilisticOutcome {
-                factories: *game_state.get_factories(),
-                out_of_bag: game_state.get_out_of_bag(),
-                bag: game_state.get_bag(),
-            };
-            let mut child = Node::new_probabilistic(outcome);
-            self.has_probabilistic_children = true;
-            // We have already generated the moves for this outcome, so we can just copy them over
-            child.children.append(&mut children);
-            self.children.push(child);
+            // Create a probabilistic child for the probabilistic event that just happend during the move generation
+            // Since it is not possible to expand all possible outcomes of a probabilistic event, we will only expand one of them
+            // and dynamically expand the other outcomes later
+            self.expand_probabilistic_child(game_state, children);
         } else {
-            // Otherwise, just add the children we generated
-            std::mem::swap(&mut self.children, &mut children);
+            // Expand the current node with the children we just created
+            self.children = children;
         }
+    }
+
+    fn expand_probabilistic_child(&mut self, game_state: &mut GameState, mut children: Vec<Node>) {
+        let outcome = ProbabilisticOutcome {
+            factories: *game_state.get_factories(),
+            out_of_bag: game_state.get_out_of_bag(),
+            bag: game_state.get_bag(),
+        };
+        let mut child = Node::new_probabilistic(outcome);
+        child.children.append(&mut children);
+        self.children.push(child);
+        self.has_probabilistic_children = true;
     }
 
     fn iteration(
@@ -337,18 +327,9 @@ impl Node {
             }
         } else {
             let next_child: &mut Node = self.child_with_max_uct_value(current_player as usize);
-            match next_child.previous_event {
-                Event::Deterministic(move_) => {
-                    game_state.do_move(move_);
-                }
-                Event::Probabilistic(outcome) => {
-                    outcome.apply_to_game_state(game_state);
-                }
-            }
+            next_child.previous_event.apply_to_game_state(game_state);
             next_child.iteration(game_state, move_list, rng)
         };
-
-        // let delta = if invert_delta { 1. - delta } else { delta };
 
         self.backpropagate(delta);
 
@@ -359,17 +340,13 @@ impl Node {
         if self.children.is_empty() {
             return;
         }
+
         let player_index = usize::from(game_state.get_current_player());
         let child: &mut Node = self.best_child(player_index);
-        match child.previous_event {
-            Event::Deterministic(move_) => {
-                game_state.do_move(move_);
-            }
-            Event::Probabilistic(outcome) => {
-                outcome.apply_to_game_state(game_state);
-            }
-        }
+
+        child.previous_event.apply_to_game_state(game_state);
         pv.push(child.previous_event.clone());
+
         child.build_pv(game_state, pv);
     }
 
@@ -378,11 +355,7 @@ impl Node {
         let mut best_child_value = std::f32::NEG_INFINITY;
 
         for (i, child) in self.children.iter().enumerate() {
-            let value: Option<Value> = child.get_value();
-            let value = match value {
-                Some(value) => value,
-                None => continue,
-            };
+            let value: Value = child.get_value();
             if value[player_index] > best_child_value {
                 best_child_index = i;
                 best_child_value = value[player_index];
@@ -416,133 +389,136 @@ pub fn playout(game_state: &mut GameState, rng: &mut SmallRng, move_list: &mut M
     }
 }
 
+#[inline]
+fn get_not_empty_factories(factories: &[[u8; 5]; NUM_FACTORIES]) -> Vec<u8> {
+    factories
+        .iter()
+        .enumerate()
+        .filter(|(_, factory)| factory.iter().any(|&tile| tile != 0))
+        .map(|(i, _)| i as u8)
+        .collect()
+}
+
+#[inline]
+fn get_fallback_move(
+    game_state: &mut GameState,
+    rng: &mut SmallRng,
+    move_list: &mut MoveList,
+) -> Option<Move> {
+    let (is_game_over, _) = game_state.get_possible_moves(move_list, rng);
+    if is_game_over {
+        None
+    } else {
+        Some(move_list[rng.gen_range(0..move_list.len())])
+    }
+}
+
+#[inline]
+fn get_player_wall_data(
+    game_state: &GameState,
+    player_index: usize,
+) -> ([u8; 5], [Option<game::TileColor>; 5], u32) {
+    (
+        game_state.get_pattern_lines_occupancy()[player_index],
+        game_state.get_pattern_lines_colors()[player_index],
+        game_state.get_wall_ocupancy()[player_index],
+    )
+}
+
+fn attempt_move_creation(
+    rng: &mut SmallRng,
+    factories: &[[u8; 5]; NUM_FACTORIES],
+    not_empty_factories: &Vec<u8>,
+    pattern_lines: &[u8; 5],
+    pattern_line_colors: &[Option<game::TileColor>; 5],
+    wall_occupancy: u32,
+) -> Option<Move> {
+    // Select a random factory and color to take
+    let factory_index = not_empty_factories[rng.gen_range(0..not_empty_factories.len())] as usize;
+    let mut tile_color = rng.gen_range(0..5);
+    while factories[factory_index][tile_color] == 0 {
+        tile_color = rng.gen_range(0..5);
+    }
+    let number_of_tiles_to_distribute = factories[factory_index][tile_color];
+    // Calculate the remaining space in our pattern lines for each color
+    let mut remaining_space: [u8; 6] = [1, 2, 3, 4, 5, 255]; // 255 is a placeholder for the floor line
+    let mut total_remaining_space = 0;
+    for (pattern_line_index, number_of_tiles) in pattern_lines.iter().enumerate() {
+        remaining_space[pattern_line_index] -= *number_of_tiles; // We subtract the number of tiles already in the pattern line from the total space
+                                                                 // If there are tiles of a different color in the patternline already, we can't put any more tiles in it, so we set the remaining space to 0
+        if let Some(existing_color) = pattern_line_colors[pattern_line_index] {
+            if tile_color != usize::from(existing_color) {
+                remaining_space[pattern_line_index] = 0;
+            }
+        } else {
+            // If the pattern line did not have a color yet, we need to check whether we are allowed to place this color here
+            // It is not possible to place a tile in a pattern line if the corresponding row in the wall is already full
+            let wall_mask = game::wall::WALL_COLOR_MASKS[tile_color];
+            let row_mask = game::wall::get_row_mask(pattern_line_index);
+            if wall_occupancy & row_mask & wall_mask > 0 {
+                remaining_space[pattern_line_index] = 0;
+            }
+        }
+        if remaining_space[pattern_line_index] == number_of_tiles_to_distribute {
+            // Heuristic: If we find a pattern line that we can fill completely, we will do that
+            let mut pattern = [0; 6];
+            pattern[pattern_line_index] = number_of_tiles_to_distribute;
+            return Some(Move {
+                take_from_factory_index: factory_index as u8,
+                color: game::TileColor::from(tile_color),
+                pattern,
+            });
+        }
+        total_remaining_space += remaining_space[pattern_line_index];
+    }
+    if total_remaining_space < number_of_tiles_to_distribute {
+        // We do not want to be in this situation, because it means that we will have to put tiles on the floor line
+        return None; // Skip this iteration and try again
+    }
+
+    // TODO: Distribute the tiles over the pattern lines in a smart way
+
+    None
+}
+
+#[inline]
 pub fn get_random_move(
     game_state: &mut GameState,
     rng: &mut SmallRng,
     move_list: &mut MoveList,
 ) -> Option<Move> {
-    // Returns (Move, is_game_over)
+    // Returns a random move from the given game state or None if there are no possible moves
     // We use the game state to generate one possible random move.
-    // In case we fail N times, we fall back to the entire move generation and pick a random move from there.
+    // In case we fail MOVE_GENERATION_RETRIES times, we fall back to the entire move generation and pick a random move from there.
+    // By doing this kind of move generation we will alter the probabilities of the moves
+    // we should make sure that the probabilities are altered in a way that is beneficial to us
+    // e.g. we should pick moves that are more likely to be good for us, to make the playout more realistic
+
     let factories: &[[u8; 5]; NUM_FACTORIES] = game_state.get_factories();
-    let not_empty_factories: Vec<u8> = factories
-        .iter()
-        .enumerate()
-        .filter(|(_, factory)| factory.iter().any(|&tile| tile != 0))
-        .map(|(i, _)| i as u8)
-        .collect();
-    if !not_empty_factories.is_empty() {
-        // There are non-empty factories, we can proceed to pick a random move
-        // By doing this kind of move generation we will alter the probabilities of the moves
-        // we should make sure that the probabilities are altered in a way that is beneficial to us
-        // e.g. we should pick moves that are more likely to be good for us, to make the playout more realistic
-        // First, take a look at our pattern lines
-        let current_player: usize = usize::from(game_state.get_current_player());
-        let pattern_lines: [u8; 5] = game_state.get_pattern_lines_occupancy()[current_player];
-        let pattern_line_colors: [Option<game::TileColor>; 5] =
-            game_state.get_pattern_lines_colors()[current_player];
-        let wall_occupancy: u32 = game_state.get_wall_ocupancy()[current_player];
-        for _ in 0..5 {
-            // Retry up to 5 times
-            // Select a random factory and color to take
-            let factory_index =
-                not_empty_factories[rng.gen_range(0..not_empty_factories.len())] as usize;
-            let mut tile_color = rng.gen_range(0..5);
-            while factories[factory_index][tile_color] == 0 {
-                tile_color = rng.gen_range(0..5);
-            }
-            let number_of_tiles_to_distribute = factories[factory_index][tile_color];
-            // Calculate the remaining space in our pattern lines for each color
-            let mut remaining_space: [u8; 6] = [1, 2, 3, 4, 5, 255]; // 255 is a placeholder for the floor line
-            let mut total_remaining_space = 0;
-            for (pattern_line_index, number_of_tiles) in pattern_lines.iter().enumerate() {
-                remaining_space[pattern_line_index] -= *number_of_tiles; // We subtract the number of tiles already in the pattern line from the total space
-                                                                         // If there are tiles of a different color in the patternline already, we can't put any more tiles in it, so we set the remaining space to 0
-                if let Some(existing_color) = pattern_line_colors[pattern_line_index] {
-                    if tile_color != usize::from(existing_color) {
-                        remaining_space[pattern_line_index] = 0;
-                    }
-                } else {
-                    // If the pattern line did not have a color yet, we need to check whether we are allowed to place this color here
-                    // It is not possible to place a tile in a pattern line if the corresponding row in the wall is already full
-                    let wall_mask = game::wall::WALL_COLOR_MASKS[tile_color];
-                    let row_mask = game::wall::get_row_mask(pattern_line_index);
-                    if wall_occupancy & row_mask & wall_mask > 0 {
-                        remaining_space[pattern_line_index] = 0;
-                    }
-                }
-                if remaining_space[pattern_line_index] == number_of_tiles_to_distribute {
-                    // Heuristic: If we find a pattern line that we can fill completely, we will do that
-                    let mut pattern = [0; 6];
-                    pattern[pattern_line_index] = number_of_tiles_to_distribute;
-                    return Some(Move {
-                        take_from_factory_index: factory_index as u8,
-                        color: game::TileColor::from(tile_color),
-                        pattern,
-                    });
-                }
-                total_remaining_space += remaining_space[pattern_line_index];
-            }
-            if total_remaining_space < number_of_tiles_to_distribute {
-                // We do not want to be in this situation, because it means that we will have to put tiles on the floor line
-                continue; // Skip this iteration and try again
-            }
-            // let mut best_pattern_index: Option<usize> = None;
-            // let mut best_pattern_fit: u8 = 255; // Arbitrary high number
-            // for (index, &space) in remaining_space.iter().enumerate() {
-            //     if space >= number_of_tiles_to_distribute && space < best_pattern_fit {
-            //         best_pattern_fit = space;
-            //         best_pattern_index = Some(index);
-            //     }
-            // }
-            // if let Some(index) = best_pattern_index {
-            //     let mut pattern: [u8; 6] = [0; 6];
-            //     pattern[index] = number_of_tiles_to_distribute;
-            //     return Some(Move {
-            //         take_from_factory_index: factory_index as u8,
-            //         color: game::TileColor::from(tile_color),
-            //         pattern,
-            //     });
-            // }
-            // TODO: Distribute the tiles over the pattern lines in a smart way
-        }
-        // // We will use this to keep track of the remaining space in our pattern lines for each color
-        // let mut remaining_space: [[u8; 6]; game::NUM_TILE_COLORS] = [
-        //     [1, 2, 3, 4, 5, 255],
-        //     [1, 2, 3, 4, 5, 255],
-        //     [1, 2, 3, 4, 5, 255],
-        //     [1, 2, 3, 4, 5, 255],
-        //     [1, 2, 3, 4, 5, 255],
-        // ]; // 255 is a placeholder for the floor line
-        // for (tile_color, remaining_space_for_color) in remaining_space.iter_mut().enumerate() {
-        //     for (pattern_line_index, number_of_tiles) in pattern_lines.iter().enumerate() {
-        //         remaining_space_for_color[pattern_line_index] -= *number_of_tiles; // We subtract the number of tiles already in the pattern line from the total space
-        //         // If there are tiles of a different color in the patternline already, we can't put any more tiles in it, so we set the remaining space to 0
-        //         if let Some(existing_color) = pattern_line_colors[pattern_line_index] {
-        //             if tile_color != usize::from(existing_color) {
-        //                 remaining_space_for_color[pattern_line_index] = 0;
-        //             }
-        //         } else {
-        //             // If the pattern line did not have a color yet, we need to check whether we are allowed to place this color here
-        //             // It is not possible to place a tile in a pattern line if the corresponding row in the wall is already full
-        //             let wall_mask = game::wall::WALL_COLOR_MASKS[tile_color];
-        //             let row_mask = game::wall::get_row_mask(pattern_line_index);
-        //             if wall_occupancy & row_mask & wall_mask > 0 {
-        //                 remaining_space_for_color[pattern_line_index] = 0;
-        //             }
-        //         }
-        //     }
-        // }
-        // Now we know how many tiles of each color we can place in each pattern line.
-        // We will use this information to generate a reasonable move.
-        // At this point we basically need a heuristic to select a:
-        // - Factory index
-        // - Color to take from the factory
-        // - Pattern line(s) to place the tiles in
-        // Generally it is better to put tiles in the same pattern line and not distribute them over multiple pattern lines
-        // because this would block other pattern lines. By placing them in a single pattern line we can complete it faster.
-        // Avoiding Negative Points: Try to avoid moves that would result in a significant number of tiles being placed on the floor line.
+    let not_empty_factories = get_not_empty_factories(factories);
+    if not_empty_factories.is_empty() {
+        // There are no non-empty factories, we can't generate a move. Fall back to default move generation
+        return get_fallback_move(game_state, rng, move_list);
     }
+
+    // There are non-empty factories, we can proceed to pick a random move
+    let current_player: usize = usize::from(game_state.get_current_player());
+    let (pattern_lines, pattern_line_colors, wall_occupancy) =
+        get_player_wall_data(game_state, current_player);
+
+    for _ in 0..MOVE_GENERATION_RETRIES {
+        if let Some(move_) = attempt_move_creation(
+            rng,
+            factories,
+            &not_empty_factories,
+            &pattern_lines,
+            &pattern_line_colors,
+            wall_occupancy,
+        ) {
+            return Some(move_);
+        }
+    }
+
     // Fallback to default move generation
     let (is_game_over, _) = game_state.get_possible_moves(move_list, rng);
     if is_game_over {
@@ -613,12 +589,11 @@ impl MonteCarloTreeSearch {
             "Searching move using MCTS. Fen: {}",
             game_state.serialize_string()
         );
-        println!("    Left Depth Iterations Value PV");
         let start_time = Instant::now();
         self.set_root(game_state).await;
         let mut rng = SmallRng::from_entropy();
         let mut pv: Vec<Event> = Vec::with_capacity(100);
-        let mut iterations_per_ms = 5.;
+        let mut iterations_per_ms = 1.; // Initial guess on the lower end for four players, will be adjusted later
         let mut completed_iterations: usize = 0;
         let search_start_time = Instant::now();
 
@@ -632,6 +607,7 @@ impl MonteCarloTreeSearch {
 
         let mut root_node = self.root_node.lock().await;
         let root_game_state = self.root_game_state.lock().await;
+        println!("    Left Depth Iterations          Value PV");
 
         loop {
             pv.truncate(0);
@@ -640,7 +616,7 @@ impl MonteCarloTreeSearch {
             let time_left: i64 = self.time_limit as i64 - start_time.elapsed().as_millis() as i64;
 
             println!(
-                "{:6}ms {:5} {:10} {:?} {}",
+                "{:6}ms {:5} {:10} {:7} {}",
                 time_left,
                 pv.len(),
                 completed_iterations,
@@ -667,7 +643,7 @@ impl MonteCarloTreeSearch {
         }
 
         println!(
-            "Search finished after {}ms. Value: {:?}% PV-Depth: {} Iterations: {} Iterations/s: {:.2} PV: {}",
+            "Search finished after {}ms. Value: {:7} PV-Depth: {} Iterations: {} Iterations/s: {:.2} PV: {}",
             start_time.elapsed().as_millis(),
             root_node.get_value(),
             pv.len(),
@@ -695,19 +671,19 @@ impl MonteCarloTreeSearch {
             let mut rng = SmallRng::from_entropy();
             let start_time = Instant::now();
             let pv: &mut Vec<Event> = &mut Vec::with_capacity(100);
-            println!("  Elapsed Depth Iterations Value PV");
+            println!("    Left Depth Iterations          Value PV");
 
             let mut root_node = root_node_mutex.lock().await;
             let root_game_state = root_game_state_mutex.lock().await;
 
+            let mut iterations_per_ms = 1.; // Initial guess on the lower end for four players, will be adjusted later
             let mut completed_iterations: usize = 0;
-            let mut iterations_per_ms = 5.;
 
             let mut last_print_time = Instant::now();
             loop {
                 if stop_receiver.try_recv().is_ok() {
                     println!(
-                        "{:6}ms {:5} {:10} {:?} {}",
+                        "{:6}ms {:5} {:10} {:7} {}",
                         "",
                         pv.len(),
                         completed_iterations,
@@ -731,7 +707,7 @@ impl MonteCarloTreeSearch {
                 if elapsed_time > 0. && last_print_time.elapsed().as_millis() > 300 {
                     last_print_time = Instant::now();
                     println!(
-                        "{:6}ms {:5} {:10} {:?} {}",
+                        "{:6}ms {:5} {:10} {:7} {}",
                         elapsed_time as i64,
                         pv.len(),
                         completed_iterations,
@@ -747,7 +723,7 @@ impl MonteCarloTreeSearch {
                 }
             }
             println!(
-                "Pondering finished after {}ms. Value: {:?}% PV-Depth: {} Iterations: {} Iterations/s: {:.2} PV: {}",
+                "Pondering finished after {}ms. Value: {:7} PV-Depth: {} Iterations: {} Iterations/s: {:.2} PV: {}",
                 start_time.elapsed().as_millis(),
                 root_node.get_value(),
                 pv.len(),
@@ -826,8 +802,7 @@ impl Player for MonteCarloTreeSearch {
             match child.previous_event.clone() {
                 Event::Deterministic(child_move) => {
                     if child_move == move_ {
-                        let mut temp_node =
-                            Node::new_probabilistic(ProbabilisticOutcome::default()); // Assuming a new method for creating a Node
+                        let mut temp_node = Node::new_probabilistic(ProbabilisticOutcome::DUMMY);
                         std::mem::swap(child, &mut temp_node);
                         let new_root_node = temp_node;
                         *root_node = new_root_node;
@@ -837,11 +812,6 @@ impl Player for MonteCarloTreeSearch {
                 }
                 Event::Probabilistic(_) => {
                     invalid = true;
-                    // let mut move_list = MoveList::default();
-                    // let mut rng = SmallRng::from_entropy();
-                    // // self.root_node = Node::new_deterministic(Move::DUMMY); // Assuming a new method for creating a Node
-                    // self.root_game_state.get_possible_moves(&mut move_list, &mut rng);
-                    // Get all possible moves to trigger the refilling of the factories
                 }
             }
         }

@@ -8,7 +8,7 @@ use crate::RuntimeError;
 use rand::rngs::SmallRng;
 use std::fmt::Write;
 
-pub const NUM_PLAYERS: usize = 2;
+pub const NUM_PLAYERS: usize = 3;
 pub const FLOOR_LINE_PENALTY: [u8; 8] = [0, 1, 2, 4, 6, 8, 11, 14];
 
 fn find_tile_combinations(
