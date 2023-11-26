@@ -35,4 +35,5 @@ pub trait Player: Send + Sync {
     async fn notify_move(&mut self, _new_game_state: &GameState, _move_: Move) {}
     async fn set_time(&mut self, _time: u64) {}
     async fn set_pondering(&mut self, _pondering: bool) {}
+    async fn reset(&mut self) {}
 }

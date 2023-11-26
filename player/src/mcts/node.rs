@@ -834,4 +834,13 @@ impl Player for MonteCarloTreeSearch {
     async fn set_pondering(&mut self, pondering: bool) {
         self.use_pondering = pondering;
     }
+
+    async fn reset(&mut self) {
+        self.stop_pondering().await;
+        let mut rng = SmallRng::from_entropy();
+        let mut root_node = self.root_node.lock().await;
+        let mut root_game_state = self.root_game_state.lock().await;
+        *root_node = Node::new_deterministic(Move::DUMMY);
+        *root_game_state = GameState::new(&mut rng);
+    }
 }

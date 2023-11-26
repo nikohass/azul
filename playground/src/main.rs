@@ -70,14 +70,14 @@ async fn main() {
     let mut player_three = node::MonteCarloTreeSearch::default();
     // let mut player_four = node::MonteCarloTreeSearch::default();
 
-    player_one.set_time(10_000).await;
-    player_two.set_time(10_000).await;
-    player_three.set_time(10_000).await;
+    player_one.set_time(100).await;
+    player_two.set_time(100).await;
+    player_three.set_time(100).await;
     // player_four.set_time(10000).await;
 
-    player_one.set_pondering(false).await;
-    player_two.set_pondering(false).await;
-    player_three.set_pondering(false).await;
+    player_one.set_pondering(true).await;
+    player_two.set_pondering(true).await;
+    player_three.set_pondering(true).await;
     // player_four.set_pondering(false).await;
 
     let mut players: Vec<Box<dyn Player>> = vec![

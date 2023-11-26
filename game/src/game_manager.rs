@@ -95,5 +95,10 @@ pub async fn run_match(
         stats.player_statistics[i].final_score = *score;
     }
 
+    // Reset the players
+    for player in players.iter_mut() {
+        player.reset().await;
+    }
+
     Ok(stats)
 }
