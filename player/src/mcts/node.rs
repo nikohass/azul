@@ -5,8 +5,10 @@ use game::{
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 use std::time::Instant;
 
+use std::sync::{Arc, Mutex};
+
 const C: f32 = 0.2;
-const C_BASE: f32 = 6120.0;
+const C_BASE: f32 = 20120.0;
 const C_FACTOR: f32 = std::f32::consts::SQRT_2;
 
 const MOVE_GENERATION_RETRIES: usize = 5;
@@ -19,12 +21,6 @@ struct ProbabilisticOutcome {
 }
 
 impl ProbabilisticOutcome {
-    pub const DUMMY: Self = Self {
-        factories: [[0; NUM_TILE_COLORS]; NUM_FACTORIES],
-        out_of_bag: [0; NUM_TILE_COLORS],
-        bag: [0; NUM_TILE_COLORS],
-    }; // For mem swap of root node
-
     pub fn apply_to_game_state(&self, game_state: &mut GameState) {
         game_state.evaluate_round(); // This will move the tiles from the factories to the pattern lines
         game_state.set_factories(self.factories); // Overwrite the factories with the outcome of the event
@@ -161,12 +157,25 @@ impl std::fmt::Display for Event {
 }
 
 struct Node {
-    children: Vec<Node>,
+    children: Vec<Arc<Mutex<Node>>>,
     previous_event: Event, // The edge from the parent to this node
     n: f32,
     q: Value,
     is_game_over: bool,
     has_probabilistic_children: bool,
+}
+
+impl Default for Node {
+    fn default() -> Self {
+        Node {
+            children: Vec::new(),
+            previous_event: Event::Deterministic(Move::DUMMY),
+            n: 0.,
+            q: Value::default(),
+            is_game_over: false,
+            has_probabilistic_children: false,
+        }
+    }
 }
 
 impl Node {
@@ -210,21 +219,24 @@ impl Node {
         }
     }
 
-    fn child_with_max_uct_value(&mut self, player_index: usize) -> &mut Node {
+    fn child_with_max_uct_value(&mut self, player_index: usize) -> Arc<Mutex<Node>> {
         let c_adjusted = C + C_FACTOR * ((1. + self.n + C_BASE) / C_BASE).ln();
 
         let mut best_child_index = 0;
         let mut best_chuld_uct_value = std::f32::NEG_INFINITY;
 
         for (i, child) in self.children.iter().enumerate() {
-            let value = child.get_uct_value(player_index, self.n, c_adjusted);
+            let value = child
+                .lock()
+                .unwrap()
+                .get_uct_value(player_index, self.n, c_adjusted);
             if value > best_chuld_uct_value {
                 best_child_index = i;
                 best_chuld_uct_value = value;
             }
         }
 
-        &mut self.children[best_child_index]
+        self.children[best_child_index].clone()
     }
 
     fn backpropagate(&mut self, value: Value) {
@@ -242,9 +254,9 @@ impl Node {
         }
 
         // Create children nodes for each possible move
-        let mut children: Vec<Node> = Vec::with_capacity(move_list.len());
+        let mut children = Vec::with_capacity(move_list.len());
         for i in 0..move_list.len() {
-            children.push(Node::new_deterministic(move_list[i]))
+            children.push(Arc::new(Mutex::new(Node::new_deterministic(move_list[i]))))
         }
 
         if probabilistic_event {
@@ -258,15 +270,19 @@ impl Node {
         }
     }
 
-    fn expand_probabilistic_child(&mut self, game_state: &mut GameState, mut children: Vec<Node>) {
+    fn expand_probabilistic_child(
+        &mut self,
+        game_state: &mut GameState,
+        children: Vec<Arc<Mutex<Node>>>,
+    ) {
         let outcome = ProbabilisticOutcome {
             factories: *game_state.get_factories(),
             out_of_bag: game_state.get_out_of_bag(),
             bag: game_state.get_bag(),
         };
         let mut child = Node::new_probabilistic(outcome);
-        child.children.append(&mut children);
-        self.children.push(child);
+        child.children = children;
+        self.children.push(Arc::new(Mutex::new(child)));
         self.has_probabilistic_children = true;
     }
 
@@ -297,9 +313,9 @@ impl Node {
                 assert!(probabilistic_event); // A probabilistic event must have happened, otherwise we wouldn't have any probabilistic children
 
                 // Create a child for each possible move
-                let mut children: Vec<Node> = Vec::with_capacity(move_list.len());
+                let mut children: Vec<Arc<Mutex<Node>>> = Vec::with_capacity(move_list.len());
                 for i in 0..move_list.len() {
-                    children.push(Node::new_deterministic(move_list[i]))
+                    children.push(Arc::new(Mutex::new(Node::new_deterministic(move_list[i]))))
                 }
 
                 let outcome = ProbabilisticOutcome {
@@ -309,7 +325,7 @@ impl Node {
                 };
                 let mut child = Node::new_probabilistic(outcome);
                 child.children.append(&mut children);
-                self.children.push(child);
+                self.children.push(Arc::new(Mutex::new(child)));
             }
         }
 
@@ -326,7 +342,8 @@ impl Node {
                 self.q / self.n
             }
         } else {
-            let next_child: &mut Node = self.child_with_max_uct_value(current_player as usize);
+            let next_child = self.child_with_max_uct_value(current_player as usize);
+            let mut next_child = next_child.lock().unwrap();
             next_child.previous_event.apply_to_game_state(game_state);
             next_child.iteration(game_state, move_list, rng)
         };
@@ -342,7 +359,8 @@ impl Node {
         }
 
         let player_index = usize::from(game_state.get_current_player());
-        let child: &mut Node = self.best_child(player_index);
+        let child = self.best_child(player_index);
+        let mut child = child.lock().unwrap();
 
         child.previous_event.apply_to_game_state(game_state);
         pv.push(child.previous_event.clone());
@@ -350,19 +368,19 @@ impl Node {
         child.build_pv(game_state, pv);
     }
 
-    fn best_child(&mut self, player_index: usize) -> &mut Node {
+    fn best_child(&mut self, player_index: usize) -> Arc<Mutex<Node>> {
         let mut best_child_index = 0;
         let mut best_child_value = std::f32::NEG_INFINITY;
 
         for (i, child) in self.children.iter().enumerate() {
-            let value: Value = child.get_value();
+            let value: Value = child.lock().unwrap().get_value();
             if value[player_index] > best_child_value {
                 best_child_index = i;
                 best_child_value = value[player_index];
             }
         }
 
-        &mut self.children[best_child_index]
+        self.children[best_child_index].clone()
     }
 
     pub fn best_move(&mut self, player_index: usize) -> Option<Move> {
@@ -370,7 +388,8 @@ impl Node {
             return None;
         }
 
-        let child: &mut Node = self.best_child(player_index);
+        let child = self.best_child(player_index);
+        let child = child.lock().unwrap();
         match child.previous_event {
             Event::Deterministic(move_) => Some(move_),
             Event::Probabilistic(_) => None,
@@ -532,8 +551,6 @@ pub struct MonteCarloTreeSearch {
     root_node: SharedState<Node>,
     root_game_state: SharedState<GameState>,
     time_limit: u64,
-    stop_pondering: Option<tokio::sync::oneshot::Sender<()>>,
-    use_pondering: bool,
 }
 
 fn do_iterations(
@@ -624,7 +641,7 @@ impl MonteCarloTreeSearch {
                 pv.iter()
                     .map(|event| event.to_string())
                     .collect::<Vec<_>>()
-                    .join(" ")
+                    .join(", ")
             );
 
             if time_left < 30 {
@@ -652,100 +669,10 @@ impl MonteCarloTreeSearch {
             pv.iter()
                 .map(|event| event.to_string())
                 .collect::<Vec<_>>()
-                .join(" "),
+                .join(", "),
         );
         let player_index = usize::from(game_state.get_current_player());
         root_node.best_move(player_index).unwrap()
-    }
-
-    async fn start_pondering(&mut self) {
-        if !self.use_pondering {
-            return;
-        }
-        println!("Pondering...");
-        let (stop_sender, mut stop_receiver) = tokio::sync::oneshot::channel();
-        let root_node_mutex = self.root_node.clone();
-        let root_game_state_mutex = self.root_game_state.clone();
-
-        tokio::spawn(async move {
-            let mut rng = SmallRng::from_entropy();
-            let start_time = Instant::now();
-            let pv: &mut Vec<Event> = &mut Vec::with_capacity(100);
-            println!("    Left Depth Iterations          Value PV");
-
-            let mut root_node = root_node_mutex.lock().await;
-            let root_game_state = root_game_state_mutex.lock().await;
-
-            let mut iterations_per_ms = 1.; // Initial guess on the lower end for four players, will be adjusted later
-            let mut completed_iterations: usize = 0;
-
-            let mut last_print_time = Instant::now();
-            loop {
-                if stop_receiver.try_recv().is_ok() {
-                    println!(
-                        "{:6}ms {:5} {:10} {:7} {}",
-                        "",
-                        pv.len(),
-                        completed_iterations,
-                        root_node.get_value(),
-                        pv.iter()
-                            .map(|event| event.to_string())
-                            .collect::<Vec<_>>()
-                            .join(" ")
-                    );
-                    println!("Pondering stopped.");
-                    break; // Stop if a message has been received
-                }
-
-                pv.truncate(0);
-                let new_iterations = (iterations_per_ms * 10.) as usize; // Do 10ms worth of iterations
-                do_iterations(&mut root_node, &root_game_state, new_iterations, &mut rng);
-                completed_iterations += new_iterations;
-                root_node.build_pv(&mut root_game_state.clone(), pv);
-
-                let elapsed_time = start_time.elapsed().as_micros() as f32 / 1000.;
-                if elapsed_time > 0. && last_print_time.elapsed().as_millis() > 300 {
-                    last_print_time = Instant::now();
-                    println!(
-                        "{:6}ms {:5} {:10} {:7} {}",
-                        elapsed_time as i64,
-                        pv.len(),
-                        completed_iterations,
-                        root_node.get_value(),
-                        pv.iter()
-                            .map(|event| event.to_string())
-                            .collect::<Vec<_>>()
-                            .join(" ")
-                    );
-                }
-                if elapsed_time > 0. {
-                    iterations_per_ms = completed_iterations as f32 / elapsed_time;
-                }
-            }
-            println!(
-                "Pondering finished after {}ms. Value: {:7} PV-Depth: {} Iterations: {} Iterations/s: {:.2} PV: {}",
-                start_time.elapsed().as_millis(),
-                root_node.get_value(),
-                pv.len(),
-                completed_iterations,
-                iterations_per_ms * 1000.,
-                pv.iter()
-                    .map(|event| event.to_string())
-                    .collect::<Vec<_>>()
-                    .join(" "),
-            );
-        });
-
-        self.stop_pondering = Some(stop_sender);
-    }
-
-    async fn stop_pondering(&mut self) {
-        if let Some(stop_sender) = self.stop_pondering.take() {
-            let result = stop_sender.send(());
-            if result.is_err() {
-                println!("Failed to stop pondering.");
-            }
-        }
     }
 }
 
@@ -755,9 +682,7 @@ impl Default for MonteCarloTreeSearch {
         Self {
             root_node: SharedState::new(Node::new_deterministic(Move::DUMMY)),
             root_game_state: SharedState::new(GameState::new(&mut rng)),
-            time_limit: 2000,
-            stop_pondering: None,
-            use_pondering: false,
+            time_limit: 10000,
         }
     }
 }
@@ -769,78 +694,75 @@ impl Player for MonteCarloTreeSearch {
     }
 
     async fn get_move(&mut self, game_state: &GameState) -> Move {
-        if self.use_pondering {
-            println!("Stopping pondering, it's my turn now.");
-        }
-        self.stop_pondering().await;
         let move_ = self.search(game_state).await;
         self.root_game_state.lock().await.do_move(move_);
         let mut root_node = self.root_node.lock().await;
         let player_index = usize::from(game_state.get_current_player());
+        println!("Setting child as new root node.");
         let new_root_node = std::mem::replace(
-            root_node.best_child(player_index),
+            &mut *root_node.best_child(player_index).lock().unwrap(),
             Node::new_deterministic(Move::DUMMY),
         );
         *root_node = new_root_node;
+        println!("New root node set.");
         drop(root_node);
-        if self.use_pondering {
-            println!("Turn finished, starting pondering again.");
-            self.start_pondering().await;
-        }
+        println!("Move: {}", move_);
         move_
     }
 
     async fn notify_move(&mut self, new_game_state: &GameState, move_: Move) {
-        if self.use_pondering {
-            println!("Stopping pondering, opponent made a move.");
-        }
-        self.stop_pondering().await;
         let mut invalid = false;
-        let mut root_node = self.root_node.lock().await;
-        let mut root_game_state = self.root_game_state.lock().await;
-        for child in &mut root_node.children {
-            match child.previous_event.clone() {
-                Event::Deterministic(child_move) => {
-                    if child_move == move_ {
-                        let mut temp_node = Node::new_probabilistic(ProbabilisticOutcome::DUMMY);
-                        std::mem::swap(child, &mut temp_node);
-                        let new_root_node = temp_node;
-                        *root_node = new_root_node;
-                        *root_game_state = new_game_state.clone();
-                        return;
-                    }
-                }
-                Event::Probabilistic(_) => {
+        let mut root_node_guard = self.root_node.lock().await;
+        let mut root_game_state_guard = self.root_game_state.lock().await;
+
+        // Find the child node that matches the move
+        if let Some((i, _)) = root_node_guard
+            .children
+            .iter()
+            .enumerate()
+            .find(|(_, child)| {
+                matches!(
+                    child.lock().unwrap().previous_event,
+                    Event::Deterministic(child_move) if child_move == move_
+                )
+            })
+        {
+            // Found the matching child, now make it the new root
+            println!("Setting child as new root node.");
+
+            // Swap the root node with the matching child node
+            let child_arc = root_node_guard.children.remove(i);
+            let mut child_node = child_arc.lock().unwrap();
+
+            // Take the data out of the child to avoid cloning the whole subtree
+            let new_root_node = std::mem::take(&mut *child_node);
+
+            // Update the root node with the data from the matching child
+            *root_node_guard = new_root_node;
+            *root_game_state_guard = new_game_state.clone();
+            println!("New root node set.");
+        } else {
+            // No matching child was found, or there was a probabilistic event
+            for child in &root_node_guard.children {
+                if let Event::Probabilistic(_) = child.lock().unwrap().previous_event {
                     invalid = true;
+                    break;
                 }
             }
+
+            if invalid {
+                // Replace the root node with a new dummy node if an invalid state was encountered
+                *root_node_guard = Node::new_deterministic(Move::DUMMY); // Assuming a new method for creating a Node
+            }
+            *root_game_state_guard = new_game_state.clone();
         }
-        if invalid {
-            *root_node = Node::new_deterministic(Move::DUMMY); // Assuming a new method for creating a Node
-        }
-        *root_game_state = new_game_state.clone();
-        drop(root_node);
-        drop(root_game_state);
-        if self.use_pondering {
-            println!("Turn finished, starting pondering again.");
-            self.start_pondering().await;
-        }
+
+        // Explicitly drop the guards to release the locks
+        drop(root_node_guard);
+        drop(root_game_state_guard);
     }
 
     async fn set_time(&mut self, time: u64) {
         self.time_limit = time;
-    }
-
-    async fn set_pondering(&mut self, pondering: bool) {
-        self.use_pondering = pondering;
-    }
-
-    async fn reset(&mut self) {
-        self.stop_pondering().await;
-        let mut rng = SmallRng::from_entropy();
-        let mut root_node = self.root_node.lock().await;
-        let mut root_game_state = self.root_game_state.lock().await;
-        *root_node = Node::new_deterministic(Move::DUMMY);
-        *root_game_state = GameState::new(&mut rng);
     }
 }

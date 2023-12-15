@@ -69,7 +69,7 @@ impl std::fmt::Display for Move {
 
         write!(
             f,
-            "{}{}{} -> {}",
+            "{}{}{}->{}",
             taken_tile_count, color_string, factory, destination_string
         )
     }
