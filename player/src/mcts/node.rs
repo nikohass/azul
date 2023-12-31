@@ -682,7 +682,7 @@ impl Default for MonteCarloTreeSearch {
         Self {
             root_node: SharedState::new(Node::new_deterministic(Move::DUMMY)),
             root_game_state: SharedState::new(GameState::new(&mut rng)),
-            time_limit: 10000,
+            time_limit: 6000,
         }
     }
 }
