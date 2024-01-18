@@ -8,7 +8,7 @@ use crate::RuntimeError;
 use rand::rngs::SmallRng;
 use std::fmt::Write;
 
-pub const NUM_PLAYERS: usize = 2;
+pub const NUM_PLAYERS: usize = 4;
 pub const FLOOR_LINE_PENALTY: [u8; 8] = [0, 1, 2, 4, 6, 8, 11, 14];
 
 fn find_tile_combinations(
@@ -397,7 +397,7 @@ impl GameState {
             pattern_lines_occupancy,
             pattern_lines_colors,
             next_round_starting_player,
-            tile_taken_from_center
+            tile_taken_from_center,
         })
     }
 
@@ -419,8 +419,14 @@ impl GameState {
                 if self.pattern_lines_colors[player_index][pattern_line_index].is_none() {
                     // If the pattern line is empty, we can't place a tile in it
                     println!("{}", self);
-                    println!("Player {} pattern line {} is empty", player_index, pattern_line_index);
-                    panic!("Player {} pattern line {} is empty", player_index, pattern_line_index)
+                    println!(
+                        "Player {} pattern line {} is empty",
+                        player_index, pattern_line_index
+                    );
+                    panic!(
+                        "Player {} pattern line {} is empty",
+                        player_index, pattern_line_index
+                    )
                 }
 
                 let pattern_line_color =

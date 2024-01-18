@@ -1,13 +1,25 @@
 
 [game]
 num_games = 200
-num_simultaneous_games = 14
+num_simultaneous_games = 5
 verbose = false
 
 [player_one]
 executable = "./target/release/test_client.exe"
-think_time = 450
+think_time = 1200
 
 [player_two]
-executable = "./clients/test_client-1.exe"
-think_time = 450
+executable = "./target/release/test_client.exe"
+think_time = 1000
+
+[player_three]
+executable = "./target/release/test_client.exe"
+think_time = 1000
+
+[player_four]
+executable = "./target/release/test_client.exe"
+think_time = 1000
+
+# [player_four]
+# executable = "./target/release/test_client.exe"
+# think_time = 450

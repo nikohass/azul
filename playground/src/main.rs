@@ -57,10 +57,7 @@ use rand::{rngs::SmallRng, Rng, SeedableRng};
 // }
 
 #[allow(unused_imports)]
-use player::{
-    mcts::{node, node2},
-    random_player::RandomPlayer,
-};
+use player::{mcts::node, random_player::RandomPlayer};
 
 #[tokio::main]
 async fn main() {
@@ -69,12 +66,22 @@ async fn main() {
     let game_state = GameState::new(&mut rng);
 
     let mut player_one = node::MonteCarloTreeSearch::default(); //RandomPlayer::new("Random player".to_string());
-    let mut player_two = node2::MonteCarloTreeSearch::default();
+    let mut player_two = node::MonteCarloTreeSearch::default();
+    let mut player_three = node::MonteCarloTreeSearch::default();
+    //HumanCommandLinePlayer::default();
+    let mut player_four = node::MonteCarloTreeSearch::default(); //HumanCommandLinePlayer::default();
 
-    player_one.set_time(800).await;
+    player_one.set_time(1200).await;
     player_two.set_time(800).await;
+    player_three.set_time(800).await;
+    player_four.set_time(800).await;
 
-    let mut players: Vec<Box<dyn Player>> = vec![Box::new(player_one), Box::new(player_two)];
+    let mut players: Vec<Box<dyn Player>> = vec![
+        Box::new(player_one),
+        Box::new(player_two),
+        Box::new(player_three),
+        Box::new(player_four),
+    ];
     let _stats = game_manager::run_match(game_state, &mut players, true)
         .await
         .unwrap();
