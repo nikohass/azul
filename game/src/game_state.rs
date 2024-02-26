@@ -1,4 +1,4 @@
-use crate::factories::{self, CENTER_FACTORY_INDEX, NUM_FACTORIES};
+use crate::factories::{Factories, CENTER_FACTORY_INDEX, NUM_FACTORIES};
 use crate::move_::Move;
 use crate::move_list::MoveList;
 use crate::player::PlayerMarker;
@@ -16,7 +16,7 @@ fn find_tile_combinations(
     current_pattern: &mut [u8; 6],
     remaining_space: &mut [u8; 6],
     results: &mut Vec<[u8; 6]>,
-    start_index: usize, // Add a parameter to keep track of the start index
+    start_index: usize,
 ) {
     if tiles_left == 0 {
         results.push(*current_pattern);
@@ -33,18 +33,20 @@ fn find_tile_combinations(
                 remaining_space,
                 results,
                 pattern_line_index,
-            ); // pass pattern_line_index to enforce order
+            );
             remaining_space[pattern_line_index] += 1;
             current_pattern[pattern_line_index] -= 1;
         }
     }
 }
 
+pub type Bag = [u8; NUM_TILE_COLORS];
+
 #[derive(Clone)]
 pub struct GameState {
-    bag: [u8; NUM_TILE_COLORS], // For each color, how many tiles are left in the bag
-    out_of_bag: [u8; NUM_TILE_COLORS],
-    factories: [[u8; NUM_TILE_COLORS]; NUM_FACTORIES], // For each factory, how many tiles of each color are in it (including the center)
+    bag: Bag, // For each color, how many tiles are left in the bag
+    out_of_bag: Bag,
+    factories: Factories, // For each factory, how many tiles of each color are in it (including the center)
 
     scores: [i16; NUM_PLAYERS], // For each player, how many points they have
     floor_line_progress: [u8; NUM_PLAYERS], // For each player, how many tiles they have in their penalty
@@ -56,9 +58,7 @@ pub struct GameState {
     pattern_lines_colors: [[Option<TileColor>; 5]; NUM_PLAYERS], // For each player, the color of their pattern lines. If the pattern line is empty, the color is 255
 
     current_player: PlayerMarker,
-
     next_round_starting_player: PlayerMarker,
-
     tile_taken_from_center: bool,
 }
 
@@ -81,27 +81,27 @@ impl GameState {
         self.scores
     }
 
-    pub fn get_bag(&self) -> [u8; NUM_TILE_COLORS] {
+    pub fn get_bag(&self) -> Bag {
         self.bag
     }
 
-    pub fn set_bag(&mut self, bag: [u8; NUM_TILE_COLORS]) {
+    pub fn set_bag(&mut self, bag: Bag) {
         self.bag = bag;
     }
 
-    pub fn get_out_of_bag(&self) -> [u8; NUM_TILE_COLORS] {
+    pub fn get_out_of_bag(&self) -> Bag {
         self.out_of_bag
     }
 
-    pub fn set_out_of_bag(&mut self, out_of_bag: [u8; NUM_TILE_COLORS]) {
+    pub fn set_out_of_bag(&mut self, out_of_bag: Bag) {
         self.out_of_bag = out_of_bag;
     }
 
-    pub fn get_factories(&self) -> &[[u8; NUM_TILE_COLORS]; NUM_FACTORIES] {
+    pub fn get_factories(&self) -> &Factories {
         &self.factories
     }
 
-    pub fn set_factories(&mut self, factories: [[u8; NUM_TILE_COLORS]; NUM_FACTORIES]) {
+    pub fn set_factories(&mut self, factories: Factories) {
         self.factories = factories;
     }
 
@@ -286,7 +286,7 @@ impl GameState {
         out_of_bag[4] = ((out_of_bag_binary >> 32) & 0xFF) as u8;
 
         let factories_strings = entries.get(5).ok_or("No factories")?;
-        let mut factories = [[0; NUM_TILE_COLORS]; NUM_FACTORIES];
+        let mut factories = Factories::empty();
         for (factory_index, factory_string) in factories_strings
             .split('-')
             .enumerate()
@@ -650,12 +650,8 @@ impl GameState {
     }
 
     pub fn fill_factories(&mut self, rng: &mut SmallRng) {
-        factories::fill_factories(
-            &mut self.factories,
-            &mut self.bag,
-            &mut self.out_of_bag,
-            rng,
-        );
+        self.factories
+            .refill_by_drawing_from_bag(&mut self.bag, &mut self.out_of_bag, rng);
     }
 
     pub fn check_integrity(&self) -> Result<(), RuntimeError> {
@@ -744,55 +740,39 @@ impl GameState {
 
         // Count the entire number of tiles in the game
         let mut tile_count = self.bag;
-        // println!("Tile count bag:             {:?}", tile_count);
         for factory in self.factories.iter() {
             for (color, number) in factory.iter().enumerate() {
                 tile_count[color] += number;
             }
         }
-        // println!("Tile count + factories:     {:?}", tile_count);
 
         for (color, num) in self.out_of_bag.iter().enumerate() {
             tile_count[color] += num;
         }
-        // println!("Tile count + out of bag:    {:?}", tile_count);
 
         for player in 0..NUM_PLAYERS {
             for pattern_line_index in 0..5 {
                 let color = self.pattern_lines_colors[player][pattern_line_index];
-                /*println!(
-                    "pattern line index {} color: {:?}",
-                    pattern_line_index, color
-                );*/
                 if let Some(color) = color {
                     let color = color as usize;
-                    /*println!(
-                        "self.pattern_lines_occupancy[player][color]: {:?}",
-                        self.pattern_lines_occupancy[player][pattern_line_index]
-                    );*/
                     tile_count[color] += self.pattern_lines_occupancy[player][pattern_line_index];
                 }
             }
         }
-        // println!("Tile count + pattern lines: {:?}", tile_count);
 
         for player in 0..NUM_PLAYERS {
             for (color, wall) in self.walls[player].iter().enumerate() {
                 tile_count[color] += wall.count_ones() as u8;
             }
         }
-        // println!("Tile count + wall:          {:?}", tile_count);
 
         // Make sure the total number of tiles is 20 for each
-        //let sum_floor_line_progress: u8 = self.floor_line_progress.iter().sum();
         let sum_tiles_in_game: u8 = tile_count.iter().sum();
-        //let sum_tiles_in_game = sum_tiles_in_game + sum_floor_line_progress;
         if sum_tiles_in_game != 100 {
             println!(
                 "The sum of the tiles does not add up to 100. {:?} = {}",
                 tile_count,
                 tile_count.iter().sum::<u8>(),
-                //sum_floor_line_progress
             );
             is_valid = false;
         }
@@ -817,16 +797,11 @@ impl GameState {
         }
     }
 
-    // pub fn reconstruct_move_sequence(&mut self, past_state: &GameState, move_list: &mut MoveList) {
-    //     // Given two game states, reconstruct the move sequence that led from the past state to the current state
-
-    // }
-
     pub fn new(rng: &mut SmallRng) -> Self {
         let mut ret = Self {
             bag: [20, 20, 20, 20, 20],
             out_of_bag: [0; NUM_TILE_COLORS],
-            factories: [[0; NUM_TILE_COLORS]; NUM_FACTORIES],
+            factories: Factories::empty(),
             scores: [0; NUM_PLAYERS],
             floor_line_progress: [0; NUM_PLAYERS],
             walls: [[0; NUM_TILE_COLORS]; NUM_PLAYERS],
@@ -841,26 +816,6 @@ impl GameState {
         ret
     }
 }
-
-// impl Default for GameState {
-//     fn default() -> Self {
-//         let mut ret = Self {
-//             bag: [20, 20, 20, 20, 20],
-//             out_of_bag: [0; NUM_TILE_COLORS],
-//             factories: [[0; NUM_TILE_COLORS]; NUM_FACTORIES],
-//             scores: [0; NUM_PLAYERS],
-//             floor_line_progress: [0; NUM_PLAYERS],
-//             walls: [[0; NUM_TILE_COLORS]; NUM_PLAYERS],
-//             wall_occupancy: [0; NUM_PLAYERS],
-//             current_player: PlayerMarker::new(0),
-//             pattern_lines_occupancy: [[0; 5]; NUM_PLAYERS],
-//             pattern_lines_colors: [[None; 5]; NUM_PLAYERS],
-//             next_round_starting_player: None,
-//         };
-//         ret.fill_factories();
-//         ret
-//     }
-// }
 
 fn bag_to_string(game_state: &GameState) -> String {
     let mut string = String::from("BAG       ");

@@ -1,0 +1,65 @@
+use game::*;
+
+#[derive(Debug, Clone)] // TODO: Default just for swapping root
+pub struct ProbabilisticOutcome {
+    pub factories: Factories,
+    pub out_of_bag: Bag,
+    pub bag: Bag,
+}
+
+impl ProbabilisticOutcome {
+    pub fn apply_to_game_state(&self, game_state: &mut GameState) {
+        game_state.evaluate_round(); // This will move the tiles from the factories to the pattern lines
+        game_state.set_factories(self.factories.clone()); // Overwrite the factories with the outcome of the event
+
+        // The number of tiles in and out of bag also changes when the factories are refilled, so overwrite those as well
+        game_state.set_out_of_bag(self.out_of_bag);
+        game_state.set_bag(self.bag);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum Event {
+    Deterministic(Move),
+    Probabilistic(ProbabilisticOutcome),
+}
+
+impl Event {
+    pub fn apply_to_game_state(&self, game_state: &mut GameState) {
+        match self {
+            Event::Deterministic(move_) => game_state.do_move(*move_),
+            Event::Probabilistic(outcome) => outcome.apply_to_game_state(game_state),
+        }
+    }
+}
+
+impl std::fmt::Display for Event {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Event::Deterministic(move_) => write!(f, "{}", move_),
+            Event::Probabilistic(outcome) => {
+                let string = outcome
+                    .factories
+                    .iter()
+                    .take(NUM_FACTORIES - 1)
+                    .enumerate()
+                    .map(|(_factory_index, factory)| {
+                        factory
+                            .iter()
+                            .enumerate()
+                            .map(|(color, number_of_tiles)| {
+                                TileColor::from(color)
+                                    .to_string()
+                                    .repeat(*number_of_tiles as usize)
+                            })
+                            .collect::<Vec<String>>()
+                            .join("")
+                    })
+                    .collect::<Vec<String>>()
+                    .join(" ");
+
+                write!(f, "{}", string)
+            }
+        }
+    }
+}

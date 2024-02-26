@@ -1,16 +1,17 @@
-use rand::{rngs::SmallRng, SeedableRng};
-
 use super::NUM_PLAYERS;
 use crate::{move_::Move, GameState, MoveList, TileColor};
+use rand::{rngs::SmallRng, SeedableRng};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PlayerMarker(u8);
 
 impl PlayerMarker {
+    #[inline]
     pub fn new(id: u8) -> Self {
         Self(id)
     }
 
+    #[inline]
     pub fn next(&self) -> Self {
         Self((self.0 + 1) % (NUM_PLAYERS as u8))
     }
