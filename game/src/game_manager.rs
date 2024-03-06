@@ -19,7 +19,7 @@ pub struct PlayerStatistics {
 
 pub async fn run_match(
     mut game_state: GameState,
-    players: &mut Vec<Box<dyn Player>>,
+    players: &mut [Box<dyn Player>],
     verbose: bool,
 ) -> Result<MatchStatistcs, RuntimeError> {
     let num_players = players.len();

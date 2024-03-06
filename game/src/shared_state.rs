@@ -16,10 +16,6 @@ where
     pub async fn lock(&self) -> async_mutex::MutexGuard<'_, T> {
         self.0.lock().await
     }
-
-    // pub async fn replace(&self, new: T) {
-    //     *self.0.lock().await = new;
-    // }
 }
 
 impl<T> Clone for SharedState<T>

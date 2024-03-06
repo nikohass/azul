@@ -43,7 +43,7 @@ struct AppConfig {
 }
 
 async fn run_match(
-    players: &mut Vec<Box<dyn Player>>,
+    players: &mut [Box<dyn Player>],
     verbose: bool,
 ) -> Result<MatchStatistcs, RuntimeError> {
     game_manager::run_match(

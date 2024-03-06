@@ -57,7 +57,7 @@ use rand::{rngs::SmallRng, Rng, SeedableRng};
 // }
 
 #[allow(unused_imports)]
-use player::{mcts::node, random_player::RandomPlayer};
+use player::{mcts::MonteCarloTreeSearch, random_player::RandomPlayer};
 
 #[tokio::main]
 async fn main() {
@@ -65,11 +65,11 @@ async fn main() {
     let mut rng = SmallRng::from_entropy();
     let game_state = GameState::new(&mut rng);
 
-    let mut player_one = node::MonteCarloTreeSearch::default(); //RandomPlayer::new("Random player".to_string());
-    let mut player_two = node::MonteCarloTreeSearch::default();
-    let mut player_three = node::MonteCarloTreeSearch::default();
+    let mut player_one = MonteCarloTreeSearch::default(); //RandomPlayer::new("Random player".to_string());
+    let mut player_two = MonteCarloTreeSearch::default();
+    let mut player_three = MonteCarloTreeSearch::default();
     //HumanCommandLinePlayer::default();
-    let mut player_four = node::MonteCarloTreeSearch::default(); //HumanCommandLinePlayer::default();
+    let mut player_four = MonteCarloTreeSearch::default(); //HumanCommandLinePlayer::default();
 
     player_one.set_time(1200).await;
     player_two.set_time(800).await;
