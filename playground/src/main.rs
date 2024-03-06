@@ -64,17 +64,16 @@ async fn main() {
     // perft();
     let mut rng = SmallRng::from_entropy();
     let game_state = GameState::new(&mut rng);
-
     let mut player_one = MonteCarloTreeSearch::default(); //RandomPlayer::new("Random player".to_string());
     let mut player_two = MonteCarloTreeSearch::default();
     let mut player_three = MonteCarloTreeSearch::default();
     //HumanCommandLinePlayer::default();
     let mut player_four = MonteCarloTreeSearch::default(); //HumanCommandLinePlayer::default();
 
-    player_one.set_time(1200).await;
-    player_two.set_time(800).await;
-    player_three.set_time(800).await;
-    player_four.set_time(800).await;
+    player_one.set_time(12000).await;
+    player_two.set_time(8000).await;
+    player_three.set_time(8000).await;
+    player_four.set_time(8000).await;
 
     let mut players: Vec<Box<dyn Player>> = vec![
         Box::new(player_one),

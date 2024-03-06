@@ -64,7 +64,6 @@ pub struct WebSocketConnection {
     write: SharedState<WsSink>,
     addr: SocketAddr,
     read_broadcast: tokio::sync::broadcast::Sender<WebSocketMessage>,
-    // pending_responses: SharedState<HashMap<String, tokio::sync::mpsc::Sender<WebSocketMessage>>>,
 }
 
 impl WebSocketConnection {
@@ -90,7 +89,6 @@ impl WebSocketConnection {
             write,
             addr,
             read_broadcast: broadcast.0,
-            // pending_responses: SharedState::new(HashMap::new()),
         };
 
         connection.spawn_receiver_task(read).await;
@@ -137,11 +135,6 @@ impl WebSocketConnection {
                             data,
                         };
                         let _ = broadcast_sender.send(message);
-                        // if let Err(err) = send_result {
-                        //     log::error!("Error sending message: {:?}", err);
-                        //     log::info!("Stopping receiver task");
-                        //     break;
-                        // }
                     }
                     Err(err) => log::error!("Error reading message: {:?}", err),
                 }
@@ -189,30 +182,6 @@ impl WebSocketConnection {
                     log::error!("Client sent error event");
                     continue;
                 }
-                // EventType::MoveResponse => {
-                //     log::info!("Client sent a move.");
-                //     let request_id = message.data["request_id"]
-                //         .as_str()
-                //         .ok_or("Missing request_id field")?;
-                //     println!("Accessing pending_responses");
-                //     let sender = self.pending_responses.lock().await.remove(request_id);
-                //     println!("Accessing pending_responses done");
-                //     if let Some(sender) = sender {
-                //         let result: Result<
-                //             (),
-                //             tokio::sync::mpsc::error::SendError<WebSocketMessage>,
-                //         > = sender.send(message).await;
-                //         if let Err(err) = result {
-                //             log::error!("Error sending move response: {}", err);
-                //         }
-                //     } else {
-                //         log::error!(
-                //             "Received move response for unknown request id: {}",
-                //             request_id
-                //         );
-                //     }
-                //     continue;
-                // }
                 EventType::GameStateUpdate | EventType::GameOver | EventType::MoveRequest => {
                     log::error!(
                         "Client sent {} event, this event is only sent by the server",
@@ -337,71 +306,6 @@ impl WebSocketConnection {
         receiver
     }
 }
-
-// pub async fn handle_websocket_connection(stream: tokio::net::TcpStream, addr: SocketAddr) {
-//     log::info!("New WebSocket connection: {}", addr);
-//     if let Err(err) = handle_websocket(stream, addr).await {
-//         log::error!("WebSocket connection error: {:?}", err);
-//     }
-// }
-
-// async fn handle_message(
-//     message: &Message,
-//     write: &SharedState<WsSink>,
-//     addr: SocketAddr,
-// ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-//     let json = serde_json::from_str::<serde_json::Value>(&message.to_string())?;
-//     let event = json["event"]
-//         .as_str()
-//         .ok_or_else(|| Box::<dyn std::error::Error + Send + Sync>::from("Missing event field"))?;
-//     log::info!("Received {} from {}", event, addr);
-//     match event {
-//         "ping" => handle_ping(write, addr).await?,
-//         "new_game" => handle_new_game(write, addr, json).await?,
-//         _ => log::error!("Unknown event: {}", event),
-//     }
-
-//     Ok(())
-// }
-
-// async fn handle_ping(
-//     write: &SharedState<WsSink>,
-//     addr: SocketAddr,
-// ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-//     let pong = serde_json::json!({
-//         "event": "pong",
-//     });
-//     write
-//         .lock()
-//         .await
-//         .send(Message::Text(pong.to_string()))
-//         .await?;
-//     log::info!("Sent pong to {}", addr);
-//     Ok(())
-// }
-
-// async fn handle_new_game(
-//     write: &SharedState<WsSink>,
-//     addr: SocketAddr,
-//     json: serde_json::Value,
-// ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-//     let pretty = serde_json::to_string_pretty(&json)?;
-//     println!("{}", pretty);
-
-//     let id = new_game.get_id();
-//     let response = serde_json::json!({
-//         "event": "game_created",
-//         "id": id,
-//         "players": players,
-//     });
-//     write
-//         .lock()
-//         .await
-//         .send(Message::Text(response.to_string()))
-//         .await?;
-//     log::info!("Sent game_created to {}", addr);
-//     Ok(())
-// }
 
 pub async fn run_websocket_api() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let addr = "127.0.0.1:3001".parse::<SocketAddr>().unwrap();

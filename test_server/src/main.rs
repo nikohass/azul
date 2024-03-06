@@ -25,6 +25,7 @@ struct GameConfig {
     pub num_games: u64,
     pub num_simultaneous_games: u64,
     pub verbose: bool,
+    pub constant_ordering: bool,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -90,7 +91,11 @@ async fn main() {
         );
     }
 
-    let player_combinations = player_combinations(NUM_PLAYERS);
+    let player_combinations = if app_config.game.constant_ordering {
+        constant_player_ordering(NUM_PLAYERS)
+    } else {
+        rotating_player_ordering(NUM_PLAYERS)
+    };
     // Set num_games to a multiple of the number of player combinations
     let remainder = app_config.game.num_games % player_combinations.len() as u64;
     let num_games = app_config.game.num_games - remainder;
@@ -237,7 +242,7 @@ async fn main() {
     }
 }
 
-fn player_combinations(num_players: usize) -> Vec<Vec<usize>> {
+fn rotating_player_ordering(num_players: usize) -> Vec<Vec<usize>> {
     fn permute(players: &mut Vec<usize>, start: usize, result: &mut Vec<Vec<usize>>) {
         if start == players.len() {
             result.push(players.clone());
@@ -253,5 +258,16 @@ fn player_combinations(num_players: usize) -> Vec<Vec<usize>> {
     let mut players = (1..=num_players).collect::<Vec<_>>();
     let mut result = Vec::new();
     permute(&mut players, 0, &mut result);
+    result
+}
+
+fn constant_player_ordering(num_players: usize) -> Vec<Vec<usize>> {
+    let mut result = Vec::new();
+
+    for _ in 0..num_players {
+        let order = 1..(num_players + 1);
+        result.push(order.to_owned().collect());
+    }
+
     result
 }

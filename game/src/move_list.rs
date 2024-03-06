@@ -121,3 +121,61 @@ impl std::fmt::Display for MoveList {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new() {
+        let move_list = MoveList::new();
+        assert_eq!(move_list.len(), 0);
+        assert!(move_list.is_empty());
+    }
+
+    #[test]
+    fn test_push_and_len() {
+        let mut move_list = MoveList::new();
+        let move_ = Move::DUMMY;
+        move_list.push(move_);
+        assert_eq!(move_list.len(), 1);
+        assert!(!move_list.is_empty());
+    }
+
+    #[test]
+    fn test_clear() {
+        let mut move_list = MoveList::new();
+        move_list.push(Move::DUMMY);
+        move_list.clear();
+        assert_eq!(move_list.len(), 0);
+        assert!(move_list.is_empty());
+    }
+
+    #[test]
+    fn test_contains() {
+        let mut move_list = MoveList::new();
+        let move_ = Move::DUMMY;
+        assert!(!move_list.contains(move_));
+        move_list.push(move_);
+        assert!(move_list.contains(move_));
+    }
+
+    #[test]
+    fn test_index() {
+        let mut move_list = MoveList::new();
+        let move_ = Move::DUMMY;
+        move_list.push(move_);
+        assert_eq!(&move_list[0], &move_);
+    }
+
+    #[test]
+    fn test_iter() {
+        let mut move_list = MoveList::new();
+        move_list.push(Move::DUMMY);
+        move_list.push(Move::DUMMY);
+        let mut iter = move_list.into_iter();
+        assert_eq!(iter.next(), Some(&Move::DUMMY));
+        assert_eq!(iter.next(), Some(&Move::DUMMY));
+        assert_eq!(iter.next(), None);
+    }
+}

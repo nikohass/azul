@@ -143,19 +143,19 @@ impl GameState {
         // 3 bits * 5 colors * max 10 factories = 150 bit
         // The center might be larger
 
-        let mut factories = [0b0_u64; NUM_FACTORIES];
+        let mut factories = [0b0_u128; NUM_FACTORIES];
         for (factory_index, factory) in self.factories.iter().enumerate().take(CENTER_FACTORY_INDEX)
         {
-            let mut factory_binary: u64 = 0b0_u64;
+            let mut factory_binary = 0b0_u128;
             for (color_index, number_of_tiles) in factory.iter().enumerate() {
-                let number_of_tiles = *number_of_tiles as u64;
-                factory_binary |= number_of_tiles << (color_index * 3);
+                let number_of_tiles = *number_of_tiles as u128;
+                factory_binary |= number_of_tiles << (color_index * 4);
             }
             factories[factory_index] = factory_binary;
         }
-        factories[CENTER_FACTORY_INDEX] = 0b0_u64;
+        factories[CENTER_FACTORY_INDEX] = 0b0_u128;
         for color_index in 0..NUM_TILE_COLORS {
-            let number_of_tiles = self.factories[CENTER_FACTORY_INDEX][color_index] as u64;
+            let number_of_tiles = self.factories[CENTER_FACTORY_INDEX][color_index] as u128;
             factories[CENTER_FACTORY_INDEX] |= number_of_tiles << (color_index * 8);
         }
 
@@ -293,11 +293,11 @@ impl GameState {
             .take(CENTER_FACTORY_INDEX)
         {
             let factory_binary = factory_string
-                .parse::<u64>()
+                .parse::<u128>()
                 .map_err(|_| "Invalid factory")?;
             for color_index in 0..NUM_TILE_COLORS {
                 factories[factory_index][color_index] =
-                    ((factory_binary >> (color_index * 3)) & 0b111) as u8;
+                    ((factory_binary >> (color_index * 4)) & 0b1111) as u8;
             }
         }
         for color_index in 0..NUM_TILE_COLORS {
@@ -649,7 +649,7 @@ impl GameState {
         }
     }
 
-    pub fn fill_factories(&mut self, rng: &mut SmallRng) {
+    fn fill_factories(&mut self, rng: &mut SmallRng) {
         self.factories
             .refill_by_drawing_from_bag(&mut self.bag, &mut self.out_of_bag, rng);
     }

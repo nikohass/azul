@@ -42,8 +42,7 @@ impl std::fmt::Display for Event {
                     .factories
                     .iter()
                     .take(NUM_FACTORIES - 1)
-                    .enumerate()
-                    .map(|(_factory_index, factory)| {
+                    .map(|factory| {
                         factory
                             .iter()
                             .enumerate()

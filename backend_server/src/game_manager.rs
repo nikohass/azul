@@ -58,29 +58,11 @@ impl Match {
         &self.id
     }
 
-    // pub fn get_game_state(&self) -> &GameState {
-    //     &self.game_state
-    // }
-
-    // pub fn get_players(&self) -> &[Box<dyn PlayerTrait>] {
-    //     &self.players
-    // }
-
-    // pub fn get_state(&self) -> MatchState {
-    //     self.state
-    // }
-
-    // pub fn reset(&mut self) {
-    //     self.game_state = GameState::default();
-    //     self.state = MatchState::NotStarted;
-    // }
-
     pub async fn start_match(&mut self, websocket: WebSocketConnection) {
         let game_state = &mut self.game_state;
         let mut move_list = MoveList::default();
         let mut rng = SmallRng::from_entropy();
         let mut round = 0;
-        // game_state.fill_factories(); // Fill the factories before every round
         loop {
             game_state.check_integrity().unwrap(); // Check the integrity of the game state. If it is not valid, panic and crash the tokio task
             send_game_state_update(game_state, &websocket); // Send the game state to the players
