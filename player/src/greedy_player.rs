@@ -15,7 +15,7 @@ impl GreedyPlayer {
 
 #[async_trait::async_trait]
 impl Player for GreedyPlayer {
-    fn name(&self) -> &str {
+    fn get_name(&self) -> &str {
         &self.name
     }
 

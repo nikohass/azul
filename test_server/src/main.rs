@@ -11,6 +11,7 @@ use game::{
     game_manager::{self, MatchStatistcs},
     GameState, Player, RuntimeError, SharedState, NUM_PLAYERS,
 };
+use async_mutex::MutexGuard;
 
 #[derive(Parser, Debug)]
 #[clap(about, version, author)]
@@ -156,79 +157,7 @@ async fn main() {
                 let mut game_results_lock = game_results_clone.lock().await;
                 game_results_lock.push(stats);
 
-                // Calculate and print aggregated statistics
-                let total_games = game_results_lock.len() as u32;
-                let avg_moves = game_results_lock
-                    .iter()
-                    .map(|stats| stats.executed_moves.len() as u32)
-                    .sum::<u32>() as f32
-                    / total_games as f32;
-                let avg_refills = game_results_lock
-                    .iter()
-                    .map(|stats| stats.num_factory_refills)
-                    .sum::<u32>() as f32
-                    / total_games as f32;
-
-                let mut avg_scores = vec![0f32; NUM_PLAYERS];
-                let mut wins = [0; NUM_PLAYERS];
-                let mut draws = [0; NUM_PLAYERS];
-                let mut losses = [0; NUM_PLAYERS];
-
-                for stats in game_results_lock.iter() {
-                    for (i, player_stats) in stats.player_statistics.iter().enumerate() {
-                        avg_scores[i] += player_stats.final_score as f32;
-
-                        // determine wins, draws, losses
-                        // Update wins[i], draws[i], losses[i] accordingly
-                        let mut max_score = 0;
-                        let mut max_score_count = 0;
-                        for (j, other_player_stats) in stats.player_statistics.iter().enumerate() {
-                            if i == j {
-                                continue;
-                            }
-                            match other_player_stats.final_score.cmp(&max_score) {
-                                std::cmp::Ordering::Greater => {
-                                    max_score = other_player_stats.final_score;
-                                    max_score_count = 1;
-                                }
-                                std::cmp::Ordering::Equal => {
-                                    max_score_count += 1;
-                                }
-                                _ => {}
-                            }
-                        }
-
-                        match player_stats.final_score.cmp(&max_score) {
-                            std::cmp::Ordering::Greater => wins[i] += 1,
-                            std::cmp::Ordering::Equal => {
-                                if max_score_count == 1 {
-                                    draws[i] += 1;
-                                } else {
-                                    losses[i] += 1;
-                                }
-                            }
-                            std::cmp::Ordering::Less => losses[i] += 1,
-                        }
-                    }
-                }
-
-                for score in &mut avg_scores {
-                    *score /= total_games as f32;
-                }
-
-                println!("Total games: {}", total_games);
-                println!("Average executed moves per game: {}", avg_moves);
-                println!("Average factory refills per game: {}", avg_refills);
-                for i in 0..NUM_PLAYERS {
-                    println!(
-                        "Player {} - Average score: {}, Wins: {}, Draws: {}, Losses: {}",
-                        i + 1,
-                        avg_scores[i],
-                        wins[i],
-                        draws[i],
-                        losses[i]
-                    );
-                }
+                print_stats(game_results_lock);
             }
         });
         handles.push(handle);
@@ -239,6 +168,102 @@ async fn main() {
             Ok(_) => println!("Task completed successfully"),
             Err(e) => eprintln!("Game ended with an error: {:?}", e),
         }
+    }
+}
+
+fn print_stats(game_results_lock: MutexGuard<Vec<MatchStatistcs>>) {
+    // Calculate and print aggregated statistics
+    let total_games = game_results_lock.len() as u32;
+    let avg_moves = game_results_lock
+        .iter()
+        .map(|stats| stats.executed_moves.len() as u32)
+        .sum::<u32>() as f32
+        / total_games as f32;
+    let avg_refills = game_results_lock
+        .iter()
+        .map(|stats| stats.num_factory_refills)
+        .sum::<u32>() as f32
+        / total_games as f32;
+
+    let mut avg_scores = vec![0f32; NUM_PLAYERS];
+    let mut wins = [0; NUM_PLAYERS];
+    let mut draws = [0; NUM_PLAYERS];
+    let mut losses = [0; NUM_PLAYERS];
+
+    for stats in game_results_lock.iter() {
+        for (i, player_stats) in stats.player_statistics.iter().enumerate() {
+            avg_scores[i] += player_stats.final_score as f32;
+
+            // determine wins, draws, losses
+            // Update wins[i], draws[i], losses[i] accordingly
+            let mut max_score = 0;
+            let mut max_score_count = 0;
+            for (j, other_player_stats) in stats.player_statistics.iter().enumerate() {
+                if i == j {
+                    continue;
+                }
+                match other_player_stats.final_score.cmp(&max_score) {
+                    std::cmp::Ordering::Greater => {
+                        max_score = other_player_stats.final_score;
+                        max_score_count = 1;
+                    }
+                    std::cmp::Ordering::Equal => {
+                        max_score_count += 1;
+                    }
+                    _ => {}
+                }
+            }
+
+            match player_stats.final_score.cmp(&max_score) {
+                std::cmp::Ordering::Greater => wins[i] += 1,
+                std::cmp::Ordering::Equal => {
+                    if max_score_count == 1 {
+                        draws[i] += 1;
+                    } else {
+                        losses[i] += 1;
+                    }
+                }
+                std::cmp::Ordering::Less => losses[i] += 1,
+            }
+        }
+    }
+
+    for score in &mut avg_scores {
+        *score /= total_games as f32;
+    }
+
+    let mut average_branching_factor_per_ply: [f32; 100] = [0.0; 100];
+    let mut sum_branching_factor_per_ply: [u32; 100] = [0; 100];
+    for stats in game_results_lock.iter() {
+        for (i, &branching_factor) in stats.branching_factor.iter().enumerate() {
+            average_branching_factor_per_ply[i] += branching_factor as f32;
+            sum_branching_factor_per_ply[i] += 1;
+        }
+    }
+
+    for (i, &sum) in sum_branching_factor_per_ply.iter().enumerate() {
+        if sum == 0 {
+            average_branching_factor_per_ply[i] = 0.0;
+        } else {
+            average_branching_factor_per_ply[i] /= sum as f32;
+        }
+    }
+
+    println!("Average branching factor per ply: {:?}", average_branching_factor_per_ply);
+    println!("Sum branching factor per ply: {:?}", sum_branching_factor_per_ply);
+
+    println!("Total games: {}", total_games);
+    println!("Average executed moves per game: {}", avg_moves);
+    println!("Average factory refills per game: {}", avg_refills);
+    for i in 0..NUM_PLAYERS {
+        println!(
+            "Player {} - Average score: {}, Wins: {}, Draws: {}, Losses: {}",
+            i + 1,
+            avg_scores[i],
+            wins[i],
+            draws[i],
+            losses[i]
+        );
     }
 }
 
@@ -271,3 +296,4 @@ fn constant_player_ordering(num_players: usize) -> Vec<Vec<usize>> {
 
     result
 }
+

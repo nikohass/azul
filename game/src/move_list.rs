@@ -1,6 +1,6 @@
 use super::Move;
 
-const MAX_MOVES: usize = 1024;
+const MAX_MOVES: usize = 1500;
 
 pub struct MoveList {
     moves: [Move; MAX_MOVES],

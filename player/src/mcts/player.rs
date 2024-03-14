@@ -147,7 +147,7 @@ impl Default for MonteCarloTreeSearch {
 
 #[async_trait::async_trait]
 impl Player for MonteCarloTreeSearch {
-    fn name(&self) -> &str {
+    fn get_name(&self) -> &str {
         "MCTS"
     }
 

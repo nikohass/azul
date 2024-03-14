@@ -8,6 +8,7 @@ pub struct MatchStatistcs {
     pub num_factory_refills: u32,
     pub executed_moves: Vec<(GameState, PlayerMarker, Move, u64)>,
     pub player_statistics: [PlayerStatistics; NUM_PLAYERS],
+    pub branching_factor: Vec<u32>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -67,6 +68,7 @@ pub async fn run_match(
             return Err(RuntimeError::IllegalMove);
         }
 
+        stats.branching_factor.push(move_list.len() as u32);
         stats.executed_moves.push((
             game_state.clone(),
             current_player_marker,

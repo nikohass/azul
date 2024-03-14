@@ -13,10 +13,10 @@ think_time = 1000
 executable = "./target/release/test_client.exe"
 think_time = 1000
 
-[player_three]
-executable = "./target/release/test_client.exe"
-think_time = 1000
+# [player_three]
+# executable = "./target/release/test_client.exe"
+# think_time = 1000
 
-[player_four]
-executable = "./target/release/test_client.exe"
-think_time = 1000
+# [player_four]
+# executable = "./target/release/test_client.exe"
+# think_time = 1000

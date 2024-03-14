@@ -21,7 +21,7 @@ impl RandomPlayer {
 
 #[async_trait::async_trait]
 impl Player for RandomPlayer {
-    fn name(&self) -> &str {
+    fn get_name(&self) -> &str {
         &self.name
     }
 

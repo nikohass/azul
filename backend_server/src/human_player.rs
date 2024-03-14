@@ -24,7 +24,7 @@ impl HumanPlayer {
 
 #[async_trait::async_trait]
 impl Player for HumanPlayer {
-    fn name(&self) -> &str {
+    fn get_name(&self) -> &str {
         &self.name
     }
 
