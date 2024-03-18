@@ -1,4 +1,4 @@
-use game::*;
+use game::{match_::run_match, *};
 #[allow(unused_imports)]
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 
@@ -80,9 +80,7 @@ async fn main() {
         Box::new(player_three),
         Box::new(player_four),
     ];
-    let _stats = r#match::run_match(game_state, &mut players, true)
-        .await
-        .unwrap();
+    let _stats = run_match(game_state, &mut players, true).await.unwrap();
     // println!("{:#?}", stats);
 }
 

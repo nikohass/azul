@@ -6,12 +6,12 @@ use rand::{rngs::SmallRng, SeedableRng};
 use serde::Deserialize;
 
 mod client;
+use async_mutex::MutexGuard;
 use client::Client;
 use game::{
-    game_manager::{self, MatchStatistcs},
+    match_::{self, MatchStatistcs},
     GameState, Player, RuntimeError, SharedState, NUM_PLAYERS,
 };
-use async_mutex::MutexGuard;
 
 #[derive(Parser, Debug)]
 #[clap(about, version, author)]
@@ -48,7 +48,7 @@ async fn run_match(
     players: &mut [Box<dyn Player>],
     verbose: bool,
 ) -> Result<MatchStatistcs, RuntimeError> {
-    game_manager::run_match(
+    match_::run_match(
         GameState::new(&mut SmallRng::from_entropy()),
         players,
         verbose,
@@ -148,8 +148,8 @@ async fn main() {
                 };
 
                 // Reordering player_statistics to match the original order
-                let mut reordered_stats: Vec<game_manager::PlayerStatistics> =
-                    vec![game_manager::PlayerStatistics::default(); NUM_PLAYERS];
+                let mut reordered_stats: Vec<match_::PlayerStatistics> =
+                    vec![match_::PlayerStatistics::default(); NUM_PLAYERS];
                 for (index, &original_index) in next_order.iter().enumerate() {
                     reordered_stats[original_index - 1] = stats.player_statistics[index].clone();
                 }
@@ -249,8 +249,14 @@ fn print_stats(game_results_lock: MutexGuard<Vec<MatchStatistcs>>) {
         }
     }
 
-    println!("Average branching factor per ply: {:?}", average_branching_factor_per_ply);
-    println!("Sum branching factor per ply: {:?}", sum_branching_factor_per_ply);
+    println!(
+        "Average branching factor per ply: {:?}",
+        average_branching_factor_per_ply
+    );
+    println!(
+        "Sum branching factor per ply: {:?}",
+        sum_branching_factor_per_ply
+    );
 
     println!("Total games: {}", total_games);
     println!("Average executed moves per game: {}", avg_moves);
@@ -296,4 +302,3 @@ fn constant_player_ordering(num_players: usize) -> Vec<Vec<usize>> {
 
     result
 }
-
