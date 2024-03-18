@@ -14,8 +14,6 @@ pub struct Client {
 impl Client {
     pub fn from_path(path: &str, verbose: bool) -> Self {
         let mut process = Command::new(path)
-            // .args(&["--time", &time.to_string()])
-            // .args(&["--test", "true"])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -34,7 +32,12 @@ impl Client {
     pub fn did_panic(&self) -> bool {
         let mut child = self.child.lock().unwrap();
         match child.try_wait() {
-            Ok(Some(status)) => !status.success(),
+            Ok(Some(status)) => {
+                if !status.success() {
+                    println!("Client {} exited with: {}", self.path, status);
+                }
+                !status.success()
+            }
             Ok(None) => false,
             Err(_) => true,
         }
@@ -43,7 +46,7 @@ impl Client {
 
 #[async_trait::async_trait]
 impl Player for Client {
-    fn name(&self) -> &str {
+    fn get_name(&self) -> &str {
         &self.path
     }
 
@@ -79,15 +82,7 @@ impl Player for Client {
                 }
             }
             line.truncate(0);
-            // let elapsed: u128 = start_time.elapsed().as_millis();
-            // if elapsed > self.time as u128 + 2500 {
-            //     println!("warning: Client {} hard-timeout: {}ms", self.path, elapsed);
-            // }
         }
-        // let elapsed = start_time.elapsed().as_millis();
-        // if elapsed as u64 > 1990 {
-        //     println!("warning: Client {} soft-timeout: {}ms", self.path, elapsed);
-        // }
         line.pop();
         Move::deserialize_string(&line)
     }

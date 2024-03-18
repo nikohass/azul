@@ -1,6 +1,6 @@
 mod error;
 mod factories;
-pub mod game_manager;
+pub mod match_;
 mod game_state;
 mod move_;
 mod move_list;
@@ -17,7 +17,7 @@ pub use game_state::GameState;
 pub use game_state::{FLOOR_LINE_PENALTY, NUM_PLAYERS};
 pub use move_::Move;
 pub use move_list::MoveList;
-pub use player::{HumanCommandLinePlayer, Player, PlayerMarker};
+pub use player::{Player, PlayerMarker};
 pub use shared_state::SharedState;
 pub use tile_color::TileColor;
 pub use tile_color::NUM_TILE_COLORS;

@@ -49,7 +49,7 @@ impl Match {
     pub async fn get_player_names(&self) -> Vec<String> {
         let mut player_names = Vec::new();
         for player in &self.players {
-            player_names.push(player.name().to_string());
+            player_names.push(player.get_name().to_string());
         }
         player_names
     }
@@ -83,7 +83,7 @@ impl Match {
                     "Round {}, turn {}, player {}",
                     round,
                     turn,
-                    self.players[current_player].name()
+                    self.players[current_player].get_name()
                 );
                 send_game_state_update(game_state, &websocket);
                 let move_ = self.players[current_player].get_move(game_state).await;
