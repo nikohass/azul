@@ -1,6 +1,6 @@
 mod error;
 mod factories;
-pub mod game_manager;
+pub mod match_;
 mod game_state;
 mod move_;
 mod move_list;
