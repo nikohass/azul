@@ -104,3 +104,90 @@ impl Factories {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::*;
+    use rand::SeedableRng;
+
+    #[test]
+    fn test_empty_factories() {
+        let factories = Factories::empty();
+
+        for factory in factories.iter() {
+            for &tile_count in factory.iter() {
+                assert_eq!(tile_count, 0);
+            }
+        }
+    }
+
+    #[test]
+    fn test_factories_refill_from_bag() {
+        // Make sure the number of tiles placed in the factories is correct
+
+        // Setup factories and bag
+        let mut factories: Factories = Factories::empty();
+        let mut bag = [20, 20, 20, 20, 20];
+        let mut out_of_bag: Bag = [0, 0, 0, 0, 0];
+        let mut rng = SmallRng::seed_from_u64(42); // Seed RNG for reproducibility
+
+        // Run the function
+        factories.refill_by_drawing_from_bag(&mut bag, &mut out_of_bag, &mut rng);
+
+        // Check that the factories are filled correctly
+        let remaining_tiles_in_bag = bag.iter().sum::<u8>();
+        let expected_num_tiles_in_factories = 4 * (NUM_FACTORIES as u8 - 1); // -1 because the center factory is not filled
+
+        assert_eq!(
+            remaining_tiles_in_bag,
+            100 - expected_num_tiles_in_factories
+        );
+    }
+
+    #[test]
+    fn test_index_access() {
+        let mut factories = Factories::empty();
+        // Modify a factory
+        factories[0][1] = 5;
+
+        assert_eq!(factories[0][1], 5);
+    }
+
+    #[test]
+    fn test_bag_refill_after_emptying() {
+        // Make sure the function refills the bag from the out_of_bag when it runs out of tiles
+
+        // Setup factories and bag
+        let mut factories: Factories = Factories::empty();
+        let mut bag = [1, 1, 1, 1, 1]; // not enough tiles to fill all factories
+        let mut out_of_bag: Bag = [19, 19, 19, 19, 19];
+        let mut rng = SmallRng::seed_from_u64(42); // Seed RNG for reproducibility
+
+        // Run the function
+        factories.refill_by_drawing_from_bag(&mut bag, &mut out_of_bag, &mut rng);
+
+        // Check that the factories are filled correctly
+        assert_eq!(out_of_bag, [0, 0, 0, 0, 0]); // There are no tiles left in the out_of_bag because they were all moved to the bag
+    }
+
+    #[test]
+    fn test_bag_refill_not_enough_tiles() {
+        // Make sure the factory filling works even if there are not enough tiles in the bag and out_of_bag
+
+        // Setup factories and bag
+        let mut factories: Factories = Factories::empty();
+        let mut bag = [0, 0, 0, 0, 0]; // no tiles in the bag
+        let mut out_of_bag: Bag = [0, 0, 0, 0, 10]; // only 10 white tiles in the out_of_bag
+        let mut rng = SmallRng::seed_from_u64(42); // Seed RNG for reproducibility
+
+        // Run the function
+        factories.refill_by_drawing_from_bag(&mut bag, &mut out_of_bag, &mut rng);
+
+        // Check that the factories are filled correctly
+        assert_eq!(out_of_bag, [0, 0, 0, 0, 0]); // There are no tiles left in the out_of_bag because they were all moved to the bag
+        assert_eq!(bag, [0, 0, 0, 0, 0]); // The bag is refilled with the tiles from the out_of_bag, but the tiles are distributed to the factories
+        let num_tiles_in_factories = factories.iter().flatten().sum::<u8>();
+        assert_eq!(num_tiles_in_factories, 10); // All 10 white tiles are placed in the factories
+    }
+}

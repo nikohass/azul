@@ -137,9 +137,41 @@ pub fn count_full_colors(occupancy: u32) -> u32 {
 
 #[cfg(test)]
 mod test {
-    use rand::Rng;
-
     use super::*;
+    use rand::Rng;
+    use rand::SeedableRng;
+
+    #[test]
+    fn test_complete_row_exists() {
+        let row = 0b11111;
+        assert!(check_complete_row_exists(row));
+        let row = 0b01111;
+        assert!(!check_complete_row_exists(row));
+    }
+
+    #[test]
+    fn test_count_complete_rows() {
+        let occupancy = 0b11111_00000_11111_00000_11111;
+        assert_eq!(count_complete_rows(occupancy), 3);
+        let occupancy = 0b11111_00000_11111_00000_01111;
+        assert_eq!(count_complete_rows(occupancy), 2);
+    }
+
+    #[test]
+    fn test_count_complete_columns() {
+        let occupancy = VALID_WALL_TILES;
+        assert_eq!(count_complete_columns(occupancy), 5);
+    }
+
+    #[test]
+    fn test_count_full_colors() {
+        let occupancy = VALID_WALL_TILES;
+        assert_eq!(count_full_colors(occupancy), 5);
+        let occupancy = WALL_COLOR_MASKS[0];
+        assert_eq!(count_full_colors(occupancy), 1);
+        let occupancy = WALL_COLOR_MASKS[0] | WALL_COLOR_MASKS[1];
+        assert_eq!(count_full_colors(occupancy), 2);
+    }
 
     fn count_row_neighbors_check(mut occupancy: u32, new_tile_pos: u8) -> u32 {
         // Create a bitboard with the new tile on it
@@ -164,28 +196,16 @@ mod test {
         neighbors.count_ones()
     }
 
-    fn display_bitboard(bitboard: u32) {
-        for row in 0..5 {
-            for col in 0..5 {
-                // Calculate the position of the bit to check
-                let bit_position = row * 6 + (4 - col);
-                // Check if the bit is set in the bitboard
-                let is_set = bitboard & (1 << bit_position) != 0;
-                // Print an 'X' if the bit is set; otherwise, print a '.'
-                print!("{}", if is_set { '1' } else { '.' });
-            }
-            // Newline after each row
-            println!();
-        }
-    }
-
     #[test]
     fn test_count_row_neighbors_quick() {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rngs::SmallRng::seed_from_u64(0); // Seed RNG for reproducibility
+
         for _ in 0..1000 {
+            // Get occupancy bitboard
             let occupancy: u32 = rng.gen();
             let occupancy = occupancy & VALID_WALL_TILES;
 
+            // Get tile position
             let mut new_tile_pos;
             loop {
                 new_tile_pos = rng.gen_range(0..30);
@@ -193,14 +213,10 @@ mod test {
                     break;
                 }
             }
-            println!("Occupancy:");
-            display_bitboard(occupancy);
-            println!("New tile:");
-            display_bitboard(1 << new_tile_pos);
-            let expected = count_row_neighbors_check(occupancy, new_tile_pos);
-            let actual = count_row_neighbors(occupancy, new_tile_pos);
-            println!("Expected: {}", expected);
-            println!("Actual: {}", actual);
+
+            // Place the tile on the board and check the number of neighbors
+            let expected = count_row_neighbors_check(occupancy, new_tile_pos); // Default implementation
+            let actual = count_row_neighbors(occupancy, new_tile_pos); // Optimized implementation
             assert_eq!(expected, actual);
         }
     }

@@ -1058,7 +1058,6 @@ mod tests {
                 }
                 let is_game_over = game_state.evaluate_round();
                 if is_game_over {
-                    println!("The game ended after round evaluation");
                     break;
                 }
             }
