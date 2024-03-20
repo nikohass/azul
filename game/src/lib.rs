@@ -1,7 +1,7 @@
 mod error;
 mod factories;
-pub mod match_;
 mod game_state;
+pub mod match_;
 mod move_;
 mod move_list;
 mod player;

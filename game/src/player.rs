@@ -39,3 +39,52 @@ pub trait Player: Send + Sync {
     async fn set_pondering(&mut self, _pondering: bool) {}
     async fn reset(&mut self) {}
 }
+
+#[cfg(test)]
+mod tests {
+    use rand::{rngs::SmallRng, SeedableRng as _};
+
+    use crate::MoveList;
+
+    use super::*;
+
+    pub struct MockPlayer {
+        name: String,
+    }
+
+    #[async_trait::async_trait]
+    impl Player for MockPlayer {
+        fn get_name(&self) -> &str {
+            &self.name
+        }
+
+        async fn get_move(&mut self, game_state: &GameState) -> Move {
+            let mut game_state = game_state.clone();
+            let mut move_list = MoveList::default();
+            let mut rng = SmallRng::seed_from_u64(0);
+            game_state.get_possible_moves(&mut move_list, &mut rng);
+            move_list[0]
+        }
+    }
+
+    #[test]
+    fn test_player_marker() {
+        let marker = PlayerMarker::new(0);
+        assert_eq!(marker.next(), PlayerMarker::new(1));
+        assert_eq!(marker.next().next(), PlayerMarker::new(2));
+        assert_eq!(marker.next().next().next(), PlayerMarker::new(3));
+        assert_eq!(marker.next().next().next().next(), PlayerMarker::new(0));
+    }
+
+    #[tokio::test]
+    async fn test_mock_player() {
+        let mut player = MockPlayer {
+            name: "MockPlayer".to_string(),
+        };
+        let mut rng = SmallRng::seed_from_u64(0);
+        let game_state = GameState::new(&mut rng);
+        let _move: Move = player.get_move(&game_state).await;
+
+        assert_eq!(player.get_name(), "MockPlayer");
+    }
+}

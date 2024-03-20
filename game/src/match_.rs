@@ -104,3 +104,52 @@ pub async fn run_match(
 
     Ok(stats)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    pub struct MockPlayer {
+        name: String,
+    }
+
+    #[async_trait::async_trait]
+    impl Player for MockPlayer {
+        fn get_name(&self) -> &str {
+            &self.name
+        }
+
+        async fn get_move(&mut self, game_state: &GameState) -> Move {
+            let mut game_state = game_state.clone();
+            let mut move_list = MoveList::default();
+            let mut rng = SmallRng::seed_from_u64(0);
+            game_state.get_possible_moves(&mut move_list, &mut rng);
+            move_list[0]
+        }
+    }
+
+    #[tokio::test]
+    async fn test_match() {
+        let player1: Box<dyn Player> = Box::new(MockPlayer {
+            name: "Player 1".to_string(),
+        });
+        let player2: Box<dyn Player> = Box::new(MockPlayer {
+            name: "Player 2".to_string(),
+        });
+        let player3: Box<dyn Player> = Box::new(MockPlayer {
+            name: "Player 3".to_string(),
+        });
+        let player4: Box<dyn Player> = Box::new(MockPlayer {
+            name: "Player 4".to_string(),
+        });
+        let mut players = match NUM_PLAYERS {
+            2 => vec![player1, player2],
+            3 => vec![player1, player2, player3],
+            _ => vec![player1, player2, player3, player4],
+        };
+        let mut rng = SmallRng::seed_from_u64(0);
+        run_match(GameState::new(&mut rng), &mut players, false)
+            .await
+            .unwrap();
+    }
+}
