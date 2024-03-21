@@ -4,8 +4,8 @@ use game::*;
 use rand::rngs::SmallRng;
 use std::sync::{Arc, Mutex};
 
-const C: f32 = 0.2;
-const C_BASE: f32 = 20120.0;
+const C: f32 = 0.1;
+const C_BASE: f32 = 30120.0;
 const C_FACTOR: f32 = std::f32::consts::SQRT_2;
 
 pub struct Node {
