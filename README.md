@@ -61,3 +61,18 @@ After compiling the project, you will find the executables inside `target/releas
     ./target/release/playground
     ```
    Execute this for miscellaneous testing and development experiments.
+
+### Running the unit tests
+
+To run the unit tests, execute the following command:
+```bash
+cargo test
+```
+To determine the test coverage, install the `cargo-llvm-cov` tool by running:
+```bash
+cargo install cargo-llvm-cov
+```
+Then, run the following command to generate the coverage report:
+```bash
+cargo llvm-cov --open
+```

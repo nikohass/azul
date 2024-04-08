@@ -1,5 +1,6 @@
 use crate::factories::CENTER_FACTORY_INDEX;
 use crate::tile_color::TileColor;
+use std::fmt::Write as _;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Move {
@@ -16,16 +17,21 @@ impl Move {
     };
 
     pub fn serialize_string(&self) -> String {
-        format!(
-            "{}{}{}",
+        let mut result = String::new();
+        write!(
+            result,
+            "{}{}",
             self.take_from_factory_index,
-            char::from(self.color),
-            self.pattern
-                .iter()
-                .map(|&x| x.to_string())
-                .collect::<Vec<_>>()
-                .join("")
+            char::from(self.color)
         )
+        .unwrap();
+
+        self.pattern.iter().fold(&mut result, |acc, &x| {
+            write!(acc, "{:02}", x).unwrap();
+            acc
+        });
+
+        result
     }
 
     pub fn deserialize_string(string: &str) -> Self {
@@ -33,8 +39,9 @@ impl Move {
         let take_from_factory_index = chars.next().unwrap().to_digit(10).unwrap() as u8;
         let color = TileColor::from(chars.next().unwrap());
         let mut pattern = [0; 6];
-        for p in pattern.iter_mut() {
-            *p = chars.next().unwrap().to_digit(10).unwrap() as u8;
+        let pattern_str: String = chars.collect();
+        for (i, chunk) in pattern_str.as_bytes().chunks(2).enumerate() {
+            pattern[i] = std::str::from_utf8(chunk).unwrap().parse::<u8>().unwrap();
         }
         Self {
             take_from_factory_index,
