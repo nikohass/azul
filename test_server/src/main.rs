@@ -9,6 +9,7 @@ mod client;
 use async_mutex::MutexGuard;
 use client::Client;
 use game::{
+    init_logging,
     match_::{self, MatchStatistcs},
     GameState, Player, RuntimeError, SharedState, NUM_PLAYERS,
 };
@@ -58,6 +59,7 @@ async fn run_match(
 
 #[tokio::main]
 async fn main() {
+    init_logging("test_server");
     let cli = Cli::parse();
 
     let config_file = cli
@@ -73,7 +75,7 @@ async fn main() {
         .try_deserialize()
         .expect("Configuration file format error");
 
-    println!("{:#?}", app_config);
+    log::debug!("{:#?}", app_config);
 
     let mut players: Vec<PlayerConfig> = vec![app_config.player_one, app_config.player_two];
     if let Some(player) = app_config.player_three {
@@ -106,7 +108,7 @@ async fn main() {
         game_queue.extend(player_combinations.clone());
     }
 
-    println!("Length of game queue: {}", game_queue.len());
+    log::info!("Length of game queue: {}", game_queue.len());
 
     let game_queue = SharedState::new(game_queue);
     let game_results: SharedState<Vec<MatchStatistcs>> = SharedState::new(Vec::new());
@@ -142,7 +144,7 @@ async fn main() {
                 let mut stats = match stats {
                     Ok(stats) => stats,
                     Err(e) => {
-                        eprintln!("Game ended with an error: {:?}", e);
+                        log::error!("Game ended with an error: {:?}", e);
                         continue;
                     }
                 };
@@ -165,8 +167,8 @@ async fn main() {
 
     for handle in handles {
         match handle.await {
-            Ok(_) => println!("Task completed successfully"),
-            Err(e) => eprintln!("Game ended with an error: {:?}", e),
+            Ok(_) => log::debug!("Task completed successfully"),
+            Err(e) => log::error!("Game ended with an error: {:?}", e),
         }
     }
 }
@@ -249,20 +251,20 @@ fn print_stats(game_results_lock: MutexGuard<Vec<MatchStatistcs>>) {
         }
     }
 
-    println!(
+    log::debug!(
         "Average branching factor per ply: {:?}",
         average_branching_factor_per_ply
     );
-    println!(
+    log::debug!(
         "Sum branching factor per ply: {:?}",
         sum_branching_factor_per_ply
     );
 
-    println!("Total games: {}", total_games);
-    println!("Average executed moves per game: {}", avg_moves);
-    println!("Average factory refills per game: {}", avg_refills);
+    log::info!("Total games: {}", total_games);
+    log::debug!("Average executed moves per game: {}", avg_moves);
+    log::debug!("Average factory refills per game: {}", avg_refills);
     for i in 0..NUM_PLAYERS {
-        println!(
+        log::debug!(
             "Player {} - Average score: {}, Wins: {}, Draws: {}, Losses: {}",
             i + 1,
             avg_scores[i],

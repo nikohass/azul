@@ -8,7 +8,7 @@ use crate::RuntimeError;
 use rand::rngs::SmallRng;
 use std::fmt::Write;
 
-pub const NUM_PLAYERS: usize = 4;
+pub const NUM_PLAYERS: usize = 2;
 pub const FLOOR_LINE_PENALTY: [u8; 8] = [0, 1, 2, 4, 6, 8, 11, 14];
 
 fn find_tile_combinations(
@@ -817,9 +817,9 @@ impl GameState {
     }
 }
 
-fn bag_to_string(game_state: &GameState) -> String {
+pub fn bag_to_string(bag: &Bag) -> String {
     let mut string = String::from("BAG       ");
-    for (color, number_of_tiles_left) in game_state.bag.iter().enumerate() {
+    for (color, number_of_tiles_left) in bag.iter().enumerate() {
         write!(
             string,
             "{} {}\t",
@@ -832,9 +832,9 @@ fn bag_to_string(game_state: &GameState) -> String {
     string
 }
 
-fn factories_to_string(game_state: &GameState) -> String {
+pub fn factories_to_string(factories: &Factories) -> String {
     let mut string = String::from("FACTORIES ");
-    for (factory_index, factory) in game_state.factories.iter().enumerate() {
+    for (factory_index, factory) in factories.iter().enumerate() {
         let tile_count: usize = factory.iter().sum::<u8>() as usize;
 
         if factory_index == CENTER_FACTORY_INDEX {
@@ -933,8 +933,8 @@ fn player_pattern_board_to_string(game_state: &GameState, player_index: usize) -
 impl std::fmt::Display for GameState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut string = String::with_capacity(1024);
-        string.push_str(&bag_to_string(self));
-        string.push_str(&factories_to_string(self));
+        string.push_str(&bag_to_string(&self.bag));
+        string.push_str(&factories_to_string(&self.factories));
 
         // Player header
         for player_index in 0..NUM_PLAYERS {

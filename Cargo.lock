@@ -561,6 +561,8 @@ version = "0.1.0"
 dependencies = [
  "async-mutex",
  "async-trait",
+ "log",
+ "log4rs",
  "rand",
  "tokio",
 ]
@@ -1439,6 +1441,7 @@ dependencies = [
  "clap",
  "config",
  "game",
+ "log",
  "rand",
  "serde",
  "tokio",
