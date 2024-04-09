@@ -15,11 +15,17 @@ fn find_tile_combinations(
     tiles_left: u8,
     current_pattern: &mut [u8; 6],
     remaining_space: &mut [u8; 6],
-    results: &mut Vec<[u8; 6]>,
+    move_list: &mut MoveList,
+    factory_index: u8,
+    color: TileColor,
     start_index: usize,
 ) {
     if tiles_left == 0 {
-        results.push(*current_pattern);
+        move_list.push(Move {
+            take_from_factory_index: factory_index,
+            color,
+            pattern: *current_pattern,
+        });
         return;
     }
 
@@ -31,7 +37,9 @@ fn find_tile_combinations(
                 tiles_left - 1,
                 current_pattern,
                 remaining_space,
-                results,
+                move_list,
+                factory_index,
+                color,
                 pattern_line_index,
             );
             remaining_space[pattern_line_index] += 1;
@@ -420,6 +428,7 @@ impl GameState {
                 }
                 let row_mask = wall::get_row_mask(pattern_line_index);
 
+                #[cfg(debug_assertions)]
                 if self.pattern_lines_colors[player_index][pattern_line_index].is_none() {
                     // If the pattern line is empty, we can't place a tile in it
                     println!("{}", self);
@@ -441,7 +450,6 @@ impl GameState {
                 let score_for_tile =
                     wall::get_placed_tile_score(self.wall_occupancy[player_index], new_tile_pos);
                 score += score_for_tile as i16;
-                // println!("Evaluate round: Player {} score: {} for tile at position {} in pattern line {}", player_index, score_for_tile, new_tile_pos, pattern_line_index);
 
                 // Add the tile to the wall
                 self.walls[player_index][pattern_line_color as usize] |= new_tile;
@@ -497,19 +505,18 @@ impl GameState {
     }
 
     pub fn do_move(&mut self, mov: Move) {
-        // Step 1: Put the remaining tiles in the center
         let current_player: usize = self.current_player.into();
-
         let take_from_factory_index = mov.take_from_factory_index as usize;
         let color = mov.color as usize;
         let factory_content: [u8; 5] = self.factories[take_from_factory_index];
+
+        // Step 1: Put the remaining tiles in the center
         if take_from_factory_index == CENTER_FACTORY_INDEX {
             // If we took tiles from the center, we only remove the color we took
             self.factories[take_from_factory_index][color] = 0;
-            // If we are the first player to take tiles from the center in this round, we become the starting player for the next round
             if !self.tile_taken_from_center {
+                // If we are the first player to take tiles from the center in this round, we become the starting player for the next round and advance the floor line
                 self.next_round_starting_player = self.current_player;
-                // Floor line progress + 1
                 self.floor_line_progress[current_player] += 1;
                 self.tile_taken_from_center = true;
             }
@@ -608,8 +615,6 @@ impl GameState {
                     continue; // Skip the move gen if there are no tiles of this color in the factory
                 }
 
-                // TODO: Can we speed this up by moving it outside the loop, only setting the value to 0 if the color differs in the loop?
-
                 // We will use this to keep track of the remaining space in our pattern lines
                 let mut remaining_space: [u8; 6] = [1, 2, 3, 4, 5, 255]; // 255 is the floor line
                 for (pattern_line_index, number_of_tiles) in player_pattern_lines.iter().enumerate()
@@ -634,23 +639,15 @@ impl GameState {
                     }
                 }
 
-                // TODO: Speed this up by not allocating a new vector every time
-                let mut possible_patterns = Vec::new();
                 find_tile_combinations(
                     *number,
                     &mut [0, 0, 0, 0, 0, 0],
                     &mut remaining_space,
-                    &mut possible_patterns,
+                    move_list,
+                    factory_index as u8,
+                    TileColor::from(color),
                     0,
                 );
-
-                for pattern in possible_patterns {
-                    move_list.push(Move {
-                        take_from_factory_index: factory_index as u8,
-                        color: TileColor::from(color as u8),
-                        pattern,
-                    });
-                }
             }
         }
 

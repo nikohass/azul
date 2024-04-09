@@ -7,11 +7,12 @@ constant_ordering = false
 
 [player_one]
 executable = "./target/release/test_client.exe"
-think_time = 2500
+think_time = 1500
 
 [player_two]
-executable = "./clients/2/2.exe"
-think_time = 2500
+executable = "./clients/2/3.exe"
+# executable = "./target/release/test_client.exe"
+think_time = 1500
 
 # [player_three]
 # executable = "./target/release/test_client.exe"
