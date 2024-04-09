@@ -10,7 +10,7 @@ executable = "./target/release/test_client.exe"
 think_time = 1500
 
 [player_two]
-executable = "./clients/2/4.exe"
+executable = "./clients/2/6.exe"
 # executable = "./target/release/test_client.exe"
 think_time = 1500
 

@@ -1,7 +1,6 @@
-use game::{wall::WALL_COLOR_MASKS, *};
-use rand::{rngs::SmallRng, Rng};
-
 use super::value::Value;
+use game::{wall::WALL_COLOR_MASKS, *};
+use rand::{rngs::SmallRng, Rng, SeedableRng as _};
 
 pub fn playout(game_state: &mut GameState, rng: &mut SmallRng) -> Value {
     loop {
@@ -68,8 +67,9 @@ pub fn get_random_move(game_state: &mut GameState, rng: &mut SmallRng) -> Option
     let mut pattern = [0; 6];
     if total_remaining_space <= number_of_tiles {
         // We must discard tiles here
+        let num_tiles_to_discard = number_of_tiles - total_remaining_space;
         pattern = remaining_space;
-        pattern[5] = number_of_tiles - total_remaining_space;
+        pattern[5] = num_tiles_to_discard;
     } else {
         // Select a pattern line to fill
         while number_of_tiles > 0 {
@@ -89,4 +89,28 @@ pub fn get_random_move(game_state: &mut GameState, rng: &mut SmallRng) -> Option
         color,
         pattern,
     })
+}
+
+pub struct HeuristicMoveGenerationPlayer {
+    rng: SmallRng,
+}
+
+impl Default for HeuristicMoveGenerationPlayer {
+    fn default() -> Self {
+        Self {
+            rng: SmallRng::from_entropy(),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl Player for HeuristicMoveGenerationPlayer {
+    async fn get_move(&mut self, game_state: &GameState) -> Move {
+        let mut game_state = game_state.clone();
+        get_random_move(&mut game_state, &mut self.rng).unwrap()
+    }
+
+    fn get_name(&self) -> &str {
+        "HeuristicMoveGenerationPlayer"
+    }
 }

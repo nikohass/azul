@@ -1,7 +1,13 @@
 use std::collections::HashMap;
 
-use game::{match_::run_match, *};
-use player::mcts::MonteCarloTreeSearch;
+use game::{
+    match_::{run_match, MatchStatistcs},
+    *,
+};
+use player::{
+    mcts::{HeuristicMoveGenerationPlayer, MonteCarloTreeSearch},
+    random_player::RandomPlayer,
+};
 use rand::{rngs::SmallRng, SeedableRng};
 
 // #[tokio::main]
@@ -119,7 +125,7 @@ fn find_single_factory_combinations(
 #[tokio::main]
 async fn main() {
     // let mut game_state = GameState::deserialize_string("2_1_1_69005545235_1_0-0-0-0-0-512_65537000_257_0-0_33751553-67240449_1095250412034-1095283835393_1").unwrap();
-    // let mut rng = SmallRng::from_entropy();
+    let mut rng = SmallRng::from_entropy();
     // let mut game_state = GameState::new(&mut rng); //GameState::deserialize_string("2_0_1_64694063885_0_0-0-0-0-0-196865_65537000_256_0-0_4295164416-12918522369_4278452479-12952010755_1").unwrap();
     // println!("{}", game_state);
     // let mut move_list = MoveList::default();
@@ -144,12 +150,13 @@ async fn main() {
     //     game_state.do_move(move_);
     //     println!("{}", game_state);
     // }
-    // let mut player_one = MonteCarloTreeSearch::default();
-    // let mut player_two = MonteCarloTreeSearch::default();
-    // player_one.set_time(3000).await;
-    // player_two.set_time(3000).await;
-    // let game_state = GameState::new(&mut rng);
+    let mut player_one = RandomPlayer::default();
+    let mut player_two = HeuristicMoveGenerationPlayer::default();
+    player_one.set_time(3000).await;
+    player_two.set_time(3000).await;
+    let game_state = GameState::new(&mut rng);
 
-    // let mut players: Vec<Box<dyn Player>> = vec![Box::new(player_one), Box::new(player_two)];
-    // let _stats = run_match(game_state, &mut players, true).await.unwrap();
+    let mut players: Vec<Box<dyn Player>> = vec![Box::new(player_one), Box::new(player_two)];
+
+    run_match(game_state, &mut players, true).await.unwrap();
 }

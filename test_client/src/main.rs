@@ -2,6 +2,7 @@ use game::{GameState, Move, Player as _};
 use player::mcts::MonteCarloTreeSearch as Player;
 
 // use player::random_player::RandomPlayer as Player;
+// use player::mcts::HeuristicMoveGenerationPlayer as Player;
 
 #[tokio::main]
 async fn main() {
