@@ -1,6 +1,9 @@
 use rand::{rngs::SmallRng, SeedableRng};
 
-use crate::{GameState, Move, MoveList, Player, PlayerMarker, RuntimeError, NUM_PLAYERS};
+use crate::{
+    game_state::MoveGenerationResult, GameState, Move, MoveList, Player, PlayerMarker,
+    RuntimeError, NUM_PLAYERS,
+};
 
 #[derive(Default, Debug, Clone)]
 pub struct MatchStatistcs {
@@ -37,8 +40,9 @@ pub async fn run_match(
         if verbose {
             println!("{}", game_state);
         }
-        let (is_game_over, refilled_factories) =
-            game_state.get_possible_moves(&mut move_list, &mut rng);
+        let result = game_state.get_possible_moves(&mut move_list, &mut rng);
+        let is_game_over = matches!(result, MoveGenerationResult::GameOver);
+        let refilled_factories = matches!(result, MoveGenerationResult::RoundOver);
         if is_game_over {
             break;
         }

@@ -32,7 +32,10 @@ fn get_fallback_move(
     rng: &mut SmallRng,
     move_list: &mut MoveList,
 ) -> Option<Move> {
-    let (is_game_over, _) = game_state.get_possible_moves(move_list, rng);
+    let is_game_over = matches!(
+        game_state.get_possible_moves(move_list, rng),
+        MoveGenerationResult::GameOver
+    );
     if is_game_over {
         None
     } else {
@@ -145,9 +148,11 @@ pub fn get_random_move(
             return Some(move_);
         }
     }
-
     // Fallback to default move generation
-    let (is_game_over, _) = game_state.get_possible_moves(move_list, rng);
+    let is_game_over = matches!(
+        game_state.get_possible_moves(move_list, rng),
+        MoveGenerationResult::GameOver
+    );
     if is_game_over {
         None
     } else {

@@ -42,6 +42,13 @@ fn find_tile_combinations(
 
 pub type Bag = [u8; NUM_TILE_COLORS];
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MoveGenerationResult {
+    GameOver,
+    RoundOver,
+    Continue,
+}
+
 #[derive(Clone)]
 pub struct GameState {
     bag: Bag, // For each color, how many tiles are left in the bag
@@ -382,9 +389,6 @@ impl GameState {
             .map_err(|_| "Invalid tile taken from center")?;
         let tile_taken_from_center = tile_taken_from_center == 1;
 
-        println!("Bag: {:?}", bag);
-        println!("Out of bag: {:?}", out_of_bag);
-
         Ok(Self {
             current_player,
             bag,
@@ -574,8 +578,21 @@ impl GameState {
         &mut self,
         move_list: &mut MoveList,
         rng: &mut SmallRng,
-    ) -> (bool, bool) {
-        // -> (is_game_over, did_fill_factories)
+    ) -> MoveGenerationResult {
+        let is_round_over = self.factories.is_empty();
+
+        if is_round_over {
+            let is_game_over = self.evaluate_round();
+
+            return if is_game_over {
+                MoveGenerationResult::GameOver
+            } else {
+                self.fill_factories(rng);
+                self.get_possible_moves(move_list, rng);
+                MoveGenerationResult::RoundOver
+            };
+        }
+
         move_list.clear(); // Clear any remaining moves from the previous round
         let current_player: usize = self.current_player.into();
 
@@ -637,19 +654,10 @@ impl GameState {
             }
         }
 
-        if move_list.is_empty() {
-            let is_game_over = self.evaluate_round();
-            if !is_game_over {
-                self.fill_factories(rng);
-                self.get_possible_moves(move_list, rng);
-            }
-            (is_game_over, true)
-        } else {
-            (false, false)
-        }
+        MoveGenerationResult::Continue
     }
 
-    fn fill_factories(&mut self, rng: &mut SmallRng) {
+    pub fn fill_factories(&mut self, rng: &mut SmallRng) {
         self.factories
             .refill_by_drawing_from_bag(&mut self.bag, &mut self.out_of_bag, rng);
     }
@@ -774,6 +782,7 @@ impl GameState {
                 tile_count,
                 tile_count.iter().sum::<u8>(),
             );
+            println!("{}", self);
             is_valid = false;
         }
         for (color, number) in tile_count.iter().enumerate() {
@@ -1003,63 +1012,58 @@ mod tests {
             loop {
                 game_state.check_integrity().unwrap();
 
-                loop {
-                    game_state.get_possible_moves(&mut move_list, &mut rng);
-                    if move_list.is_empty() {
-                        break;
-                    }
-                    let move_ = move_list[rng.gen_range(0..move_list.len())];
-
-                    game_state.do_move(move_);
-                    game_state.check_integrity().unwrap();
-
-                    let string = game_state.serialize_string();
-                    let reconstructed_game_state =
-                        GameState::deserialize_string(string.as_str()).unwrap();
-                    assert_eq!(game_state.bag, reconstructed_game_state.bag, "Bag");
-                    assert_eq!(
-                        game_state.out_of_bag, reconstructed_game_state.out_of_bag,
-                        "Out of bag"
-                    );
-                    assert_eq!(
-                        game_state.factories, reconstructed_game_state.factories,
-                        "Factories"
-                    );
-                    assert_eq!(game_state.scores, reconstructed_game_state.scores, "Scores");
-                    assert_eq!(
-                        game_state.floor_line_progress,
-                        reconstructed_game_state.floor_line_progress,
-                        "Floor line progress"
-                    );
-                    assert_eq!(game_state.walls, reconstructed_game_state.walls, "Walls");
-                    assert_eq!(
-                        game_state.wall_occupancy, reconstructed_game_state.wall_occupancy,
-                        "Wall occupancy"
-                    );
-                    assert_eq!(
-                        game_state.pattern_lines_occupancy,
-                        reconstructed_game_state.pattern_lines_occupancy,
-                        "Pattern lines occupancy"
-                    );
-                    assert_eq!(
-                        game_state.pattern_lines_colors,
-                        reconstructed_game_state.pattern_lines_colors,
-                        "Pattern lines colors"
-                    );
-                    assert_eq!(
-                        game_state.current_player, reconstructed_game_state.current_player,
-                        "Current player"
-                    );
-                    assert_eq!(
-                        game_state.next_round_starting_player,
-                        reconstructed_game_state.next_round_starting_player,
-                        "Next round starting player"
-                    );
-                }
-                let is_game_over = game_state.evaluate_round();
-                if is_game_over {
+                let result = game_state.get_possible_moves(&mut move_list, &mut rng);
+                if result == MoveGenerationResult::GameOver {
                     break;
                 }
+
+                let move_ = move_list[rng.gen_range(0..move_list.len())];
+
+                game_state.do_move(move_);
+                println!("Did move: {}", move_);
+                println!("{}", game_state);
+                game_state.check_integrity().unwrap();
+
+                let string = game_state.serialize_string();
+                let reconstructed_game_state =
+                    GameState::deserialize_string(string.as_str()).unwrap();
+                assert_eq!(game_state.bag, reconstructed_game_state.bag, "Bag");
+                assert_eq!(
+                    game_state.out_of_bag, reconstructed_game_state.out_of_bag,
+                    "Out of bag"
+                );
+                assert_eq!(
+                    game_state.factories, reconstructed_game_state.factories,
+                    "Factories"
+                );
+                assert_eq!(game_state.scores, reconstructed_game_state.scores, "Scores");
+                assert_eq!(
+                    game_state.floor_line_progress, reconstructed_game_state.floor_line_progress,
+                    "Floor line progress"
+                );
+                assert_eq!(game_state.walls, reconstructed_game_state.walls, "Walls");
+                assert_eq!(
+                    game_state.wall_occupancy, reconstructed_game_state.wall_occupancy,
+                    "Wall occupancy"
+                );
+                assert_eq!(
+                    game_state.pattern_lines_occupancy,
+                    reconstructed_game_state.pattern_lines_occupancy,
+                    "Pattern lines occupancy"
+                );
+                assert_eq!(
+                    game_state.pattern_lines_colors, reconstructed_game_state.pattern_lines_colors,
+                    "Pattern lines colors"
+                );
+                assert_eq!(
+                    game_state.current_player, reconstructed_game_state.current_player,
+                    "Current player"
+                );
+                assert_eq!(
+                    game_state.next_round_starting_player,
+                    reconstructed_game_state.next_round_starting_player,
+                    "Next round starting player"
+                );
             }
         }
     }

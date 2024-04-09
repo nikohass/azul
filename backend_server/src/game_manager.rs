@@ -1,7 +1,7 @@
 use crate::websocket_api::{EventType, WebSocketConnection, WebSocketMessage};
 use game::{
-    GameState, MoveList, Player, SharedState, TileColor, CENTER_FACTORY_INDEX, FLOOR_LINE_PENALTY,
-    NUM_PLAYERS, NUM_TILE_COLORS,
+    GameState, MoveGenerationResult, MoveList, Player, SharedState, TileColor,
+    CENTER_FACTORY_INDEX, FLOOR_LINE_PENALTY, NUM_PLAYERS, NUM_TILE_COLORS,
 };
 use rand::{rngs::SmallRng, SeedableRng};
 use std::collections::HashMap;
@@ -70,7 +70,10 @@ impl Match {
             println!("{}", game_state);
             let mut is_game_over;
             loop {
-                is_game_over = game_state.get_possible_moves(&mut move_list, &mut rng).0;
+                is_game_over = matches!(
+                    game_state.get_possible_moves(&mut move_list, &mut rng),
+                    MoveGenerationResult::GameOver
+                );
                 if is_game_over {
                     // If there are no legal moves we end the game
                     break;

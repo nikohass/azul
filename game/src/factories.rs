@@ -56,6 +56,12 @@ impl Factories {
     }
 
     #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.iter()
+            .all(|factory| factory.iter().all(|&tile_count| tile_count == 0))
+    }
+
+    #[inline]
     pub fn refill_by_drawing_from_bag(
         &mut self,
         bag: &mut Bag,

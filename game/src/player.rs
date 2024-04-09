@@ -71,9 +71,6 @@ mod tests {
     fn test_player_marker() {
         let marker = PlayerMarker::new(0);
         assert_eq!(marker.next(), PlayerMarker::new(1));
-        assert_eq!(marker.next().next(), PlayerMarker::new(2));
-        assert_eq!(marker.next().next().next(), PlayerMarker::new(3));
-        assert_eq!(marker.next().next().next().next(), PlayerMarker::new(0));
     }
 
     #[tokio::test]

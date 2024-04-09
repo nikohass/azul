@@ -14,7 +14,7 @@ pub use factories::{Factories, Factory};
 pub use factories::{CENTER_FACTORY_INDEX, NUM_FACTORIES};
 pub use game_state::GameState;
 pub use game_state::{bag_to_string, factories_to_string, Bag};
-pub use game_state::{FLOOR_LINE_PENALTY, NUM_PLAYERS};
+pub use game_state::{MoveGenerationResult, FLOOR_LINE_PENALTY, NUM_PLAYERS};
 pub use move_::Move;
 pub use move_list::MoveList;
 pub use player::{Player, PlayerMarker};

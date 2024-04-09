@@ -105,9 +105,11 @@ impl Node {
     }
 
     fn expand(&mut self, game_state: &mut GameState, move_list: &mut MoveList, rng: &mut SmallRng) {
-        let (is_game_over, probabilistic_event) = game_state.get_possible_moves(move_list, rng);
-        self.is_game_over = is_game_over;
+        let result = game_state.get_possible_moves(move_list, rng);
+        let is_game_over = matches!(result, MoveGenerationResult::GameOver);
+        let probabilistic_event = matches!(result, MoveGenerationResult::RoundOver);
 
+        self.is_game_over = is_game_over;
         if is_game_over {
             // If the game is over, we don't need to expand any children
             return;
@@ -163,8 +165,10 @@ impl Node {
             if desired_number_of_children > self.children.len() {
                 // We will expand a new child
                 let mut game_state_clone = game_state.clone(); // Clone here because we don't want to modify the game state
-                let (_is_game_over, probabilistic_event) =
-                    game_state_clone.get_possible_moves(move_list, rng);
+                let probabilistic_event = matches!(
+                    game_state_clone.get_possible_moves(move_list, rng),
+                    MoveGenerationResult::RoundOver
+                );
 
                 assert!(probabilistic_event); // A probabilistic event must have happened, otherwise we wouldn't have any probabilistic children
 
