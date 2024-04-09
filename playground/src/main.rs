@@ -29,6 +29,7 @@ use rand::{rngs::SmallRng, SeedableRng};
 //     // println!("{:#?}", stats);
 // }
 
+#[allow(dead_code)]
 fn hash_factory(factory: &[u8; 5]) -> u16 {
     let mut hash = 0u16; // Ein u16 hat genug Platz für bis zu 16 Bits, also ausreichend für unsere 10 Bits.
 
@@ -41,6 +42,7 @@ fn hash_factory(factory: &[u8; 5]) -> u16 {
     hash
 }
 
+#[allow(dead_code)]
 fn hash_factories(factories: &mut Factories, factory_lookup: &HashMap<u16, u16>) -> u128 {
     let mut factory_ids: [u16; NUM_FACTORIES] = [0; NUM_FACTORIES];
     for (index, factory) in factories.iter().enumerate().take(NUM_FACTORIES - 1) {
@@ -60,6 +62,7 @@ fn hash_factories(factories: &mut Factories, factory_lookup: &HashMap<u16, u16>)
     hash
 }
 
+#[allow(dead_code)]
 fn find_single_factory_combinations(
     start: usize,                    // Startindex für die Änderung des aktuellen Elements
     sum: u8,                         // Die aktuelle Summe der Elemente im Array
@@ -85,58 +88,43 @@ fn find_single_factory_combinations(
     }
 }
 
-fn main() {
-    // print!("{}", bag_to_string(&bag));
+// fn main() {
+//     // print!("{}", bag_to_string(&bag));
 
-    // let mut factory = [TileColor::Red; 4];
-    // let mut all_possible_factory_combinations = Vec::new();
-    let mut factory = [0; 5]; // Initialisiert das Array mit 0
-    let mut combinations = Vec::new(); // Ein Vektor zum Speichern der Kombinationen
+//     // let mut factory = [TileColor::Red; 4];
+//     // let mut all_possible_factory_combinations = Vec::new();
+//     let mut factory = [0; 5]; // Initialisiert das Array mit 0
+//     let mut combinations = Vec::new(); // Ein Vektor zum Speichern der Kombinationen
 
-    // Startet die Suche nach Kombinationen
-    find_single_factory_combinations(0, 0, &mut factory, &mut combinations);
+//     // Startet die Suche nach Kombinationen
+//     find_single_factory_combinations(0, 0, &mut factory, &mut combinations);
 
-    println!(
-        "Number of possible factory combinations: {}",
-        combinations.len()
-    );
-    println!("{:#?}", combinations);
+//     println!(
+//         "Number of possible factory combinations: {}",
+//         combinations.len()
+//     );
+//     println!("{:#?}", combinations);
 
-    let factory_lookup: HashMap<u16, u16> = combinations
-        .iter()
-        .enumerate()
-        .map(|(index, factory)| (hash_factory(factory), index as u16))
-        .collect();
+//     let factory_lookup: HashMap<u16, u16> = combinations
+//         .iter()
+//         .enumerate()
+//         .map(|(index, factory)| (hash_factory(factory), index as u16))
+//         .collect();
 
-    for combination in combinations.iter() {
-        let hash = hash_factory(combination);
-        println!("Hash: {}, Index: {}", hash, factory_lookup[&hash]);
-    }
-}
-// #[tokio::main]
-// async fn main() {
-//     let mut rng = SmallRng::from_entropy();
-//     for _ in 0..10 {
-//         let mut bag = Bag::from([20, 20, 20, 20, 20]);
-//         let mut factories = Factories::empty();
-//         let mut out_of_bag = [0; 5];
-//         factories.refill_by_drawing_from_bag(&mut bag, &mut out_of_bag, &mut rng);
-//         // print!("{}", bag_to_string(&bag));
-//         print!("{}", factories_to_string(&factories));
-
-//         let hash = hash_factories(&mut factories, &factory_lookup);
-//         println!("Hash: {}", hash);
+//     for combination in combinations.iter() {
+//         let hash = hash_factory(combination);
+//         println!("Hash: {}, Index: {}", hash, factory_lookup[&hash]);
 //     }
-//     player_one.set_time(2000).await;
-//     player_two.set_time(2000).await;
-//     player_three.set_time(2000).await;
-//     player_four.set_time(2000).await;
-
-//     let mut players: Vec<Box<dyn Player>> = vec![
-//         Box::new(player_one),
-//         Box::new(player_two),
-//         Box::new(player_three),
-//         Box::new(player_four),
-//     ];
-//     let _stats = run_match(game_state, &mut players, true).await.unwrap();
 // }
+#[tokio::main]
+async fn main() {
+    let mut rng = SmallRng::from_entropy();
+    let mut player_one = MonteCarloTreeSearch::default();
+    let mut player_two = MonteCarloTreeSearch::default();
+    player_one.set_time(3000).await;
+    player_two.set_time(3000).await;
+    let game_state = GameState::new(&mut rng);
+
+    let mut players: Vec<Box<dyn Player>> = vec![Box::new(player_one), Box::new(player_two)];
+    let _stats = run_match(game_state, &mut players, true).await.unwrap();
+}

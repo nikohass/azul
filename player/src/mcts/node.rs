@@ -2,14 +2,13 @@ use super::event::{Event, ProbabilisticOutcome};
 use super::value::Value;
 use game::*;
 use rand::rngs::SmallRng;
-use std::sync::{Arc, Mutex};
 
 const C: f32 = 0.1;
 const C_BASE: f32 = 30120.0;
 const C_FACTOR: f32 = std::f32::consts::SQRT_2;
 
 pub struct Node {
-    children: Vec<Arc<Mutex<Node>>>,
+    children: Vec<Node>,
     previous_event: Event, // The edge from the parent to this node
     n: f32,
     q: Value,
@@ -53,11 +52,11 @@ impl Node {
         }
     }
 
-    pub fn get_children(&self) -> &Vec<Arc<Mutex<Node>>> {
+    pub fn get_children(&self) -> &Vec<Node> {
         &self.children
     }
 
-    pub fn get_children_mut(&mut self) -> &mut Vec<Arc<Mutex<Node>>> {
+    pub fn get_children_mut(&mut self) -> &mut Vec<Node> {
         &mut self.children
     }
 
@@ -83,24 +82,21 @@ impl Node {
         }
     }
 
-    fn child_with_max_uct_value(&mut self, player_index: usize) -> Arc<Mutex<Node>> {
+    fn child_with_max_uct_value(&mut self, player_index: usize) -> &mut Node {
         let c_adjusted = C + C_FACTOR * ((1. + self.n + C_BASE) / C_BASE).ln();
 
         let mut best_child_index = 0;
         let mut best_chuld_uct_value = std::f32::NEG_INFINITY;
 
         for (i, child) in self.children.iter().enumerate() {
-            let value = child
-                .lock()
-                .unwrap()
-                .get_uct_value(player_index, self.n, c_adjusted);
+            let value = child.get_uct_value(player_index, self.n, c_adjusted);
             if value > best_chuld_uct_value {
                 best_child_index = i;
                 best_chuld_uct_value = value;
             }
         }
 
-        self.children[best_child_index].clone()
+        &mut self.children[best_child_index]
     }
 
     fn backpropagate(&mut self, value: Value) {
@@ -120,7 +116,7 @@ impl Node {
         // Create children nodes for each possible move
         let mut children = Vec::with_capacity(move_list.len());
         for i in 0..move_list.len() {
-            children.push(Arc::new(Mutex::new(Node::new_deterministic(move_list[i]))))
+            children.push(Node::new_deterministic(move_list[i]))
         }
 
         if probabilistic_event {
@@ -134,11 +130,7 @@ impl Node {
         }
     }
 
-    fn expand_probabilistic_child(
-        &mut self,
-        game_state: &mut GameState,
-        children: Vec<Arc<Mutex<Node>>>,
-    ) {
+    fn expand_probabilistic_child(&mut self, game_state: &mut GameState, children: Vec<Node>) {
         let outcome = ProbabilisticOutcome {
             factories: game_state.get_factories().clone(),
             out_of_bag: game_state.get_out_of_bag(),
@@ -146,7 +138,7 @@ impl Node {
         };
         let mut child = Node::new_probabilistic(outcome);
         child.children = children;
-        self.children.push(Arc::new(Mutex::new(child)));
+        self.children.push(child);
         self.has_probabilistic_children = true;
     }
 
@@ -177,9 +169,9 @@ impl Node {
                 assert!(probabilistic_event); // A probabilistic event must have happened, otherwise we wouldn't have any probabilistic children
 
                 // Create a child for each possible move
-                let mut children: Vec<Arc<Mutex<Node>>> = Vec::with_capacity(move_list.len());
+                let mut children: Vec<Node> = Vec::with_capacity(move_list.len());
                 for i in 0..move_list.len() {
-                    children.push(Arc::new(Mutex::new(Node::new_deterministic(move_list[i]))))
+                    children.push(Node::new_deterministic(move_list[i]))
                 }
 
                 let outcome = ProbabilisticOutcome {
@@ -189,7 +181,7 @@ impl Node {
                 };
                 let mut child = Node::new_probabilistic(outcome);
                 child.children.append(&mut children);
-                self.children.push(Arc::new(Mutex::new(child)));
+                self.children.push(child);
             }
         }
 
@@ -207,7 +199,6 @@ impl Node {
             }
         } else {
             let next_child = self.child_with_max_uct_value(current_player as usize);
-            let mut next_child = next_child.lock().unwrap();
             next_child.previous_event.apply_to_game_state(game_state);
             next_child.iteration(game_state, move_list, rng)
         };
@@ -224,7 +215,6 @@ impl Node {
 
         let player_index = usize::from(game_state.get_current_player());
         let child = self.best_child(player_index);
-        let mut child = child.lock().unwrap();
 
         child.previous_event.apply_to_game_state(game_state);
         pv.push(child.previous_event.clone());
@@ -232,19 +222,19 @@ impl Node {
         child.build_pv(game_state, pv);
     }
 
-    pub fn best_child(&mut self, player_index: usize) -> Arc<Mutex<Node>> {
+    pub fn best_child(&mut self, player_index: usize) -> &mut Node {
         let mut best_child_index = 0;
         let mut best_child_value = std::f32::NEG_INFINITY;
 
         for (i, child) in self.children.iter().enumerate() {
-            let value: Value = child.lock().unwrap().get_value();
+            let value: Value = child.get_value();
             if value[player_index] > best_child_value {
                 best_child_index = i;
                 best_child_value = value[player_index];
             }
         }
 
-        self.children[best_child_index].clone()
+        &mut self.children[best_child_index]
     }
 
     pub fn best_move(&mut self, player_index: usize) -> Option<Move> {
@@ -253,10 +243,46 @@ impl Node {
         }
 
         let child = self.best_child(player_index);
-        let child = child.lock().unwrap();
         match child.previous_event {
             Event::Deterministic(move_) => Some(move_),
             Event::Probabilistic(_) => None,
+        }
+    }
+
+    pub fn count_nodes(&self) -> ChildCount {
+        let mut total_child_count = match self.previous_event {
+            Event::Probabilistic(_) => ChildCount {
+                deterministic: 0,
+                probabilistic: 1,
+            },
+            Event::Deterministic(_) => ChildCount {
+                deterministic: 1,
+                probabilistic: 0,
+            },
+        };
+
+        for child in self.children.iter() {
+            let child_count = child.count_nodes();
+            total_child_count.deterministic += child_count.deterministic;
+        }
+
+        total_child_count
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ChildCount {
+    pub deterministic: usize,
+    pub probabilistic: usize,
+}
+
+impl std::ops::Add for ChildCount {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self {
+        ChildCount {
+            deterministic: self.deterministic + other.deterministic,
+            probabilistic: self.probabilistic + other.probabilistic,
         }
     }
 }

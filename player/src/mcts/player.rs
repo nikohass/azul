@@ -158,9 +158,10 @@ impl Player for MonteCarloTreeSearch {
         let player_index = usize::from(game_state.get_current_player());
         println!("Setting child as new root node.");
         let new_root_node = std::mem::replace(
-            &mut *root_node.best_child(player_index).lock().unwrap(),
+            &mut *root_node.best_child(player_index),
             Node::new_deterministic(Move::DUMMY),
         );
+        println!("{:#?}", new_root_node.count_nodes());
         *root_node = new_root_node;
         println!("New root node set.");
         drop(root_node);
@@ -181,7 +182,7 @@ impl Player for MonteCarloTreeSearch {
                 .enumerate()
                 .find(|(_, child)| {
                     matches!(
-                        *child.lock().unwrap().get_previous_event(),
+                        *child.get_previous_event(),
                         Event::Deterministic(child_move) if child_move == move_
                     )
                 })
@@ -190,11 +191,10 @@ impl Player for MonteCarloTreeSearch {
             println!("Setting child as new root node.");
 
             // Swap the root node with the matching child node
-            let child_arc = root_node_guard.get_children_mut().remove(i);
-            let mut child_node = child_arc.lock().unwrap();
+            let mut child_node = root_node_guard.get_children_mut().remove(i);
 
             // Take the data out of the child to avoid cloning the whole subtree
-            let new_root_node = std::mem::take(&mut *child_node);
+            let new_root_node = std::mem::take(&mut child_node);
 
             // Update the root node with the data from the matching child
             *root_node_guard = new_root_node;
@@ -203,7 +203,7 @@ impl Player for MonteCarloTreeSearch {
         } else {
             // No matching child was found, or there was a probabilistic event
             for child in root_node_guard.get_children() {
-                if let Event::Probabilistic(_) = child.lock().unwrap().get_previous_event() {
+                if let Event::Probabilistic(_) = child.get_previous_event() {
                     invalid = true;
                     break;
                 }
