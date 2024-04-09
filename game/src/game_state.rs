@@ -591,13 +591,11 @@ impl GameState {
         if is_round_over {
             let is_game_over = self.evaluate_round();
 
-            return if is_game_over {
-                MoveGenerationResult::GameOver
-            } else {
-                self.fill_factories(rng);
-                self.get_possible_moves(move_list, rng);
-                MoveGenerationResult::RoundOver
-            };
+            if is_game_over {
+                return MoveGenerationResult::GameOver;
+            }
+
+            self.fill_factories(rng);
         }
 
         move_list.clear(); // Clear any remaining moves from the previous round
@@ -651,7 +649,11 @@ impl GameState {
             }
         }
 
-        MoveGenerationResult::Continue
+        if is_round_over {
+            MoveGenerationResult::RoundOver
+        } else {
+            MoveGenerationResult::Continue
+        }
     }
 
     pub fn fill_factories(&mut self, rng: &mut SmallRng) {
