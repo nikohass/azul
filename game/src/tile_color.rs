@@ -1,7 +1,7 @@
 pub const NUM_TILE_COLORS: usize = 5;
 
 #[repr(u8)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TileColor {
     Blue,
     Yellow,

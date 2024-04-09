@@ -192,7 +192,7 @@ impl Node {
         let delta: Value = if self.children.is_empty() {
             self.expand(game_state, move_list, rng);
             if !self.is_game_over {
-                super::heuristic_move_generation::playout(&mut game_state.clone(), rng, move_list)
+                super::heuristic_move_generation::playout(&mut game_state.clone(), rng)
             } else if self.n == 0. {
                 let game_result = Value::from_game_scores(game_state.get_scores());
                 self.q = Value::from_game_scores(game_state.get_scores());
