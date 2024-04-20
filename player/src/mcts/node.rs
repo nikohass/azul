@@ -2,6 +2,7 @@ use super::event::{Event, ProbabilisticOutcome};
 use super::value::Value;
 use game::*;
 use rand::rngs::SmallRng;
+use rand::Rng as _;
 
 const C: f32 = 0.1;
 const C_BASE: f32 = 30120.0;
@@ -56,14 +57,6 @@ impl Node {
         &self.children
     }
 
-    pub fn get_children_mut(&mut self) -> &mut Vec<Node> {
-        &mut self.children
-    }
-
-    pub fn get_previous_event(&self) -> &Event {
-        &self.previous_event
-    }
-
     #[inline]
     pub fn get_value(&self) -> Value {
         if self.n > 0. {
@@ -97,6 +90,16 @@ impl Node {
         }
 
         &mut self.children[best_child_index]
+    }
+
+    fn select_child(&mut self, player_index: usize, rng: &mut SmallRng) -> &mut Node {
+        if self.has_probabilistic_children {
+            let index = rng.gen_range(0..self.children.len());
+            &mut self.children[index]
+        } else {
+            // Use the existing UCT method for deterministic children
+            self.child_with_max_uct_value(player_index)
+        }
     }
 
     fn backpropagate(&mut self, value: Value) {
@@ -151,7 +154,6 @@ impl Node {
         rng: &mut SmallRng,
     ) -> Value {
         let current_player = u8::from(game_state.get_current_player());
-
         if self.has_probabilistic_children {
             // All children of this node are probabilistic. When this node was "expanded", we only expanded one probabilistic outcome.
             // There would be too many possible outcomes to expand all of them, so we just expanded one.
@@ -161,30 +163,18 @@ impl Node {
             // If we expand a new child every time we iterate this node, we would never visit the same child twice. This would cause our estimations of the value of the child to be very inaccurate.
 
             // Let's just try this:
-            let desired_number_of_children = self.n.sqrt().ceil() as usize / 2;
+            let desired_number_of_children = self.n as usize / 2; //self.n.sqrt().ceil() as usize / 2;
             if desired_number_of_children > self.children.len() {
                 // We will expand a new child
                 let mut game_state_clone = game_state.clone(); // Clone here because we don't want to modify the game state
-                let probabilistic_event = matches!(
-                    game_state_clone.get_possible_moves(move_list, rng),
-                    MoveGenerationResult::RoundOver
-                );
-
-                assert!(probabilistic_event); // A probabilistic event must have happened, otherwise we wouldn't have any probabilistic children
-
-                // Create a child for each possible move
-                let mut children: Vec<Node> = Vec::with_capacity(move_list.len());
-                for i in 0..move_list.len() {
-                    children.push(Node::new_deterministic(move_list[i]))
-                }
+                game_state_clone.fill_factories(rng);
 
                 let outcome = ProbabilisticOutcome {
                     factories: game_state_clone.get_factories().clone(),
                     out_of_bag: game_state_clone.get_out_of_bag(),
                     bag: game_state_clone.get_bag(),
                 };
-                let mut child = Node::new_probabilistic(outcome);
-                child.children.append(&mut children);
+                let child = Node::new_probabilistic(outcome);
                 self.children.push(child);
             }
         }
@@ -202,7 +192,7 @@ impl Node {
                 self.q / self.n
             }
         } else {
-            let next_child = self.child_with_max_uct_value(current_player as usize);
+            let next_child = self.select_child(current_player as usize, rng);
             next_child.previous_event.apply_to_game_state(game_state);
             next_child.iteration(game_state, move_list, rng)
         };
@@ -266,8 +256,7 @@ impl Node {
         };
 
         for child in self.children.iter() {
-            let child_count = child.count_nodes();
-            total_child_count.deterministic += child_count.deterministic;
+            total_child_count += child.count_nodes();
         }
 
         total_child_count
@@ -280,13 +269,9 @@ pub struct ChildCount {
     pub probabilistic: usize,
 }
 
-impl std::ops::Add for ChildCount {
-    type Output = Self;
-
-    fn add(self, other: Self) -> Self {
-        ChildCount {
-            deterministic: self.deterministic + other.deterministic,
-            probabilistic: self.probabilistic + other.probabilistic,
-        }
+impl std::ops::AddAssign for ChildCount {
+    fn add_assign(&mut self, other: Self) {
+        self.deterministic += other.deterministic;
+        self.probabilistic += other.probabilistic;
     }
 }

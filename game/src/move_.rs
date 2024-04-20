@@ -49,6 +49,10 @@ impl Move {
             pattern,
         }
     }
+
+    pub fn is_discard_only(&self) -> bool {
+        self.pattern.iter().take(5).all(|&x| x == 0)
+    }
 }
 
 impl std::fmt::Display for Move {
