@@ -8,6 +8,7 @@ use game::{
     *,
 };
 use player::{
+    command_line_player::HumanCommandLinePlayer,
     mcts::{HeuristicMoveGenerationPlayer, MonteCarloTreeSearch},
     random_player::RandomPlayer,
 };
@@ -154,20 +155,21 @@ async fn main() {
     //     println!("{}", game_state);
     // }
     let mut player_one = MonteCarloTreeSearch::default();
-    let mut player_two = MonteCarloTreeSearch::default();
-    let mut player_three = MonteCarloTreeSearch::default();
-    let mut player_four = MonteCarloTreeSearch::default();
-    player_one.set_time(12_000).await;
-    player_two.set_time(12_000).await;
-    player_three.set_time(12_000).await;
-    player_four.set_time(12_000).await;
+    // let mut player_two = MonteCarloTreeSearch::default();
+    let mut player_two = HumanCommandLinePlayer::default();
+    // let mut player_three = HumanCommandLinePlayer::default();
+    // let mut player_four = MonteCarloTreeSearch::default();
+    player_one.set_time(3000).await;
+    player_two.set_time(3000).await;
+    // player_three.set_time(3_000).await;
+    // player_four.set_time(3_000).await;
     let game_state = GameState::new(&mut rng);
 
     let mut players: Vec<Box<dyn Player>> = vec![
         Box::new(player_one),
         Box::new(player_two),
-        Box::new(player_three),
-        Box::new(player_four),
+        // Box::new(player_three),
+        // Box::new(player_four),
     ];
 
     run_match(game_state, &mut players, true).await.unwrap();

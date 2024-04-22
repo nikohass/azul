@@ -56,7 +56,7 @@ impl MonteCarloTreeSearch {
             panic!("Monte Carlo Tree search was started in a position where it is not possible to make a move.");
         }
 
-        println!("    Left Depth Iterations          Value PV");
+        println!("    Left Depth Iterations               Value PV");
 
         loop {
             pv.truncate(0);
@@ -66,7 +66,7 @@ impl MonteCarloTreeSearch {
             let time_left: i64 = self.time_limit as i64 - start_time.elapsed().as_millis() as i64;
 
             println!(
-                "{:6}ms {:5} {:10} {:7} {}",
+                "{:6}ms {:5} {:10} {:18} {}",
                 time_left,
                 pv.len(),
                 completed_iterations,

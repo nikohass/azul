@@ -52,6 +52,10 @@ pub fn get_random_move(game_state: &mut GameState, rng: &mut SmallRng) -> Option
         }
     }
 
+    if possible_takes.is_empty() {
+        return None;
+    }
+
     let (factory_index, color, mut number_of_tiles) =
         possible_takes[rng.gen_range(0..possible_takes.len())];
 

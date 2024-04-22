@@ -17,19 +17,6 @@ pub struct Node {
     has_probabilistic_children: bool,
 }
 
-impl Default for Node {
-    fn default() -> Self {
-        Node {
-            children: Vec::new(),
-            previous_event: Event::Deterministic(Move::DUMMY),
-            n: 0.,
-            q: Value::default(),
-            is_game_over: false,
-            has_probabilistic_children: false,
-        }
-    }
-}
-
 impl Node {
     pub fn new_deterministic(previous_move: Move) -> Self {
         Node {
@@ -163,7 +150,7 @@ impl Node {
             // If we expand a new child every time we iterate this node, we would never visit the same child twice. This would cause our estimations of the value of the child to be very inaccurate.
 
             // Let's just try this:
-            let desired_number_of_children = self.n as usize / 2; //self.n.sqrt().ceil() as usize / 2;
+            let desired_number_of_children = self.n.sqrt() as usize / 2; //self.n.sqrt().ceil() as usize / 2;
             if desired_number_of_children > self.children.len() {
                 // We will expand a new child
                 let mut game_state_clone = game_state.clone(); // Clone here because we don't want to modify the game state
@@ -180,16 +167,20 @@ impl Node {
         }
 
         let delta: Value = if self.children.is_empty() {
-            self.expand(game_state, move_list, rng);
-            if !self.is_game_over {
-                super::heuristic_move_generation::playout(&mut game_state.clone(), rng)
-            } else if self.n == 0. {
-                let game_result = Value::from_game_scores(game_state.get_scores());
-                self.q = Value::from_game_scores(game_state.get_scores());
-                self.n = 1.;
-                game_result
+            if rng.gen_bool(0.05) {
+                self.expand(game_state, move_list, rng);
+                if !self.is_game_over {
+                    super::heuristic_move_generation::playout(&mut game_state.clone(), rng)
+                } else if self.n == 0. {
+                    let game_result = Value::from_game_scores(game_state.get_scores());
+                    self.q = Value::from_game_scores(game_state.get_scores());
+                    self.n = 1.;
+                    game_result
+                } else {
+                    self.q / self.n
+                }
             } else {
-                self.q / self.n
+                super::heuristic_move_generation::playout(&mut game_state.clone(), rng)
             }
         } else {
             let next_child = self.select_child(current_player as usize, rng);

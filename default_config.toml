@@ -5,7 +5,7 @@ constant_ordering = false
 verbose = false
 [player_one]
 executable = "target/release/test_client.exe"
-think_time = 1500
+think_time = 700
 [player_two]
-executable = "clients/2/6.exe"
-think_time = 1500
+executable = "clients/2/1.exe"
+think_time = 700
