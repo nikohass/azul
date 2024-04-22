@@ -4,7 +4,7 @@ use game::*;
 use rand::rngs::SmallRng;
 use rand::Rng as _;
 
-const C: f32 = 0.1;
+const C: f32 = 0.1; // Higher means more exploration
 const C_BASE: f32 = 30120.0;
 const C_FACTOR: f32 = std::f32::consts::SQRT_2;
 

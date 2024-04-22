@@ -14,7 +14,7 @@ pub use factories::{Factories, Factory};
 pub use factories::{CENTER_FACTORY_INDEX, NUM_FACTORIES};
 pub use game_state::GameState;
 pub use game_state::{bag_to_string, factories_to_string, Bag};
-pub use game_state::{MoveGenerationResult, FLOOR_LINE_PENALTY, NUM_PLAYERS};
+pub use game_state::{MoveGenerationResult, FLOOR_LINE_PENALTY};
 pub use move_::Move;
 pub use move_list::MoveList;
 pub use player::{Player, PlayerMarker};
@@ -22,6 +22,15 @@ pub use shared_state::SharedState;
 pub use tile_color::TileColor;
 pub use tile_color::NUM_TILE_COLORS;
 pub use wall::field_at;
+
+#[cfg(feature = "three_players")]
+pub const NUM_PLAYERS: usize = 3;
+
+#[cfg(feature = "four_players")]
+pub const NUM_PLAYERS: usize = 4;
+
+#[cfg(not(any(feature = "three_players", feature = "four_players")))]
+pub const NUM_PLAYERS: usize = 2;
 
 use log::LevelFilter;
 use log4rs::append::console::ConsoleAppender;

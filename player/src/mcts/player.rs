@@ -56,7 +56,10 @@ impl MonteCarloTreeSearch {
             panic!("Monte Carlo Tree search was started in a position where it is not possible to make a move.");
         }
 
-        println!("    Left Depth Iterations               Value PV");
+        println!(
+            "    Left Depth Iterations{}Value Principal variation",
+            " ".repeat(NUM_PLAYERS * 5 - "Value".len())
+        );
 
         loop {
             pv.truncate(0);
@@ -138,8 +141,6 @@ impl Player for MonteCarloTreeSearch {
         self.root_game_state.do_move(move_);
         move_
     }
-
-    async fn notify_move(&mut self, new_game_state: &GameState, move_: Move) {}
 
     async fn set_time(&mut self, time: u64) {
         self.time_limit = time;

@@ -2,6 +2,13 @@ use game::{GameState, Move, MoveList, Player, TileColor};
 use rand::{rngs::SmallRng, SeedableRng};
 use std::collections::HashSet;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PromptResult {
+    Continue,      // User has provided valid input
+    Reset,         // User wants to start over
+    SkipSelection, // Skip this step if there is only one option
+}
+
 pub struct HumanCommandLinePlayer {
     move_list: MoveList,
 }
@@ -26,9 +33,32 @@ impl Player for HumanCommandLinePlayer {
 
         loop {
             let mut remaining_moves = self.move_list.into_iter().cloned().collect::<Vec<_>>();
-            self.prompt_for_factory_number(&mut remaining_moves);
-            self.prompt_for_tile_color(&mut remaining_moves);
-            self.prompt_for_pattern_line(&mut remaining_moves);
+            let result1 = self.prompt_for_factory_number(&mut remaining_moves);
+            if result1 == PromptResult::Reset {
+                continue;
+            }
+            let result2 = self.prompt_for_tile_color(&mut remaining_moves);
+            if result2 == PromptResult::Reset {
+                continue;
+            }
+            let result3 = self.prompt_for_pattern_line(&mut remaining_moves);
+            if result3 == PromptResult::Reset {
+                continue;
+            }
+
+            if result1 == PromptResult::SkipSelection
+                && result2 == PromptResult::SkipSelection
+                && result3 == PromptResult::SkipSelection
+            {
+                println!("Only one move available: {}", remaining_moves[0]);
+                println!("Press enter to submit the move");
+                let mut input = String::new();
+                if std::io::stdin().read_line(&mut input).is_err() {
+                    println!("Failed to read input");
+                    continue;
+                }
+                return remaining_moves[0];
+            }
 
             if remaining_moves.len() == 1 {
                 return remaining_moves[0];
@@ -40,18 +70,24 @@ impl Player for HumanCommandLinePlayer {
 }
 
 impl HumanCommandLinePlayer {
-    fn prompt_for_factory_number(&self, remaining_moves: &mut Vec<Move>) {
+    fn prompt_for_factory_number(&self, remaining_moves: &mut Vec<Move>) -> PromptResult {
         loop {
             let mut available_factories = HashSet::new();
             for move_ in remaining_moves.iter() {
                 available_factories.insert(move_.take_from_factory_index);
             }
-            println!("Select a factory to take tiles from:");
             let mut options = available_factories
                 .iter()
                 .map(|factory| factory + 1)
                 .collect::<Vec<_>>();
             options.sort();
+
+            if options.len() == 1 {
+                println!("Only one factory available: {}", options[0]);
+                return PromptResult::SkipSelection;
+            }
+
+            println!("Select a factory to take tiles from:");
             let options = options
                 .iter()
                 .map(|option| option.to_string())
@@ -63,6 +99,9 @@ impl HumanCommandLinePlayer {
             if std::io::stdin().read_line(&mut input).is_err() {
                 println!("Failed to read input");
                 continue;
+            }
+            if input.trim().is_empty() {
+                return PromptResult::Reset;
             }
 
             let factory_number = match input.trim().parse::<u8>() {
@@ -80,11 +119,11 @@ impl HumanCommandLinePlayer {
 
             // Remove all moves from all other factories
             remaining_moves.retain(|move_| move_.take_from_factory_index == factory_number - 1);
-            break;
+            return PromptResult::Continue;
         }
     }
 
-    fn prompt_for_tile_color(&self, remaining_moves: &mut Vec<Move>) {
+    fn prompt_for_tile_color(&self, remaining_moves: &mut Vec<Move>) -> PromptResult {
         loop {
             let mut available_colors = HashSet::new();
             for move_ in remaining_moves.iter() {
@@ -95,29 +134,33 @@ impl HumanCommandLinePlayer {
                 .map(|color| color.to_string())
                 .collect::<Vec<_>>();
 
-            let color = if options.len() > 1 {
-                let mut input = String::new();
-                let options = options.join(", ");
-                println!("Select a tile color:");
-                println!("Options: {}", options);
-                if std::io::stdin().read_line(&mut input).is_err() {
-                    println!("Failed to read input");
+            if options.len() == 1 {
+                println!("Only one color available: {}", options[0]);
+                return PromptResult::SkipSelection;
+            }
+
+            let mut input = String::new();
+            let options = options.join(", ");
+            println!("Select a tile color:");
+            println!("Options: {}", options);
+            if std::io::stdin().read_line(&mut input).is_err() {
+                println!("Failed to read input");
+                continue;
+            }
+            if input.trim().is_empty() {
+                return PromptResult::Reset;
+            }
+
+            let color = match input.trim().to_uppercase().as_str() {
+                "R" => TileColor::Red,
+                "G" => TileColor::Green,
+                "W" => TileColor::White,
+                "B" => TileColor::Blue,
+                "Y" => TileColor::Yellow,
+                _ => {
+                    println!("Invalid tile color");
                     continue;
                 }
-                match input.trim().to_uppercase().as_str() {
-                    "R" => TileColor::Red,
-                    "G" => TileColor::Green,
-                    "W" => TileColor::White,
-                    "B" => TileColor::Blue,
-                    "Y" => TileColor::Yellow,
-                    _ => {
-                        println!("Invalid tile color");
-                        continue;
-                    }
-                }
-            } else {
-                println!("Only one color available: {}", options[0]);
-                *available_colors.iter().next().unwrap()
             };
 
             if !available_colors.contains(&color) {
@@ -127,34 +170,40 @@ impl HumanCommandLinePlayer {
 
             // Remove all moves with other colors
             remaining_moves.retain(|move_| move_.color == color);
-            break;
+            return PromptResult::Continue;
         }
     }
 
-    fn prompt_for_pattern_line(&self, remaining_moves: &mut Vec<Move>) {
+    fn prompt_for_pattern_line(&self, remaining_moves: &mut Vec<Move>) -> PromptResult {
         loop {
-            println!("Select pattern line(s) to place tiles on:");
+            if remaining_moves.len() == 1 {
+                return PromptResult::SkipSelection;
+            }
             let mut options = HashSet::new();
             for move_ in remaining_moves.iter() {
                 let pattern = move_.pattern;
-                for i in 0..6 {
-                    if pattern[i] > 0 {
+                for (i, &count) in pattern.iter().enumerate() {
+                    if count > 0 {
                         options.insert(i);
                     }
                 }
             }
+            println!("Select pattern line(s) to place tiles on:");
             let line_description = ["1st", "2nd", "3rd", "4th", "5th", "floor"];
-            for i in 0..6 {
+            for (i, description) in line_description.iter().enumerate() {
                 if options.contains(&i) {
-                    println!("{}: {}", i + 1, line_description[i]);
+                    println!("{}: {}", i + 1, description);
                 }
             }
-            println!("Enter all pattern lines you want to place tiles on in the format '122d' (for the 1st and 2nd pattern line discarding one):");
+            println!("Enter all pattern lines you want to place tiles on in the format '1226' (for the 1st and 2nd pattern line discarding one):");
 
             let mut input = String::new();
             if std::io::stdin().read_line(&mut input).is_err() {
                 println!("Failed to read input");
                 continue;
+            }
+            if input.trim().is_empty() {
+                return PromptResult::Reset;
             }
 
             let pattern_line = match parse_pattern_line(&input, remaining_moves) {
@@ -164,7 +213,7 @@ impl HumanCommandLinePlayer {
 
             // Remove all moves with other pattern lines
             remaining_moves.retain(|move_| move_.pattern == pattern_line);
-            break;
+            return PromptResult::Continue;
         }
     }
 }

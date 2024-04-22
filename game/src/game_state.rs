@@ -4,11 +4,10 @@ use crate::move_list::MoveList;
 use crate::player::PlayerMarker;
 use crate::tile_color::{TileColor, NUM_TILE_COLORS};
 use crate::wall::{self, WALL_COLOR_MASKS};
-use crate::RuntimeError;
+use crate::{RuntimeError, NUM_PLAYERS};
 use rand::rngs::SmallRng;
 use std::fmt::Write;
 
-pub const NUM_PLAYERS: usize = 3;
 pub const FLOOR_LINE_PENALTY: [u8; 8] = [0, 1, 2, 4, 6, 8, 11, 14];
 
 fn find_tile_combinations(
@@ -841,18 +840,24 @@ pub fn bag_to_string(bag: &Bag) -> String {
 }
 
 pub fn factories_to_string(factories: &Factories) -> String {
-    let mut string = String::from("FACTORIES ");
+    let mut string = String::new();
+
+    let mut factory_strings = Vec::new();
+    let mut total_length = 0;
     for (factory_index, factory) in factories.iter().enumerate() {
+        let mut factory_string = String::new();
         let tile_count: usize = factory.iter().sum::<u8>() as usize;
 
         if factory_index == CENTER_FACTORY_INDEX {
-            string.push_str("Center-");
+            total_length += tile_count + 1 + 4; // +1 for min space + 4 for "[n] "
+            factory_string.push_str("[C] ");
         } else {
-            write!(string, "{}-", factory_index + 1).unwrap();
+            total_length += 4 + 1 + 4; // always 4 because placeholders
+            write!(factory_string, "[{}] ", factory_index + 1).unwrap();
         }
 
         for (color, number_of_tiles) in factory.iter().enumerate() {
-            string.push_str(
+            factory_string.push_str(
                 &TileColor::from(color)
                     .to_string()
                     .repeat(*number_of_tiles as usize),
@@ -860,12 +865,23 @@ pub fn factories_to_string(factories: &Factories) -> String {
         }
 
         if factory_index != NUM_FACTORIES - 1 {
-            string.push_str(&".".repeat(4 - tile_count));
+            factory_string.push_str(&".".repeat(4 - tile_count));
         }
-        string.push(' ');
+
+        factory_strings.push(factory_string);
     }
-    string.push('\n');
-    string
+
+    let maximum_size = (NUM_PLAYERS * 33).max(total_length);
+    let spaces_between_factories = (maximum_size - total_length) / NUM_FACTORIES;
+
+    for factory_string in &factory_strings {
+        string.push_str(factory_string);
+        string.push_str(&" ".repeat(spaces_between_factories));
+    }
+    let remaining_space =
+        maximum_size - total_length - spaces_between_factories * (NUM_FACTORIES - 1);
+    let leading_spaces = remaining_space / 2;
+    format!("{}{}\n", " ".repeat(leading_spaces), string,)
 }
 
 fn player_wall_to_string(game_state: &GameState, player_index: usize) -> String {
@@ -914,7 +930,7 @@ fn player_pattern_board_to_string(game_state: &GameState, player_index: usize) -
         } else {
             ("".to_string(), "".to_string())
         };
-        write!(string, "{}{} ", color.0, pattern_index + 1).unwrap();
+        write!(string, " {}{} ", color.0, pattern_index + 1).unwrap();
         let leading_whitespace = (4 - pattern_index) * 2;
         for _ in 0..leading_whitespace {
             string.push(' ');
@@ -932,6 +948,7 @@ fn player_pattern_board_to_string(game_state: &GameState, player_index: usize) -
             }
         }
         string.push_str(&color.1);
+        string.push(' ');
         string.push('\n');
     }
 
@@ -940,23 +957,40 @@ fn player_pattern_board_to_string(game_state: &GameState, player_index: usize) -
 
 impl std::fmt::Display for GameState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut string = String::with_capacity(1024);
-        string.push_str(&bag_to_string(&self.bag));
+        // Empty line for spacing
+        let mut empty_line = " ".to_string();
+        for _ in 0..NUM_PLAYERS - 1 {
+            empty_line.push_str(&" ".repeat(28));
+            empty_line.push_str("|  ");
+        }
+        empty_line.push_str(&" ".repeat(27));
+        empty_line.push('\n');
+
+        let separator_line = empty_line.replace(' ', "-").replace('|', "+");
+
+        let mut string = String::new();
+        // string.push_str(&bag_to_string(&self.bag));
         string.push_str(&factories_to_string(&self.factories));
+        string.push('\n');
 
         // Player header
+        string.push(' ');
         for player_index in 0..NUM_PLAYERS {
             if usize::from(self.current_player) == player_index {
-                // set text color to black and background to white
                 string.push_str("\x1b[30m\x1b[47m");
             }
             string.push_str(&format!(
-                "PLAYER {} {:16}\x1b[0m |  ",
+                "PLAYER {} {:18}\x1b[0m",
                 player_index, self.scores[player_index]
             ));
+            if player_index != NUM_PLAYERS - 1 {
+                string.push_str(" |  ");
+            }
         }
-
         string.push('\n');
+
+        string.push_str(&separator_line);
+        string.push_str(&empty_line);
 
         // Compute max lines
         let mut max_lines = 0;
@@ -977,21 +1011,51 @@ impl std::fmt::Display for GameState {
                 let wall_line = wall_string.lines().nth(line).unwrap_or("");
 
                 string.push_str(pattern_line);
-                string.push_str(" -> "); // separator between pattern and wall
+                string.push_str("->  "); // separator between pattern and wall
                 string.push_str(wall_line);
-                string.push_str("|  ");
+                if player_index != NUM_PLAYERS - 1 {
+                    string.push_str(" | ");
+                }
             }
             string.push('\n');
         }
 
+        string.push_str(&empty_line);
+        string.push_str(&separator_line);
+
+        string.push(' ');
         // Player floor lines
         for player_index in 0..NUM_PLAYERS {
-            string.push_str(&format!(
-                "Floor line: {:2}            |  ",
-                self.floor_line_progress[player_index]
-            ));
+            let mut floor_line = String::new();
+            let progress = self.floor_line_progress[player_index]
+                .min(FLOOR_LINE_PENALTY.len() as u8 - 1) as usize;
+
+            let mut previous_penalty = 0;
+            for (i, relative_penalty) in FLOOR_LINE_PENALTY.iter().enumerate().skip(1) {
+                let penalty = *relative_penalty as i16 - previous_penalty;
+                if i > progress {
+                    floor_line.push_str("\u{001b}[02m");
+                } else if i == 1
+                    && self.next_round_starting_player == PlayerMarker::new(player_index as u8)
+                    && self.tile_taken_from_center
+                {
+                    floor_line.push_str("\u{001b}[32m");
+                }
+                floor_line.push_str(&format!("{:2} ", -penalty));
+                floor_line.push_str("\x1b[0m");
+                previous_penalty = *relative_penalty as i16;
+            }
+            string.push_str(&floor_line);
+
+            let total_penalty = FLOOR_LINE_PENALTY[progress] as i16;
+            string.push_str(&format!(" {:5}", -total_penalty));
+            if player_index != NUM_PLAYERS - 1 {
+                string.push_str(" |  ");
+            }
         }
+
         string.push('\n');
+
         string.push_str(self.serialize_string().as_str());
         write!(f, "{}", string)
     }

@@ -181,8 +181,8 @@ if __name__ == "__main__":
     os.chdir(os.path.join(os.path.dirname(__file__), ".."))
 
     game_config = GameConfig([
-        PlayerConfig("target/release/test_client.exe", 700),
-        PlayerConfig("clients/2/1.exe", 700),
+        PlayerConfig("target/release/test_client.exe", 2000),
+        PlayerConfig("target/release/test_client.exe", 20_000),
     ], num_games=250, num_simulations_games=10)
     test = Test(game_config=game_config)
     test.run()
