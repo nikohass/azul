@@ -8,6 +8,9 @@ use crate::{RuntimeError, NUM_PLAYERS};
 use rand::rngs::SmallRng;
 use std::fmt::Write;
 
+#[cfg(debug_assertions)]
+use rand::SeedableRng as _;
+
 pub const FLOOR_LINE_PENALTY: [u8; 8] = [0, 1, 2, 4, 6, 8, 11, 14];
 
 fn find_tile_combinations(
@@ -504,6 +507,19 @@ impl GameState {
     }
 
     pub fn do_move(&mut self, mov: Move) {
+        #[cfg(debug_assertions)]
+        {
+            let mut move_list = MoveList::default();
+            self.clone()
+                .get_possible_moves(&mut move_list, &mut SmallRng::from_entropy());
+            let is_valid_move = move_list.into_iter().any(|m| *m == mov);
+            if !is_valid_move {
+                println!("{}", self);
+                println!("{}", mov);
+                println!("{:?}", move_list);
+                panic!("The move is not valid");
+            }
+        }
         let current_player: usize = self.current_player.into();
         let take_from_factory_index = mov.take_from_factory_index as usize;
         let color = mov.color as usize;
@@ -585,8 +601,9 @@ impl GameState {
         move_list: &mut MoveList,
         rng: &mut SmallRng,
     ) -> MoveGenerationResult {
-        let is_round_over = self.factories.is_empty();
+        move_list.clear(); // Clear any remaining moves from the previous round
 
+        let is_round_over = self.factories.is_empty();
         if is_round_over {
             let is_game_over = self.evaluate_round();
 
@@ -597,7 +614,6 @@ impl GameState {
             self.fill_factories(rng);
         }
 
-        move_list.clear(); // Clear any remaining moves from the previous round
         let current_player: usize = self.current_player.into();
 
         // Get the pattern lines of the current player, the moves will be placed in the pattern lines
@@ -825,7 +841,7 @@ impl GameState {
 }
 
 pub fn bag_to_string(bag: &Bag) -> String {
-    let mut string = String::from("BAG       ");
+    let mut string = String::new();
     for (color, number_of_tiles_left) in bag.iter().enumerate() {
         write!(
             string,
@@ -969,7 +985,8 @@ impl std::fmt::Display for GameState {
         let separator_line = empty_line.replace(' ', "-").replace('|', "+");
 
         let mut string = String::new();
-        // string.push_str(&bag_to_string(&self.bag));
+        string.push_str(&format!("BAG: {}", bag_to_string(&self.bag)));
+        string.push_str(&format!("OUT OF BAG: {}", bag_to_string(&self.out_of_bag)));
         string.push_str(&factories_to_string(&self.factories));
         string.push('\n');
 
@@ -980,11 +997,11 @@ impl std::fmt::Display for GameState {
                 string.push_str("\x1b[30m\x1b[47m");
             }
             string.push_str(&format!(
-                "PLAYER {} {:18}\x1b[0m",
+                "PLAYER {} {:18}\x1b[0m ",
                 player_index, self.scores[player_index]
             ));
             if player_index != NUM_PLAYERS - 1 {
-                string.push_str(" |  ");
+                string.push_str("|  ");
             }
         }
         string.push('\n');

@@ -24,6 +24,9 @@ fn do_iterations(
 
 impl MonteCarloTreeSearch {
     async fn set_root(&mut self, game_state: &GameState) {
+        game_state
+            .check_integrity()
+            .expect("Trying to set root with invalid game state.");
         if self.root_node.get_children().is_empty()
             || game_state.to_string() != self.root_game_state.to_string()
         {

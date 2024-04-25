@@ -4,8 +4,30 @@ use game::*;
 use rand::rngs::SmallRng;
 use rand::Rng as _;
 
-const C: f32 = 0.1; // Higher means more exploration
-const C_BASE: f32 = 30120.0;
+const EXPANSION_PROBABILITY: f64 = 0.05;
+
+// 2 players
+#[cfg(not(any(feature = "three_players", feature = "four_players")))]
+const C: f32 = 0.1;
+#[cfg(not(any(feature = "three_players", feature = "four_players")))]
+const C_BASE: f32 = 30_000.0;
+#[cfg(not(any(feature = "three_players", feature = "four_players")))]
+const C_FACTOR: f32 = std::f32::consts::SQRT_2;
+
+// 3 players
+#[cfg(feature = "three_players")]
+const C: f32 = 0.1;
+#[cfg(feature = "three_players")]
+const C_BASE: f32 = 30_000.0;
+#[cfg(feature = "three_players")]
+const C_FACTOR: f32 = std::f32::consts::SQRT_2;
+
+// 4 players
+#[cfg(feature = "four_players")]
+const C: f32 = 0.1;
+#[cfg(feature = "four_players")]
+const C_BASE: f32 = 30_000.0;
+#[cfg(feature = "four_players")]
 const C_FACTOR: f32 = std::f32::consts::SQRT_2;
 
 pub struct Node {
@@ -84,7 +106,6 @@ impl Node {
             let index = rng.gen_range(0..self.children.len());
             &mut self.children[index]
         } else {
-            // Use the existing UCT method for deterministic children
             self.child_with_max_uct_value(player_index)
         }
     }
@@ -113,7 +134,7 @@ impl Node {
 
         if probabilistic_event {
             // Create a probabilistic child for the probabilistic event that just happend during the move generation
-            // Since it is not possible to expand all possible outcomes of a probabilistic event, we will only expand one of them
+            // Since it is not possible to expand all outcomes of a probabilistic event, we will only expand one of them
             // and dynamically expand the other outcomes later
             self.expand_probabilistic_child(game_state, children);
         } else {
@@ -140,6 +161,9 @@ impl Node {
         move_list: &mut MoveList,
         rng: &mut SmallRng,
     ) -> Value {
+        #[cfg(debug_assertions)]
+        game_state.check_integrity().unwrap();
+
         let current_player = u8::from(game_state.get_current_player());
         if self.has_probabilistic_children {
             // All children of this node are probabilistic. When this node was "expanded", we only expanded one probabilistic outcome.
@@ -150,10 +174,11 @@ impl Node {
             // If we expand a new child every time we iterate this node, we would never visit the same child twice. This would cause our estimations of the value of the child to be very inaccurate.
 
             // Let's just try this:
-            let desired_number_of_children = self.n.sqrt() as usize / 2; //self.n.sqrt().ceil() as usize / 2;
+            let desired_number_of_children = self.n.sqrt().ceil() as usize / 2;
             if desired_number_of_children > self.children.len() {
                 // We will expand a new child
                 let mut game_state_clone = game_state.clone(); // Clone here because we don't want to modify the game state
+                game_state_clone.evaluate_round();
                 game_state_clone.fill_factories(rng);
 
                 let outcome = ProbabilisticOutcome {
@@ -167,10 +192,10 @@ impl Node {
         }
 
         let delta: Value = if self.children.is_empty() {
-            if rng.gen_bool(0.05) {
+            if rng.gen_bool(EXPANSION_PROBABILITY) {
                 self.expand(game_state, move_list, rng);
                 if !self.is_game_over {
-                    super::heuristic_move_generation::playout(&mut game_state.clone(), rng)
+                    super::heuristic_move_generation::playout(game_state.clone(), rng)
                 } else if self.n == 0. {
                     let game_result = Value::from_game_scores(game_state.get_scores());
                     self.q = Value::from_game_scores(game_state.get_scores());
@@ -180,7 +205,7 @@ impl Node {
                     self.q / self.n
                 }
             } else {
-                super::heuristic_move_generation::playout(&mut game_state.clone(), rng)
+                super::heuristic_move_generation::playout(game_state.clone(), rng)
             }
         } else {
             let next_child = self.select_child(current_player as usize, rng);

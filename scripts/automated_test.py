@@ -4,21 +4,43 @@ import numpy as np
 import enum
 import re
 from scipy.stats import norm
+from itertools import combinations
 
 class TestStatus(enum.Enum):
     OK = 0
     COMPILE_ERROR = 1
     SERVER_ERROR = 2
 
-def build_test_client() -> TestStatus:
-    result = subprocess.run(["cargo", "build", "--bin", "test_client", "--release"], capture_output=True, text=True)
+def feature(num_players: int):
+    if num_players == 3:
+        return ["--features", "three_players"]
+    elif num_players == 4:
+        return ["--features", "four_players"]
+    return []
+
+def build_executable(binary: str, num_players: int) -> TestStatus:
+    command = ["cargo", "build", "--bin", binary, "--release"] + feature(num_players)
+    print(f"Building {binary}... ({' '.join(command)})")
+    result = subprocess.run(command, capture_output=True, text=True)
+
+    print("STDOUT:")
+    print(result.stdout)
+    print("STDERR:")
+    print(result.stderr)
+
     if result.returncode != 0:
+        print("Build failed")
         return TestStatus.COMPILE_ERROR
+    print("Build successful")
     return TestStatus.OK
 
-def run_test_server():
+def run_test_server(num_players):
+    build_executable("test_server", num_players)
+    
+    command = ["cargo", "run", "--bin", "test_server", "--release"] + feature(num_players)
+    print(f"Starting test server... ({' '.join(command)})")
     # Start the test server and yield each line of output
-    with subprocess.Popen(["cargo", "run", "--bin", "test_server", "--release"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, universal_newlines=True) as proc:
+    with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, universal_newlines=True) as proc:
         if proc.stdout:
             for line in proc.stdout:
                 yield line
@@ -108,67 +130,77 @@ class PlayerStats:
         self.wins = wins
         self.games += 1
 
-def two_sample_proportion_test(wins1, total1, wins2, total2, alpha=0.001, min_games=10):
-    if total1 < min_games or total2 < min_games:
-        return 0, 1, "Not enough games to make a decision"
+def multi_player_proportion_test(players_stats, alpha=0.001, min_games=10):
+    n_players = len(players_stats)
+    results = []
 
-    p1 = wins1 / total1 if total1 > 0 else 0
-    p2 = wins2 / total2 if total2 > 0 else 0
+    # Compare each pair of players
+    for i, j in combinations(range(n_players), 2):
+        stats1, stats2 = players_stats[i], players_stats[j]
+        total1, wins1 = stats1.games, stats1.wins
+        total2, wins2 = stats2.games, stats2.wins
 
-    pooled_n = total1 + total2
-    if pooled_n > 0:
-        p_pool = (wins1 + wins2) / pooled_n
-        variance_component = p_pool * (1 - p_pool)
-        if variance_component <= 0 or total1 <= 0 or total2 <= 0:
-            return 0, 1, "Invalid computation conditions"
-        se = np.sqrt(variance_component * (1 / total1 + 1 / total2))
-    else:
-        return 0, 1, "Insufficient data to compute statistics"
+        if total1 < min_games or total2 < min_games:
+            results.append((0, 1, f"Not enough games between player {i+1} and player {j+1}"))
+            continue
 
-    if se == 0:
-        return 0, 1, "No variation between samples, standard error is zero"
-
-    z = (p1 - p2) / se if se > 0 else float('-inf')
-    p_value = 2 * (1 - norm.cdf(abs(z)))
-
-    if p_value < alpha:
-        if p1 > p2:
-            return z, p_value, "Player 1 is significantly better than Player 2"
+        p1 = wins1 / total1
+        p2 = wins2 / total2
+        pooled_n = total1 + total2
+        if pooled_n > 0:
+            p_pool = (wins1 + wins2) / pooled_n
+            variance_component = p_pool * (1 - p_pool)
+            se = np.sqrt(variance_component * (1 / total1 + 1 / total2)) if variance_component > 0 and total1 > 0 and total2 > 0 else 0
         else:
-            return z, p_value, "Player 2 is significantly better than Player 1"
-    return z, p_value, "No significant difference detected"
+            results.append((0, 1, "Insufficient data to compute statistics"))
+            continue
 
-def run_hypothesis_tests(game_stream, min_games: int, alpha=0.001):
-    stats1 = PlayerStats()
-    stats2 = PlayerStats()
+        if se == 0:
+            results.append((0, 1, f"No variation between player {i+1} and player {j+1}, standard error is zero"))
+            continue
+
+        z = (p1 - p2) / se if se > 0 else float('-inf')
+        p_value = 2 * (1 - norm.cdf(abs(z)))
+
+        if p_value < alpha:
+            better_player = i+1 if p1 > p2 else j+1
+            results.append((z, p_value, f"Player {better_player} is significantly better than player {i+1 if better_player == j+1 else j+1}"))
+        else:
+            results.append((z, p_value, f"No significant difference between player {i+1} and player {j+1}"))
+
+    return results
+
+def run_hypothesis_tests_for_players(game_stream, num_players: int, min_games: int, alpha=0.001):
+    players_stats = [PlayerStats() for _ in range(num_players)]
 
     for game_result in game_stream:
         # Update player statistics
-        stats1.update(game_result.wins[0])
-        stats2.update(game_result.wins[1])
+        for i in range(num_players):
+            players_stats[i].update(game_result.wins[i])
 
-        # Conduct the test if both players have played at least one game
-        if stats1.games > 0 and stats2.games > 0:
-            z_stat, p_value, conclusion = two_sample_proportion_test(stats1.wins, stats1.games, stats2.wins, stats2.games, min_games=min_games, alpha=alpha)
-            print(f"Game {stats1.games}: Z-statistic = {z_stat}, P-value = {p_value}, Conclusion: {conclusion}")
-
-            if "significantly better" in conclusion:
-                break
+        # Conduct the test if all players have played at least min_games
+        if all(stats.games >= min_games for stats in players_stats):
+            test_results = multi_player_proportion_test(players_stats, alpha=alpha, min_games=min_games)
+            for z_stat, p_value, conclusion in test_results:
+                print(f"Conclusion: {conclusion} (Z-statistic = {z_stat}, P-value = {p_value})")
+                # Just stop testing if a player is significantly better than someone else
+                if "significantly better" in conclusion:
+                    return
 
 class Test:
     def __init__(self, game_config: GameConfig):
         self.game_config = game_config
-    
+
     def run(self):
         self.game_config.activate()
-        build_test_client()
+        build_executable("test_client", len(self.game_config.players))
         game_result_stream = self.run_games()
-        run_hypothesis_tests(game_result_stream, self.game_config.num_simulations_games * 2)
-    
+        run_hypothesis_tests_for_players(game_result_stream, len(self.game_config.players), self.game_config.num_simulations_games * 2)
+
     def run_games(self):
         num_players = len(game_config.players)
         log_lines = []
-        for line in run_test_server():
+        for line in run_test_server(num_players):
             log_lines.append(line)
             results = parse_game_results(log_lines[-4:])
             if len(results.scores) == num_players:
@@ -181,8 +213,12 @@ if __name__ == "__main__":
     os.chdir(os.path.join(os.path.dirname(__file__), ".."))
 
     game_config = GameConfig([
-        PlayerConfig("target/release/test_client.exe", 2000),
-        PlayerConfig("target/release/test_client.exe", 20_000),
+        PlayerConfig("target/release/test_client.exe", think_time=600),
+        PlayerConfig("clients/4/9.exe", think_time=600),
+        PlayerConfig("clients/4/9.exe", think_time=600),
+        PlayerConfig("clients/4/9.exe", think_time=600),
+        # PlayerConfig("clients/3/test_client-12.exe", think_time=400),
+        # PlayerConfig("clients/3/test_client-12.exe", think_time=400),
     ], num_games=250, num_simulations_games=10)
     test = Test(game_config=game_config)
     test.run()

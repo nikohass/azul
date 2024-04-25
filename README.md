@@ -1,6 +1,6 @@
 # Azul - Rust Implementation
 
-Welcome to the Azul repository, a Rust-based implementation of the popular board game Azul. This project also integrates a Monte Carlo Tree Search (MCTS) algorithm to simulate intelligent AI behavior for playing the game. The implementation is structured into several components, including a backend server for the UI, a test client, a test server for client battles, and a playground for miscellaneous testing.
+Welcome to the Azul repository, a Rust-based implementation of the popular board game Azul. This university project integrates a Monte Carlo Tree Search (MCTS) algorithm to simulate intelligent AI behavior for playing the game. The implementation is structured into several components, including a backend server for the UI, a test client, a test server for client battles, and a playground for miscellaneous testing.
 
 ## Features
 
@@ -23,22 +23,34 @@ You can install both by following the instructions on the [official Rust website
 
 ### Installation
 
-1. Clone the repository to your local machine:
+1. **Clone the repository** to your local machine:
     ```bash
     git clone https://github.com/nikohass/azul.git
     ```
    
-2. Navigate into the project directory:
+2. **Navigate into the project directory**:
     ```bash
     cd azul
     ```
 
-3. Build the project using Cargo. This command compiles the project and produces the executable files:
+3. **Build the project using Cargo**. This command compiles the project and produces the executable files. You can specify the number of players by enabling feature flags during the build process:
+    ```bash
+    cargo build --release
+    ```
+    To compile for a game optimized for three players, use:
+    ```bash
+    cargo build --release --features "three_players"
+    ```
+    Similarly, for four players:
+    ```bash
+    cargo build --release --features "four_players"
+    ```
+    Use no features to build the default configuration for two players:
     ```bash
     cargo build --release
     ```
 
-   Note: The `--release` flag builds the executables in release mode, optimizing them for performance.
+    The `--release` flag builds the executables in release mode, optimizing them for performance.
 
 ### Running the Executables
 
@@ -61,18 +73,3 @@ After compiling the project, you will find the executables inside `target/releas
     ./target/release/playground
     ```
    Execute this for miscellaneous testing and development experiments.
-
-### Running the unit tests
-
-To run the unit tests, execute the following command:
-```bash
-cargo test
-```
-To determine the test coverage, install the `cargo-llvm-cov` tool by running:
-```bash
-cargo install cargo-llvm-cov
-```
-Then, run the following command to generate the coverage report:
-```bash
-cargo llvm-cov --open
-```

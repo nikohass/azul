@@ -5,7 +5,13 @@ constant_ordering = false
 verbose = false
 [player_one]
 executable = "target/release/test_client.exe"
-think_time = 2000
+think_time = 600
 [player_two]
-executable = "target/release/test_client.exe"
-think_time = 20000
+executable = "clients/4/9.exe"
+think_time = 600
+[player_three]
+executable = "clients/4/9.exe"
+think_time = 600
+[player_four]
+executable = "clients/4/9.exe"
+think_time = 600

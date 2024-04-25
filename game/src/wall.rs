@@ -1,4 +1,4 @@
-use crate::tile_color::NUM_TILE_COLORS;
+use crate::{tile_color::NUM_TILE_COLORS, TileColor};
 /*
     A wall is a 5x5 grid of tiles. Each tile can be one of 5 colors.
     0  1  2  3  4  (5)
@@ -32,6 +32,15 @@ pub fn field_at(row: usize, col: usize) -> u32 {
 #[inline]
 pub fn get_row_mask(row_index: usize) -> u32 {
     ROW_MASK << (row_index * 6)
+}
+
+#[inline]
+pub fn get_color_of_field(field: u32) -> TileColor {
+    let tile_color = (WALL_COLOR_MASKS[1] & field > 0) as u8
+        + (WALL_COLOR_MASKS[2] & field > 0) as u8 * 2
+        + (WALL_COLOR_MASKS[3] & field > 0) as u8 * 3
+        + (WALL_COLOR_MASKS[4] & field > 0) as u8 * 4;
+    TileColor::from(tile_color)
 }
 
 // Given a occupancy bitboard and a position of a new tile, calculate the number of points that tile would score
@@ -133,6 +142,21 @@ pub fn count_full_colors(occupancy: u32) -> u32 {
         }
     }
     num_full_colors
+}
+
+pub fn print_bitboard(occupancy: u32) {
+    for row in 0..5 {
+        for col in 0..5 {
+            let field = field_at(row, col);
+            if occupancy & field > 0 {
+                print!("X ");
+            } else {
+                print!(". ");
+            }
+        }
+        println!();
+    }
+    println!();
 }
 
 #[cfg(test)]

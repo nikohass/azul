@@ -57,6 +57,9 @@ impl Move {
 
 impl std::fmt::Display for Move {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self == &Self::DUMMY {
+            return write!(f, "Dummy Move");
+        }
         let factory = if self.take_from_factory_index == CENTER_FACTORY_INDEX as u8 {
             "c".to_string()
         } else {

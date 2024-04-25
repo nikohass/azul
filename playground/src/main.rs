@@ -150,31 +150,13 @@ async fn main() {
     //         break;
     //     }
 
-    //     println!("{}", move_);
-    //     game_state.do_move(move_);
-    //     println!("{}", game_state);
-    // }
-    // let mut player_one = MonteCarloTreeSearch::default();
-    // let mut player_two = MonteCarloTreeSearch::default();
-    // let mut player_three = MonteCarloTreeSearch::default();
-    // let mut player_four = HumanCommandLinePlayer::default();
-    // // let mut player_two = HumanCommandLinePlayer::default();
-    // player_one.set_time(120_000).await;
-    // player_two.set_time(120_000).await;
-    // player_three.set_time(120_000).await;
-    // player_four.set_time(120_000).await;
-
-    // let mut players: Vec<Box<dyn Player>> = vec![
-    //     Box::new(player_one),
-    //     Box::new(player_two),
-    //     Box::new(player_three),
-    //     Box::new(player_four),
-    // ];
     let mut players: Vec<Box<dyn Player>> = Vec::new();
     for _ in 0..NUM_PLAYERS {
-        players.push(Box::<MonteCarloTreeSearch>::default());
+        let mut player = MonteCarloTreeSearch::default();
+        player.set_time(400).await;
+        players.push(Box::new(player));
     }
-    // players.push(Box::<HumanCommandLinePlayer>::default());
+    // players.push(Box::<MonteCarloTreeSearch>::default());
 
     let game_state = GameState::new(&mut rng);
     run_match(game_state, &mut players, true).await.unwrap();
