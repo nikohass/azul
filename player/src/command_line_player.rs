@@ -10,20 +10,24 @@ pub enum PromptResult {
 }
 
 pub struct HumanCommandLinePlayer {
+    name: String,
     move_list: MoveList,
 }
 
 impl Default for HumanCommandLinePlayer {
     fn default() -> Self {
         let move_list = MoveList::default();
-        Self { move_list }
+        Self {
+            move_list,
+            name: "Human".to_string(),
+        }
     }
 }
 
 #[async_trait::async_trait]
 impl Player for HumanCommandLinePlayer {
     fn get_name(&self) -> &str {
-        "Human"
+        &self.name
     }
 
     async fn get_move(&mut self, game_state: &GameState) -> Move {
@@ -70,6 +74,14 @@ impl Player for HumanCommandLinePlayer {
 }
 
 impl HumanCommandLinePlayer {
+    pub fn new(name: &str) -> Self {
+        let move_list = MoveList::default();
+        Self {
+            move_list,
+            name: name.to_string(),
+        }
+    }
+
     fn prompt_for_factory_number(&self, remaining_moves: &mut Vec<Move>) -> PromptResult {
         loop {
             let mut available_factories = HashSet::new();

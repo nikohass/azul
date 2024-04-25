@@ -222,9 +222,9 @@ impl WebSocketConnection {
             let name = player_json["name"].as_str().ok_or("Missing name field")?;
             let player_type = player_json["type"].as_str().ok_or("Missing type field")?;
             let player: Box<dyn Player> = match player_type {
-                "human" => Box::new(HumanPlayer::new(name.to_string(), self.clone())),
-                "random" => Box::new(RandomPlayer::new(name.to_string())),
-                "greedy" => Box::new(player::greedy_player::GreedyPlayer::new(name.to_string())),
+                "human" => Box::new(HumanPlayer::new(name, self.clone())),
+                "random" => Box::new(RandomPlayer::new(name)),
+                "greedy" => Box::new(player::greedy_player::GreedyPlayer::new(name)),
                 "mcts" => Box::<player::mcts::MonteCarloTreeSearch>::default(),
                 _ => return Err(format!("Unknown player type: {}", player_type)),
             };

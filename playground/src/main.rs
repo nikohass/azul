@@ -151,12 +151,17 @@ async fn main() {
     //     }
 
     let mut players: Vec<Box<dyn Player>> = Vec::new();
-    for _ in 0..NUM_PLAYERS {
-        let mut player = MonteCarloTreeSearch::default();
-        player.set_time(400).await;
-        players.push(Box::new(player));
-    }
-    // players.push(Box::<MonteCarloTreeSearch>::default());
+    // for _ in 1..NUM_PLAYERS {
+    //     let mut player = MonteCarloTreeSearch::default();
+    //     player.set_time(10_000).await;
+    //     players.push(Box::new(player));
+    // }
+    // players.push(Box::new(HumanCommandLinePlayer::default()));
+
+    players.push(Box::new(HeuristicMoveGenerationPlayer::default()));
+    players.push(Box::new(MonteCarloTreeSearch::default()));
+    players.push(Box::new(HumanCommandLinePlayer::new("Max Mustermann")));
+    players.push(Box::new(RandomPlayer::default()));
 
     let game_state = GameState::new(&mut rng);
     run_match(game_state, &mut players, true).await.unwrap();

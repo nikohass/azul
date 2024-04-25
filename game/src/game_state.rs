@@ -971,108 +971,129 @@ fn player_pattern_board_to_string(game_state: &GameState, player_index: usize) -
     string
 }
 
+pub fn display_gamestate(game_state: &GameState, player_names: Option<&Vec<String>>) -> String {
+    // Empty line for spacing
+    let mut empty_line = " ".to_string();
+    for _ in 0..NUM_PLAYERS - 1 {
+        empty_line.push_str(&" ".repeat(28));
+        empty_line.push_str("|  ");
+    }
+    empty_line.push_str(&" ".repeat(27));
+    empty_line.push('\n');
+
+    let separator_line = empty_line.replace(' ', "-").replace('|', "+");
+
+    let mut string = String::new();
+    string.push_str(&format!("BAG: {}", bag_to_string(&game_state.bag)));
+    string.push_str(&format!(
+        "OUT OF BAG: {}",
+        bag_to_string(&game_state.out_of_bag)
+    ));
+    string.push_str(&factories_to_string(&game_state.factories));
+    string.push('\n');
+
+    // Player header
+    string.push(' ');
+    for player_index in 0..NUM_PLAYERS {
+        if usize::from(game_state.current_player) == player_index {
+            string.push_str("\x1b[30m\x1b[47m");
+        }
+
+        let player_name = if let Some(player_names) = &player_names {
+            let name = player_names[player_index].to_string();
+            if name.len() > 23 {
+                let mut name = name[..22].to_string();
+                name.push('…');
+                name
+            } else {
+                name
+            }
+        } else {
+            format!("Player {}", player_index)
+        };
+        string.push_str(&format!(
+            "{:23} {:3}\x1b[0m ",
+            player_name, game_state.scores[player_index]
+        ));
+        if player_index != NUM_PLAYERS - 1 {
+            string.push_str("|  ");
+        }
+    }
+    string.push('\n');
+
+    string.push_str(&separator_line);
+    string.push_str(&empty_line);
+
+    // Compute max lines
+    let mut max_lines = 0;
+    for player_index in 0..NUM_PLAYERS {
+        let pattern_string = player_pattern_board_to_string(game_state, player_index);
+        let wall_string = player_wall_to_string(game_state, player_index);
+        max_lines = max_lines.max(pattern_string.lines().count());
+        max_lines = max_lines.max(wall_string.lines().count());
+    }
+
+    // Player pattern boards next to walls
+    for line in 0..max_lines {
+        for player_index in 0..NUM_PLAYERS {
+            let pattern_string = player_pattern_board_to_string(game_state, player_index);
+            let wall_string = player_wall_to_string(game_state, player_index);
+
+            let pattern_line = pattern_string.lines().nth(line).unwrap_or("");
+            let wall_line = wall_string.lines().nth(line).unwrap_or("");
+
+            string.push_str(pattern_line);
+            string.push_str("->  "); // separator between pattern and wall
+            string.push_str(wall_line);
+            if player_index != NUM_PLAYERS - 1 {
+                string.push_str(" | ");
+            }
+        }
+        string.push('\n');
+    }
+
+    string.push_str(&empty_line);
+    string.push_str(&separator_line);
+
+    string.push(' ');
+    // Player floor lines
+    for player_index in 0..NUM_PLAYERS {
+        let mut floor_line = String::new();
+        let progress = game_state.floor_line_progress[player_index]
+            .min(FLOOR_LINE_PENALTY.len() as u8 - 1) as usize;
+
+        let mut previous_penalty = 0;
+        for (i, relative_penalty) in FLOOR_LINE_PENALTY.iter().enumerate().skip(1) {
+            let penalty = *relative_penalty as i16 - previous_penalty;
+            if i > progress {
+                floor_line.push_str("\u{001b}[02m");
+            } else if i == 1
+                && game_state.next_round_starting_player == PlayerMarker::new(player_index as u8)
+                && game_state.tile_taken_from_center
+            {
+                floor_line.push_str("\u{001b}[32m");
+            }
+            floor_line.push_str(&format!("{:2} ", -penalty));
+            floor_line.push_str("\x1b[0m");
+            previous_penalty = *relative_penalty as i16;
+        }
+        string.push_str(&floor_line);
+
+        let total_penalty = FLOOR_LINE_PENALTY[progress] as i16;
+        string.push_str(&format!(" {:5}", -total_penalty));
+        if player_index != NUM_PLAYERS - 1 {
+            string.push_str(" |  ");
+        }
+    }
+
+    string.push('\n');
+
+    string
+}
+
 impl std::fmt::Display for GameState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // Empty line for spacing
-        let mut empty_line = " ".to_string();
-        for _ in 0..NUM_PLAYERS - 1 {
-            empty_line.push_str(&" ".repeat(28));
-            empty_line.push_str("|  ");
-        }
-        empty_line.push_str(&" ".repeat(27));
-        empty_line.push('\n');
-
-        let separator_line = empty_line.replace(' ', "-").replace('|', "+");
-
-        let mut string = String::new();
-        string.push_str(&format!("BAG: {}", bag_to_string(&self.bag)));
-        string.push_str(&format!("OUT OF BAG: {}", bag_to_string(&self.out_of_bag)));
-        string.push_str(&factories_to_string(&self.factories));
-        string.push('\n');
-
-        // Player header
-        string.push(' ');
-        for player_index in 0..NUM_PLAYERS {
-            if usize::from(self.current_player) == player_index {
-                string.push_str("\x1b[30m\x1b[47m");
-            }
-            string.push_str(&format!(
-                "PLAYER {} {:18}\x1b[0m ",
-                player_index, self.scores[player_index]
-            ));
-            if player_index != NUM_PLAYERS - 1 {
-                string.push_str("|  ");
-            }
-        }
-        string.push('\n');
-
-        string.push_str(&separator_line);
-        string.push_str(&empty_line);
-
-        // Compute max lines
-        let mut max_lines = 0;
-        for player_index in 0..NUM_PLAYERS {
-            let pattern_string = player_pattern_board_to_string(self, player_index);
-            let wall_string = player_wall_to_string(self, player_index);
-            max_lines = max_lines.max(pattern_string.lines().count());
-            max_lines = max_lines.max(wall_string.lines().count());
-        }
-
-        // Player pattern boards next to walls
-        for line in 0..max_lines {
-            for player_index in 0..NUM_PLAYERS {
-                let pattern_string = player_pattern_board_to_string(self, player_index);
-                let wall_string = player_wall_to_string(self, player_index);
-
-                let pattern_line = pattern_string.lines().nth(line).unwrap_or("");
-                let wall_line = wall_string.lines().nth(line).unwrap_or("");
-
-                string.push_str(pattern_line);
-                string.push_str("->  "); // separator between pattern and wall
-                string.push_str(wall_line);
-                if player_index != NUM_PLAYERS - 1 {
-                    string.push_str(" | ");
-                }
-            }
-            string.push('\n');
-        }
-
-        string.push_str(&empty_line);
-        string.push_str(&separator_line);
-
-        string.push(' ');
-        // Player floor lines
-        for player_index in 0..NUM_PLAYERS {
-            let mut floor_line = String::new();
-            let progress = self.floor_line_progress[player_index]
-                .min(FLOOR_LINE_PENALTY.len() as u8 - 1) as usize;
-
-            let mut previous_penalty = 0;
-            for (i, relative_penalty) in FLOOR_LINE_PENALTY.iter().enumerate().skip(1) {
-                let penalty = *relative_penalty as i16 - previous_penalty;
-                if i > progress {
-                    floor_line.push_str("\u{001b}[02m");
-                } else if i == 1
-                    && self.next_round_starting_player == PlayerMarker::new(player_index as u8)
-                    && self.tile_taken_from_center
-                {
-                    floor_line.push_str("\u{001b}[32m");
-                }
-                floor_line.push_str(&format!("{:2} ", -penalty));
-                floor_line.push_str("\x1b[0m");
-                previous_penalty = *relative_penalty as i16;
-            }
-            string.push_str(&floor_line);
-
-            let total_penalty = FLOOR_LINE_PENALTY[progress] as i16;
-            string.push_str(&format!(" {:5}", -total_penalty));
-            if player_index != NUM_PLAYERS - 1 {
-                string.push_str(" |  ");
-            }
-        }
-
-        string.push('\n');
-
+        let mut string = display_gamestate(self, None);
         string.push_str(self.serialize_string().as_str());
         write!(f, "{}", string)
     }

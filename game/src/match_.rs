@@ -1,8 +1,8 @@
 use rand::{rngs::SmallRng, SeedableRng};
 
 use crate::{
-    game_state::MoveGenerationResult, GameState, Move, MoveList, Player, PlayerMarker,
-    RuntimeError, NUM_PLAYERS,
+    game_state::{display_gamestate, MoveGenerationResult},
+    GameState, Move, MoveList, Player, PlayerMarker, RuntimeError, NUM_PLAYERS,
 };
 
 #[derive(Default, Debug, Clone)]
@@ -31,6 +31,11 @@ pub async fn run_match(
         return Err(RuntimeError::PlayerCountMismatch);
     }
 
+    let player_names = players
+        .iter()
+        .map(|player| player.get_name().to_string())
+        .collect::<Vec<_>>();
+
     game_state.check_integrity()?;
     let mut stats = MatchStatistcs::default();
 
@@ -38,7 +43,7 @@ pub async fn run_match(
     let mut rng = SmallRng::from_entropy();
     loop {
         if verbose {
-            println!("{}", game_state);
+            println!("{}", display_gamestate(&game_state, Some(&player_names)));
         }
         let result = game_state.get_possible_moves(&mut move_list, &mut rng);
         let is_game_over = matches!(result, MoveGenerationResult::GameOver);
@@ -48,7 +53,7 @@ pub async fn run_match(
         }
         if refilled_factories && verbose {
             println!("Factories refilled");
-            println!("{}", game_state);
+            println!("{}", display_gamestate(&game_state, Some(&player_names)));
         }
         stats.num_factory_refills += refilled_factories as u32;
         stats.num_turns += 1;
@@ -68,7 +73,7 @@ pub async fn run_match(
                 current_player, players_move
             );
             println!("Move list: {:?}", move_list);
-            println!("Game state: {}", game_state);
+            println!("{}", display_gamestate(&game_state, Some(&player_names)));
             return Err(RuntimeError::IllegalMove);
         }
 
@@ -92,7 +97,7 @@ pub async fn run_match(
         game_state.check_integrity()?;
     }
     if verbose {
-        println!("{}", game_state);
+        println!("{}", display_gamestate(&game_state, Some(&player_names)));
     }
 
     // The game is over, we can get the scores

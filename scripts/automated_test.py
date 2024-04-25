@@ -214,9 +214,9 @@ if __name__ == "__main__":
 
     game_config = GameConfig([
         PlayerConfig("target/release/test_client.exe", think_time=600),
-        PlayerConfig("clients/4/9.exe", think_time=600),
-        PlayerConfig("clients/4/9.exe", think_time=600),
-        PlayerConfig("clients/4/9.exe", think_time=600),
+        PlayerConfig("clients/2/6.exe", think_time=600),
+        # PlayerConfig("clients/4/9.exe", think_time=600),
+        # PlayerConfig("clients/4/9.exe", think_time=600),
         # PlayerConfig("clients/3/test_client-12.exe", think_time=400),
         # PlayerConfig("clients/3/test_client-12.exe", think_time=400),
     ], num_games=250, num_simulations_games=10)

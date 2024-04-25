@@ -12,10 +12,10 @@ pub struct HumanPlayer {
 }
 
 impl HumanPlayer {
-    pub fn new(name: String, websocket: WebSocketConnection) -> Self {
+    pub fn new(name: &str, websocket: WebSocketConnection) -> Self {
         let move_list = MoveList::default();
         Self {
-            name,
+            name: name.to_string(),
             websocket,
             move_list,
         }

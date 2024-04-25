@@ -3,3 +3,4 @@
 /clients
 *.exe
 /notes
+default_config.toml

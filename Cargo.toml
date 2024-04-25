@@ -5,7 +5,7 @@ members = [
     "backend_server",
     "player",
     "test_server",
-    "test_client",
+    "test_client", "azul",
 ]
 resolver = "2"
 

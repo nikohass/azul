@@ -8,11 +8,11 @@ pub struct RandomPlayer {
 }
 
 impl RandomPlayer {
-    pub fn new(name: String) -> Self {
+    pub fn new(name: &str) -> Self {
         let move_list = MoveList::default();
         let rng = rand::rngs::SmallRng::from_entropy();
         Self {
-            name,
+            name: name.to_string(),
             move_list,
             rng,
         }
@@ -34,6 +34,6 @@ impl Player for RandomPlayer {
 
 impl Default for RandomPlayer {
     fn default() -> Self {
-        Self::new("RandomPlayer".to_string())
+        Self::new("Random Player")
     }
 }

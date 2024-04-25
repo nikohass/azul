@@ -107,31 +107,6 @@ pub fn get_random_move(game_state: &mut GameState, rng: &mut SmallRng) -> Option
         }
     }
 
-    // println!("Tile Scores:\n");
-    // for color in 0..NUM_TILE_COLORS {
-    //     let color = TileColor::from(color);
-    //     print!("   {}", color);
-    // }
-    // println!();
-    // for line in wall_field_importance.iter() {
-    //     print!(" ");
-    //     for field in line.iter() {
-    //         print!("{:3} ", field);
-    //     }
-    //     println!();
-    // }
-
-    // println!("Missing tiles\n");
-    // for (color, line) in missing_tiles.iter().enumerate() {
-    //     let color = TileColor::from(color as u8);
-    //     print!("{}", color);
-    //     for field in line.iter() {
-    //         print!("{:3} ", field);
-    //     }
-    //     println!();
-    // }
-    // println!("Possible takes: {:?}", possible_takes);
-
     let mut best_score = f32::NEG_INFINITY;
     let mut best_move = None;
     let floor_line_progress = game_state.get_floor_line_progress()[current_player]
@@ -228,6 +203,6 @@ impl Player for HeuristicMoveGenerationPlayer {
     }
 
     fn get_name(&self) -> &str {
-        "HeuristicMoveGenerationPlayer"
+        "Heuristic Move Generation Player"
     }
 }

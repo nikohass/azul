@@ -6,8 +6,17 @@ pub struct GreedyPlayer {
     move_list: MoveList,
 }
 
+impl Default for GreedyPlayer {
+    fn default() -> Self {
+        let name = "Greedy Player".to_string();
+        let move_list = MoveList::default();
+        Self { name, move_list }
+    }
+}
+
 impl GreedyPlayer {
-    pub fn new(name: String) -> Self {
+    pub fn new(name: &str) -> Self {
+        let name = name.to_string();
         let move_list = MoveList::default();
         Self { name, move_list }
     }
