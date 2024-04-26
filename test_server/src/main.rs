@@ -11,7 +11,7 @@ use client::Client;
 use game::{
     init_logging,
     match_::{self, MatchStatistcs},
-    GameState, Player, RuntimeError, SharedState, NUM_PLAYERS,
+    GameError, GameState, Player, SharedState, NUM_PLAYERS,
 };
 
 #[derive(Parser, Debug)]
@@ -48,7 +48,7 @@ struct AppConfig {
 async fn run_match(
     players: &mut [Box<dyn Player>],
     verbose: bool,
-) -> Result<MatchStatistcs, RuntimeError> {
+) -> Result<MatchStatistcs, GameError> {
     match_::run_match(
         GameState::new(&mut SmallRng::from_entropy()),
         players,

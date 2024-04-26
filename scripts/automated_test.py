@@ -5,6 +5,7 @@ import enum
 import re
 from scipy.stats import norm
 from itertools import combinations
+import json
 
 class TestStatus(enum.Enum):
     OK = 0
@@ -36,7 +37,7 @@ def build_executable(binary: str, num_players: int) -> TestStatus:
 
 def run_test_server(num_players):
     build_executable("test_server", num_players)
-    
+
     command = ["cargo", "run", "--bin", "test_server", "--release"] + feature(num_players)
     print(f"Starting test server... ({' '.join(command)})")
     # Start the test server and yield each line of output
@@ -65,11 +66,12 @@ class PlayerConfig:
         return result
 
 class GameConfig:
-    def __init__(self, players: list[PlayerConfig], num_games: int, num_simulations_games: int, constant_ordering: bool = False):
+    def __init__(self, players: list[PlayerConfig], num_games: int, num_simulations_games: int, constant_ordering: bool = False, stop_on_significant_difference: bool = True):
         self.players = players
         self.num_games = num_games
         self.num_simulations_games = num_simulations_games
         self.constant_ordering = constant_ordering
+        self.stop_on_significant_difference = stop_on_significant_difference
     
     def to_toml(self) -> str:
         result = "[game]\n"
@@ -86,6 +88,15 @@ class GameConfig:
     def activate(self):
         with open("default_config.toml", "w") as file:
             file.write(self.to_toml())
+    
+    def __dict__(self):
+        return {
+            "players": [player.__dict__ for player in self.players],
+            "num_games": self.num_games,
+            "num_simulations_games": self.num_simulations_games,
+            "constant_ordering": self.constant_ordering,
+            "stop_on_significant_difference": self.stop_on_significant_difference
+        }
 
 class GameResult:
     def __init__(self, scores, wins):
@@ -190,12 +201,17 @@ def run_hypothesis_tests_for_players(game_stream, num_players: int, min_games: i
 class Test:
     def __init__(self, game_config: GameConfig):
         self.game_config = game_config
+        self.result = None
 
     def run(self):
         self.game_config.activate()
         build_executable("test_client", len(self.game_config.players))
         game_result_stream = self.run_games()
-        run_hypothesis_tests_for_players(game_result_stream, len(self.game_config.players), self.game_config.num_simulations_games * 2)
+        if self.game_config.stop_on_significant_difference:
+            run_hypothesis_tests_for_players(self, game_result_stream, len(self.game_config.players), self.game_config.num_simulations_games * 2)
+        else:
+            for _ in game_result_stream:
+                None
 
     def run_games(self):
         num_players = len(game_config.players)
@@ -205,20 +221,31 @@ class Test:
             results = parse_game_results(log_lines[-4:])
             if len(results.scores) == num_players:
                 print(results)
+                self.result = results
                 yield results
                 log_lines = []
+
+        with open("logs/automated_test.log", "a") as file:
+            data = {
+                "result": self.result.__dict__,
+                "game_config": self.game_config.__dict__(),
+            }
+            file.write(json.dumps(data) + "\n")
 
 if __name__ == "__main__":
     # Change the current working directory to the project root
     os.chdir(os.path.join(os.path.dirname(__file__), ".."))
 
-    game_config = GameConfig([
-        PlayerConfig("target/release/test_client.exe", think_time=600),
-        PlayerConfig("clients/2/6.exe", think_time=600),
-        # PlayerConfig("clients/4/9.exe", think_time=600),
-        # PlayerConfig("clients/4/9.exe", think_time=600),
-        # PlayerConfig("clients/3/test_client-12.exe", think_time=400),
-        # PlayerConfig("clients/3/test_client-12.exe", think_time=400),
-    ], num_games=250, num_simulations_games=10)
-    test = Test(game_config=game_config)
-    test.run()
+    times = [200 * i for i in range(1, 11)] + [2000 + 1000 * i for i in range(1, 7)] + [10_000, 15_000, 20_000, 30_000, 60_000]
+
+    for time in times:
+        game_config = GameConfig([
+                PlayerConfig("target/release/test_client.exe", think_time=1000),
+                PlayerConfig("target/release/test_client.exe", think_time=time),
+            ],
+            num_games=10,
+            num_simulations_games=10,
+            stop_on_significant_difference=False
+        )
+        test = Test(game_config=game_config)
+        test.run()

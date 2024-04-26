@@ -150,19 +150,27 @@ async fn main() {
     //         break;
     //     }
 
-    let mut players: Vec<Box<dyn Player>> = Vec::new();
-    // for _ in 1..NUM_PLAYERS {
-    //     let mut player = MonteCarloTreeSearch::default();
+    // let mut players: Vec<Box<dyn Player>> = Vec::new();
+    // for _ in 0..NUM_PLAYERS {
+    //     let mut player = HeuristicMoveGenerationPlayer::default();
     //     player.set_time(10_000).await;
     //     players.push(Box::new(player));
     // }
-    // players.push(Box::new(HumanCommandLinePlayer::default()));
 
-    players.push(Box::new(HeuristicMoveGenerationPlayer::default()));
-    players.push(Box::new(MonteCarloTreeSearch::default()));
-    players.push(Box::new(HumanCommandLinePlayer::new("Max Mustermann")));
-    players.push(Box::new(RandomPlayer::default()));
+    // let game_state = GameState::new(&mut rng);
+    // run_match(game_state, &mut players, true).await.unwrap();
 
-    let game_state = GameState::new(&mut rng);
-    run_match(game_state, &mut players, true).await.unwrap();
+    let game_state = GameState::deserialize_string("4_3_3_8589935105_4379379203_0-0-0-0-0-0-0-0-0-0_296397698915894343_0_54908895-185350105-72938399-405391065_16908288-50331648-12884901888-0_1095267319807-1095300546559-4294967295-1099511627775_0").unwrap();
+    println!(
+        "{}",
+        display_gamestate(
+            &game_state,
+            Some(&vec![
+                "MCTS".to_string(),
+                "Niklas".to_string(),
+                "Jonathan".to_string(),
+                "Niko".to_string(),
+            ])
+        )
+    );
 }

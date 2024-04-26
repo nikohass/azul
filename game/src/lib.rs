@@ -1,5 +1,5 @@
-mod error;
 mod factories;
+mod formatting;
 mod game_state;
 pub mod match_;
 mod move_;
@@ -9,11 +9,11 @@ mod shared_state;
 mod tile_color;
 pub mod wall;
 
-pub use error::RuntimeError;
 pub use factories::{Factories, Factory};
 pub use factories::{CENTER_FACTORY_INDEX, NUM_FACTORIES};
+pub use formatting::display_gamestate;
+pub use game_state::Bag;
 pub use game_state::GameState;
-pub use game_state::{bag_to_string, factories_to_string, Bag};
 pub use game_state::{MoveGenerationResult, FLOOR_LINE_PENALTY};
 pub use move_::Move;
 pub use move_list::MoveList;
@@ -22,6 +22,13 @@ pub use shared_state::SharedState;
 pub use tile_color::TileColor;
 pub use tile_color::NUM_TILE_COLORS;
 pub use wall::field_at;
+
+#[derive(Debug, PartialEq)]
+pub enum GameError {
+    IllegalMove,
+    PlayerCountMismatch,
+    InvalidGameState,
+}
 
 #[cfg(feature = "three_players")]
 pub const NUM_PLAYERS: usize = 3;

@@ -3,7 +3,7 @@
 Welcome to the Azul repository, a Rust-based implementation of the popular board game Azul. This university project integrates a Monte Carlo Tree Search (MCTS) algorithm to simulate intelligent AI behavior for playing the game. The implementation is structured into several components, including a backend server for the UI, a test client, a test server for client battles, and a playground for miscellaneous testing.
 
 ## Features
-
+- **Azul**: An executable that allows human and AI players to play the game.
 - **Backend Server**: Host games that allow human players and AI players to play against each other.
 - **Test Client**: A client designed to be initiated by the test server to enable different versions to compete.
 - **Test Server**: Facilitates automated matches between clients, running multiple games in parallel.

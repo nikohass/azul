@@ -1,8 +1,8 @@
 use rand::{rngs::SmallRng, SeedableRng};
 
 use crate::{
-    game_state::{display_gamestate, MoveGenerationResult},
-    GameState, Move, MoveList, Player, PlayerMarker, RuntimeError, NUM_PLAYERS,
+    formatting::display_gamestate, game_state::MoveGenerationResult, GameError, GameState, Move,
+    MoveList, Player, PlayerMarker, NUM_PLAYERS,
 };
 
 #[derive(Default, Debug, Clone)]
@@ -25,10 +25,10 @@ pub async fn run_match(
     mut game_state: GameState,
     players: &mut [Box<dyn Player>],
     verbose: bool,
-) -> Result<MatchStatistcs, RuntimeError> {
+) -> Result<MatchStatistcs, GameError> {
     let num_players = players.len();
     if num_players != NUM_PLAYERS {
-        return Err(RuntimeError::PlayerCountMismatch);
+        return Err(GameError::PlayerCountMismatch);
     }
 
     let player_names = players
@@ -74,7 +74,7 @@ pub async fn run_match(
             );
             println!("Move list: {:?}", move_list);
             println!("{}", display_gamestate(&game_state, Some(&player_names)));
-            return Err(RuntimeError::IllegalMove);
+            return Err(GameError::IllegalMove);
         }
 
         stats.branching_factor.push(move_list.len() as u32);
