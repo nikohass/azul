@@ -4,72 +4,63 @@ Welcome to the Azul repository, a Rust-based implementation of the popular board
 
 ## Features
 - **Azul**: An executable that allows human and AI players to play the game.
-- **Backend Server**: Host games that allow human players and AI players to play against each other.
+- **Backend Server**: The backend for the [UI](https://github.com/Dahmspiegel/Uni-Azul-Frontend)
 - **Test Client**: A client designed to be initiated by the test server to enable different versions to compete.
 - **Test Server**: Facilitates automated matches between clients, running multiple games in parallel.
 - **Playground**: A utility executable for general testing purposes.
 
 ## Getting Started
 
-These instructions will get you a copy of the project up and running on your local machine for development and testing purposes.
+Follow these instructions to set up the project on your local system for development and experimentation.
 
 ### Prerequisites
 
-Before you begin, ensure you have the following installed:
-- Rust programming language (latest stable version)
-- Cargo (Rust's package manager and build tool)
+Ensure the following tools are installed on your system before starting:
+- Rust programming language (latest stable release)
+- Cargo (Rust's package management and compilation tool)
 
-You can install both by following the instructions on the [official Rust website](https://www.rust-lang.org/tools/install).
+Installation instructions for both are available on the [official Rust website](https://www.rust-lang.org/tools/install).
 
 ### Installation
+To compile the project and generate executable files, run the following command. You can adjust the number of players by activating specific feature flags during the build.
 
-1. **Clone the repository** to your local machine:
-    ```bash
-    git clone https://github.com/nikohass/azul.git
-    ```
-   
-2. **Navigate into the project directory**:
-    ```bash
-    cd azul
-    ```
-
-3. **Build the project using Cargo**. This command compiles the project and produces the executable files. You can specify the number of players by enabling feature flags during the build process:
-    ```bash
-    cargo build --release
-    ```
-    To compile for a game optimized for three players, use:
-    ```bash
-    cargo build --release --features "three_players"
-    ```
-    Similarly, for four players:
-    ```bash
-    cargo build --release --features "four_players"
-    ```
-    Use no features to build the default configuration for two players:
-    ```bash
-    cargo build --release
-    ```
-
-    The `--release` flag builds the executables in release mode, optimizing them for performance.
+```bash
+cargo build --release
+```
+For a three-player optimized game, use:
+```bash
+cargo build --release --features "three_players"
+```
+For four players:
+```bash
+cargo build --release --features "four_players"
+```
+Use the `--release` flag to build in release mode, which enhances performance essential for smooth gameplay.
 
 ### Running the Executables
 
-After compiling the project, you will find the executables inside `target/release` directory.
+Post compilation, the executables can be found in the `target/release` directory.
 
-1. **Backend Server**:
+1. **Azul**:
+    ```bash
+    ./target/release/azul
+    ```
+    Launches the game in a terminal interface for both human and AI players.
+
+2. **Backend Server**:
     ```bash
     ./target/release/backend_server
     ```
-   This starts the server for the UI to connect and host games.
+   Activates the server allowing the UI to connect and manage games.
 
-2. **Test Server**:
+3. **Test Server**:
     ```bash
     ./target/release/test_server
     ```
-   This starts a session to test different client versions against each other, running multiple games in parallel.
+   Initiates automated competitions among different client versions, requiring a configuration file created by `./scripts/automated_test.py`.
 
-3. **Playground**:
+4. **Playground**:
     ```bash
     ./target/release/playground
     ```
-   Execute this for miscellaneous testing and development experiments.
+   Utilize this for assorted testing and development activities.

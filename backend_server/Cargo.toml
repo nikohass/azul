@@ -14,7 +14,6 @@ tokio-tungstenite = { version = "0.21.0", features = ["native-tls"] }
 futures = "0.3.28"
 
 serde_json = "1.0.107"
-hyper = { version = "1.2.0", features = ["server"] }
 serde = "1.0.189"
 log = "0.4.20"
 log4rs = "1.2.0"
