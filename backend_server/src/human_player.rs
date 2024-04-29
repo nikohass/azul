@@ -28,6 +28,10 @@ impl Player for HumanPlayer {
         &self.name
     }
 
+    fn set_name(&mut self, name: &str) {
+        self.name = name.to_string();
+    }
+
     async fn get_move(&mut self, game_state: &GameState) -> Move {
         let mut game_state = game_state.clone();
         let mut rng = SmallRng::from_entropy();

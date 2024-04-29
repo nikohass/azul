@@ -29,7 +29,11 @@ async fn configure_players() -> Vec<Box<dyn Player>> {
             Ok(choice) => choice,
             Err(_) => continue,
         };
-        let player: Box<dyn Player> = match choice {
+
+        println!("Enter name (leave empty for default):");
+        let name = read_line();
+
+        let mut player: Box<dyn Player> = match choice {
             1 => Box::<HumanCommandLinePlayer>::default(),
             2 => Box::<GreedyPlayer>::default(),
             3 => Box::<RandomPlayer>::default(),
@@ -47,6 +51,11 @@ async fn configure_players() -> Vec<Box<dyn Player>> {
                 continue;
             }
         };
+
+        if !name.is_empty() {
+            player.set_name(&name);
+        }
+
         players.push(player);
         if players.len() == NUM_PLAYERS {
             break;

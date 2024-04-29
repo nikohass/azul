@@ -7,22 +7,14 @@ pub struct RandomPlayer {
     rng: rand::rngs::SmallRng,
 }
 
-impl RandomPlayer {
-    pub fn new(name: &str) -> Self {
-        let move_list = MoveList::default();
-        let rng = rand::rngs::SmallRng::from_entropy();
-        Self {
-            name: name.to_string(),
-            move_list,
-            rng,
-        }
-    }
-}
-
 #[async_trait::async_trait]
 impl Player for RandomPlayer {
     fn get_name(&self) -> &str {
         &self.name
+    }
+
+    fn set_name(&mut self, name: &str) {
+        self.name = name.to_string();
     }
 
     async fn get_move(&mut self, game_state: &GameState) -> Move {
@@ -34,6 +26,12 @@ impl Player for RandomPlayer {
 
 impl Default for RandomPlayer {
     fn default() -> Self {
-        Self::new("Random Player")
+        let move_list = MoveList::default();
+        let rng = rand::rngs::SmallRng::from_entropy();
+        Self {
+            move_list,
+            name: "Random Player".to_string(),
+            rng,
+        }
     }
 }

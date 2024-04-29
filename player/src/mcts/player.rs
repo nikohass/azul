@@ -5,6 +5,7 @@ use rand::{rngs::SmallRng, SeedableRng};
 use std::time::Instant;
 
 pub struct MonteCarloTreeSearch {
+    name: String,
     root_node: Node,
     root_game_state: GameState,
     time_limit: u64,
@@ -126,6 +127,7 @@ impl Default for MonteCarloTreeSearch {
     fn default() -> Self {
         let mut rng = SmallRng::from_entropy();
         Self {
+            name: "Monte Carlo Tree Search".to_string(),
             root_node: Node::new_deterministic(Move::DUMMY),
             root_game_state: GameState::new(&mut rng),
             time_limit: 6000,
@@ -136,7 +138,11 @@ impl Default for MonteCarloTreeSearch {
 #[async_trait::async_trait]
 impl Player for MonteCarloTreeSearch {
     fn get_name(&self) -> &str {
-        "MCTS"
+        &self.name
+    }
+
+    fn set_name(&mut self, name: &str) {
+        self.name = name.to_string();
     }
 
     async fn get_move(&mut self, game_state: &GameState) -> Move {

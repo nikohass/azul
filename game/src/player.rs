@@ -31,6 +31,7 @@ impl From<PlayerMarker> for usize {
 #[async_trait::async_trait]
 pub trait Player: Send + Sync {
     fn get_name(&self) -> &str;
+    fn set_name(&mut self, _name: &str) {}
     async fn get_move(&mut self, game_state: &GameState) -> Move;
 
     // Optional methods for settings and state updates that not all players need

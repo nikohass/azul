@@ -30,6 +30,10 @@ impl Player for HumanCommandLinePlayer {
         &self.name
     }
 
+    fn set_name(&mut self, name: &str) {
+        self.name = name.to_string();
+    }
+
     async fn get_move(&mut self, game_state: &GameState) -> Move {
         let mut game_state = game_state.clone();
         let mut rng = SmallRng::from_entropy();
@@ -74,14 +78,6 @@ impl Player for HumanCommandLinePlayer {
 }
 
 impl HumanCommandLinePlayer {
-    pub fn new(name: &str) -> Self {
-        let move_list = MoveList::default();
-        Self {
-            move_list,
-            name: name.to_string(),
-        }
-    }
-
     fn prompt_for_factory_number(&self, remaining_moves: &mut Vec<Move>) -> PromptResult {
         loop {
             let mut available_factories = HashSet::new();

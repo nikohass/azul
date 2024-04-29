@@ -14,18 +14,14 @@ impl Default for GreedyPlayer {
     }
 }
 
-impl GreedyPlayer {
-    pub fn new(name: &str) -> Self {
-        let name = name.to_string();
-        let move_list = MoveList::default();
-        Self { name, move_list }
-    }
-}
-
 #[async_trait::async_trait]
 impl Player for GreedyPlayer {
     fn get_name(&self) -> &str {
         &self.name
+    }
+
+    fn set_name(&mut self, name: &str) {
+        self.name = name.to_string();
     }
 
     async fn get_move(&mut self, game_state: &game::GameState) -> game::Move {

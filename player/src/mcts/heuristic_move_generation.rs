@@ -185,12 +185,14 @@ pub fn get_random_move(game_state: &mut GameState, rng: &mut SmallRng) -> Option
 
 pub struct HeuristicMoveGenerationPlayer {
     rng: SmallRng,
+    name: String,
 }
 
 impl Default for HeuristicMoveGenerationPlayer {
     fn default() -> Self {
         Self {
             rng: SmallRng::from_entropy(),
+            name: "Heuristic Move Generation Player".to_string(),
         }
     }
 }
@@ -203,6 +205,10 @@ impl Player for HeuristicMoveGenerationPlayer {
     }
 
     fn get_name(&self) -> &str {
-        "Heuristic Move Generation Player"
+        &self.name
+    }
+
+    fn set_name(&mut self, name: &str) {
+        self.name = name.to_string();
     }
 }
