@@ -39,6 +39,12 @@ pub struct Node {
     has_probabilistic_children: bool,
 }
 
+impl std::fmt::Display for Node {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.previous_event)
+    }
+}
+
 impl Node {
     pub fn new_deterministic(previous_move: Move) -> Self {
         Node {
@@ -62,8 +68,26 @@ impl Node {
         }
     }
 
-    pub fn get_children(&self) -> &Vec<Node> {
-        &self.children
+    pub fn get_move(&self) -> Option<Move> {
+        match self.previous_event {
+            Event::Deterministic(move_) => Some(move_),
+            Event::Probabilistic(_) => None,
+        }
+    }
+
+    pub fn take_child_with_move(self, move_: Move) -> Option<Node> {
+        let mut children = self.children;
+        let mut index = None;
+        for (i, child) in children.iter().enumerate() {
+            if let Some(child_move) = child.get_move() {
+                if child_move == move_ {
+                    index = Some(i);
+                    break;
+                }
+            }
+        }
+
+        index.map(|index| children.remove(index))
     }
 
     #[inline]

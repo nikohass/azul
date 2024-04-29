@@ -6,7 +6,7 @@ use std::time::Instant;
 
 pub struct MonteCarloTreeSearch {
     name: String,
-    root_node: Node,
+    root_node: Option<Node>,
     root_game_state: GameState,
     time_limit: u64,
 }
@@ -28,15 +28,15 @@ impl MonteCarloTreeSearch {
         game_state
             .check_integrity()
             .expect("Trying to set root with invalid game state.");
-        if self.root_node.get_children().is_empty()
-            || game_state.to_string() != self.root_game_state.to_string()
+
+        if self.root_game_state.serialize_string() == game_state.serialize_string()
+            && self.root_node.is_some()
         {
-            println!("Could not find the given game state in the tree. Falling back to the default root node.");
-            self.root_node = Node::new_deterministic(Move::DUMMY);
+            println!("Keeping parts of the tree from previous search.");
         } else {
-            println!("Found the given game state in the tree. Setting it as the new root node.");
+            self.root_game_state = game_state.clone();
+            self.root_node = Some(Node::new_deterministic(Move::DUMMY));
         }
-        self.root_game_state = game_state.clone();
     }
 
     async fn search(&mut self, game_state: &GameState) -> Move {
@@ -61,14 +61,15 @@ impl MonteCarloTreeSearch {
         }
 
         println!(
-            "    Left Depth Iterations{}Value Principal variation",
+            "    Left Depth Iterations Value{} Principal variation",
             " ".repeat(NUM_PLAYERS * 5 - "Value".len())
         );
 
+        let root_node = self.root_node.as_mut().unwrap();
+
         loop {
             pv.truncate(0);
-            self.root_node
-                .build_pv(&mut self.root_game_state.clone(), &mut pv);
+            root_node.build_pv(&mut self.root_game_state.clone(), &mut pv);
 
             let time_left: i64 = self.time_limit as i64 - start_time.elapsed().as_millis() as i64;
 
@@ -77,7 +78,7 @@ impl MonteCarloTreeSearch {
                 time_left,
                 pv.len(),
                 completed_iterations,
-                self.root_node.get_value(),
+                root_node.get_value(),
                 pv.iter()
                     .map(|event| event.to_string())
                     .collect::<Vec<_>>()
@@ -90,12 +91,7 @@ impl MonteCarloTreeSearch {
 
             let iterations =
                 ((time_left as f32 / 6.).min(5000.) * iterations_per_ms).max(1.) as usize;
-            do_iterations(
-                &mut self.root_node,
-                &self.root_game_state,
-                iterations,
-                &mut rng,
-            );
+            do_iterations(root_node, &self.root_game_state, iterations, &mut rng);
             completed_iterations += iterations;
 
             let elapsed_time = search_start_time.elapsed().as_micros() as f32 / 1000.;
@@ -107,7 +103,7 @@ impl MonteCarloTreeSearch {
         println!(
             "Search finished after {}ms. Value: {:7} PV-Depth: {} Iterations: {} Iterations/s: {:.2} PV: {}",
             start_time.elapsed().as_millis(),
-            self.root_node.get_value(),
+            root_node.get_value(),
             pv.len(),
             completed_iterations,
             iterations_per_ms * 1000.,
@@ -118,8 +114,14 @@ impl MonteCarloTreeSearch {
         );
 
         let player_index = usize::from(game_state.get_current_player());
-        println!("{:#?}", self.root_node.count_nodes());
-        self.root_node.best_move(player_index).unwrap()
+        println!("{:?}", root_node.count_nodes());
+        let best_move = root_node.best_move(player_index).unwrap();
+        {
+            let mut game_state = game_state.clone();
+            game_state.do_move(best_move);
+            self.notify_move(&game_state, best_move).await;
+        }
+        best_move
     }
 }
 
@@ -128,7 +130,7 @@ impl Default for MonteCarloTreeSearch {
         let mut rng = SmallRng::from_entropy();
         Self {
             name: "Monte Carlo Tree Search".to_string(),
-            root_node: Node::new_deterministic(Move::DUMMY),
+            root_node: None,
             root_game_state: GameState::new(&mut rng),
             time_limit: 6000,
         }
@@ -146,12 +148,36 @@ impl Player for MonteCarloTreeSearch {
     }
 
     async fn get_move(&mut self, game_state: &GameState) -> Move {
-        let move_ = self.search(game_state).await;
-        self.root_game_state.do_move(move_);
-        move_
+        self.search(game_state).await
     }
 
     async fn set_time(&mut self, time: u64) {
         self.time_limit = time;
+    }
+
+    async fn notify_move(&mut self, new_game_state: &GameState, last_move: Move) {
+        new_game_state
+            .check_integrity()
+            .expect("Trying to set root with invalid game state.");
+        if new_game_state.serialize_string() == self.root_game_state.serialize_string() {
+            return;
+        }
+
+        if let Some(new_root_node) = self
+            .root_node
+            .take()
+            .and_then(|root_node| root_node.take_child_with_move(last_move))
+        {
+            self.root_game_state.do_move(last_move);
+            if new_game_state.serialize_string() == self.root_game_state.serialize_string() {
+                self.root_game_state = new_game_state.clone();
+                self.root_node = Some(new_root_node);
+                println!("Successfully applied the move {} to the tree.", last_move);
+                return;
+            }
+        }
+
+        self.root_node = None;
+        self.root_game_state = new_game_state.clone();
     }
 }

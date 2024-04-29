@@ -68,7 +68,7 @@ impl Match {
             game_state.check_integrity().unwrap(); // Check the integrity of the game state. If it is not valid, panic and crash the tokio task
             send_game_state_update(game_state, &websocket); // Send the game state to the players
             let mut turn = 0;
-            println!("{}", display_gamestate(&game_state, Some(&player_names)));
+            println!("{}", display_gamestate(game_state, Some(&player_names)));
             let mut is_game_over;
             loop {
                 is_game_over = matches!(
@@ -103,7 +103,7 @@ impl Match {
 
                 // Apply the move to the game state
                 game_state.do_move(move_);
-                println!("{}", display_gamestate(&game_state, Some(&player_names)));
+                println!("{}", display_gamestate(game_state, Some(&player_names)));
 
                 send_game_state_update(game_state, &websocket);
 
@@ -114,7 +114,7 @@ impl Match {
             }
             // At the end of the round, evaluate it by counting the points and moving the first player marker
             send_game_state_update(game_state, &websocket);
-            println!("{}", display_gamestate(&game_state, Some(&player_names)));
+            println!("{}", display_gamestate(game_state, Some(&player_names)));
             if is_game_over {
                 self.state = MatchState::GameOver;
                 break;

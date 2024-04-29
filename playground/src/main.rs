@@ -12,11 +12,12 @@ async fn main() {
     let mut rng = SmallRng::from_entropy();
 
     let mut players: Vec<Box<dyn Player>> = Vec::new();
-    for _ in 0..NUM_PLAYERS {
+    for _ in 1..NUM_PLAYERS {
         let mut player = MonteCarloTreeSearch::default();
-        player.set_time(10_000).await;
+        player.set_time(8000).await;
         players.push(Box::new(player));
     }
+    players.push(Box::<RandomPlayer>::default());
 
     let game_state = GameState::new(&mut rng);
     run_match(game_state, &mut players, true).await.unwrap();

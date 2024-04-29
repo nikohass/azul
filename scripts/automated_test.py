@@ -208,7 +208,7 @@ class Test:
         build_executable("test_client", len(self.game_config.players))
         game_result_stream = self.run_games()
         if self.game_config.stop_on_significant_difference:
-            run_hypothesis_tests_for_players(self, game_result_stream, len(self.game_config.players), self.game_config.num_simulations_games * 2)
+            run_hypothesis_tests_for_players(game_result_stream, len(self.game_config.players), self.game_config.num_simulations_games * 2)
         else:
             for _ in game_result_stream:
                 None
@@ -236,16 +236,13 @@ if __name__ == "__main__":
     # Change the current working directory to the project root
     os.chdir(os.path.join(os.path.dirname(__file__), ".."))
 
-    times = [200 * i for i in range(1, 11)] + [2000 + 1000 * i for i in range(1, 7)] + [10_000, 15_000, 20_000, 30_000, 60_000]
-
-    for time in times:
-        game_config = GameConfig([
-                PlayerConfig("target/release/test_client.exe", think_time=1000),
-                PlayerConfig("target/release/test_client.exe", think_time=time),
-            ],
-            num_games=10,
-            num_simulations_games=10,
-            stop_on_significant_difference=False
-        )
-        test = Test(game_config=game_config)
-        test.run()
+    game_config = GameConfig([
+            PlayerConfig("target/release/test_client.exe", think_time=10000),
+            PlayerConfig("clients/2/10.exe", think_time=10000),
+        ],
+        num_games=100,
+        num_simulations_games=10,
+        stop_on_significant_difference=True
+    )
+    test = Test(game_config=game_config)
+    test.run()

@@ -1,11 +1,11 @@
 [game]
-num_games = 10
+num_games = 100
 num_simultaneous_games = 10
 constant_ordering = false
 verbose = false
 [player_one]
 executable = "target/release/test_client.exe"
-think_time = 1000
+think_time = 10000
 [player_two]
-executable = "target/release/test_client.exe"
-think_time = 1200
+executable = "clients/2/10.exe"
+think_time = 10000
