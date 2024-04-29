@@ -1,6 +1,6 @@
 use crate::websocket_api::{EventType, WebSocketConnection, WebSocketMessage};
 use game::{
-    GameState, MoveGenerationResult, MoveList, Player, SharedState, TileColor,
+    display_gamestate, GameState, MoveGenerationResult, MoveList, Player, SharedState, TileColor,
     CENTER_FACTORY_INDEX, FLOOR_LINE_PENALTY, NUM_PLAYERS, NUM_TILE_COLORS,
 };
 use rand::{rngs::SmallRng, SeedableRng};
@@ -59,6 +59,7 @@ impl Match {
     }
 
     pub async fn start_match(&mut self, websocket: WebSocketConnection) {
+        let player_names: Vec<String> = self.get_player_names().await;
         let game_state = &mut self.game_state;
         let mut move_list = MoveList::default();
         let mut rng = SmallRng::from_entropy();
@@ -67,7 +68,7 @@ impl Match {
             game_state.check_integrity().unwrap(); // Check the integrity of the game state. If it is not valid, panic and crash the tokio task
             send_game_state_update(game_state, &websocket); // Send the game state to the players
             let mut turn = 0;
-            println!("{}", game_state);
+            println!("{}", display_gamestate(&game_state, Some(&player_names)));
             let mut is_game_over;
             loop {
                 is_game_over = matches!(
@@ -102,7 +103,7 @@ impl Match {
 
                 // Apply the move to the game state
                 game_state.do_move(move_);
-                println!("{}", game_state);
+                println!("{}", display_gamestate(&game_state, Some(&player_names)));
 
                 send_game_state_update(game_state, &websocket);
 
@@ -113,7 +114,7 @@ impl Match {
             }
             // At the end of the round, evaluate it by counting the points and moving the first player marker
             send_game_state_update(game_state, &websocket);
-            println!("{}", game_state);
+            println!("{}", display_gamestate(&game_state, Some(&player_names)));
             if is_game_over {
                 self.state = MatchState::GameOver;
                 break;

@@ -1,7 +1,7 @@
 use crate::{game_manager::Match, human_player::HumanPlayer};
 use futures::{SinkExt, StreamExt};
 use game::{Player, SharedState};
-use player::random_player::RandomPlayer;
+use player::{greedy_player::GreedyPlayer, random_player::RandomPlayer};
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use tokio_tungstenite::{accept_async, tungstenite::protocol::Message, WebSocketStream};
@@ -221,13 +221,14 @@ impl WebSocketConnection {
         for player_json in data["players"].as_array().ok_or("Missing players field")? {
             let name = player_json["name"].as_str().ok_or("Missing name field")?;
             let player_type = player_json["type"].as_str().ok_or("Missing type field")?;
-            let player: Box<dyn Player> = match player_type {
+            let mut player: Box<dyn Player> = match player_type {
                 "human" => Box::new(HumanPlayer::new(name, self.clone())),
-                "random" => Box::new(RandomPlayer::new(name)),
-                "greedy" => Box::new(player::greedy_player::GreedyPlayer::new(name)),
+                "random" => Box::<RandomPlayer>::default(),
+                "greedy" => Box::<GreedyPlayer>::default(),
                 "mcts" => Box::<player::mcts::MonteCarloTreeSearch>::default(),
                 _ => return Err(format!("Unknown player type: {}", player_type)),
             };
+            player.set_name(name);
             players.push(player);
         }
         let game_manager_shared = Match::new_with_players(players).await;

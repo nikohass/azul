@@ -41,7 +41,7 @@ async fn configure_players() -> Vec<Box<dyn Player>> {
             5 => {
                 let mut mcts = MonteCarloTreeSearch::default();
                 println!("Set thinking time for MCTS (ms):");
-                let time = read_line().parse::<u64>().unwrap_or(1000);
+                let time = read_line().parse::<u64>().unwrap_or(1000).max(100);
 
                 mcts.set_time(time).await;
                 Box::new(mcts)
