@@ -24,7 +24,7 @@ fn do_iterations(
 }
 
 impl MonteCarloTreeSearch {
-    async fn set_root(&mut self, game_state: &GameState) {
+    fn set_root(&mut self, game_state: &GameState) {
         game_state
             .check_integrity()
             .expect("Trying to set root with invalid game state.");
@@ -45,7 +45,7 @@ impl MonteCarloTreeSearch {
             game_state.serialize_string()
         );
         let start_time = Instant::now();
-        self.set_root(game_state).await;
+        self.set_root(game_state);
         let mut rng = SmallRng::from_entropy();
         let mut pv: Vec<Event> = Vec::with_capacity(100);
         let mut iterations_per_ms = 1.; // Initial guess on the lower end for four players, will be adjusted later
@@ -122,6 +122,31 @@ impl MonteCarloTreeSearch {
             self.notify_move(&game_state, best_move).await;
         }
         best_move
+    }
+
+    pub fn store_tree(&self, min_visits: f32) {
+        let mut current_id = 0;
+        let mut data = String::from("digraph G {\n"); // Start of the DOT graph
+                                                      // Settings for the graph
+        data.push_str("graph [overlap=scale, scale=2];\n");
+        data.push_str("node [width=.3, height=.3, fixedsize=true];\n");
+        data.push_str("edge [penwidth=0.5];\n");
+
+        if let Some(root_node) = &self.root_node {
+            root_node.store_node(0, &mut current_id, &mut data, min_visits);
+        }
+        data.push_str("}\n"); // End of the DOT graph
+
+        std::fs::write("logs/tree.dot", data).expect("Unable to write file");
+        println!("Tree stored in logs/tree.dot");
+    }
+
+    pub fn get_principal_variation(&mut self) -> Vec<Event> {
+        let mut pv: Vec<Event> = Vec::new();
+        if let Some(root_node) = &mut self.root_node {
+            root_node.build_pv(&mut self.root_game_state.clone(), &mut pv);
+        }
+        pv
     }
 }
 

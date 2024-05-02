@@ -4,3 +4,4 @@
 *.exe
 /notes
 default_config.toml
+/plots

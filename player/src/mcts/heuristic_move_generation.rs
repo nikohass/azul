@@ -10,24 +10,19 @@ pub fn playout(mut game_state: GameState, rng: &mut SmallRng) -> Value {
     game_state
         .check_integrity()
         .expect("Game state integrity check failed before playout");
-    let mut move_count = 0;
-    loop {
+
+    // There are situations where every single player is only able to discard tiles
+    // In this case, the game is in a infinite loop and we should break out of it
+    for _ in 0..90 {
         match get_random_move(&mut game_state, rng) {
-            None => {
-                return Value::from_game_scores(game_state.get_scores());
-            }
             Some(move_) => {
                 game_state.do_move(move_);
             }
-        }
-        // There are situations where every single player is only able to discard tiles
-        // In this case, the game is in a infinite loop and we should break out of it
-        move_count += 1;
-        if move_count > 90 {
-            // Max realistic game lenght is 85 moves
-            return Value::from_game_scores(game_state.get_scores());
+            None => break,
         }
     }
+
+    Value::from_game_scores(game_state.get_scores())
 }
 
 pub fn get_random_move(game_state: &mut GameState, rng: &mut SmallRng) -> Option<Move> {

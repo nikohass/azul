@@ -68,6 +68,33 @@ impl Node {
         }
     }
 
+    pub fn store_node(
+        &self,
+        parent_id: usize,
+        current_id: &mut usize,
+        data: &mut String,
+        min_visits: f32,
+    ) {
+        let local_id: usize = *current_id;
+        if self.n < min_visits {
+            return;
+        }
+
+        // Write node definition
+        data.push_str(&format!("{} [label=\"{}\"];\n", local_id, self.n,));
+
+        // Write edge definition
+        if parent_id != local_id {
+            // avoid linking root to itself
+            data.push_str(&format!("{} -> {};\n", parent_id, local_id));
+        }
+
+        for child in &self.children {
+            *current_id += 1;
+            child.store_node(local_id, current_id, data, min_visits);
+        }
+    }
+
     pub fn get_move(&self) -> Option<Move> {
         match self.previous_event {
             Event::Deterministic(move_) => Some(move_),
@@ -221,10 +248,9 @@ impl Node {
                 if !self.is_game_over {
                     super::heuristic_move_generation::playout(game_state.clone(), rng)
                 } else if self.n == 0. {
-                    let game_result = Value::from_game_scores(game_state.get_scores());
                     self.q = Value::from_game_scores(game_state.get_scores());
                     self.n = 1.;
-                    game_result
+                    self.q
                 } else {
                     self.q / self.n
                 }
