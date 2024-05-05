@@ -12,6 +12,7 @@ use rand::SeedableRng as _;
 
 pub const FLOOR_LINE_PENALTY: [u8; 8] = [0, 1, 2, 4, 6, 8, 11, 14];
 
+#[cfg(feature = "house_rules")]
 fn find_tile_combinations(
     tiles_left: u8,
     current_pattern: &mut [u8; 6],
@@ -46,6 +47,76 @@ fn find_tile_combinations(
             remaining_space[pattern_line_index] += 1;
             current_pattern[pattern_line_index] -= 1;
         }
+    }
+}
+
+#[cfg(not(feature = "house_rules"))]
+fn find_tile_combinations(
+    tiles_left: u8,
+    current_pattern: &mut [u8; 6],
+    remaining_space: &mut [u8; 6],
+    move_list: &mut MoveList,
+    factory_index: u8,
+    color: TileColor,
+) {
+    // Handle placing some tiles and optionally discarding the rest
+    for pattern_line_index in 0..5 {
+        // Iterate through possible numbers of tiles to place in this line
+        for num_to_place in 1..=tiles_left.min(remaining_space[pattern_line_index]) {
+            let discard_amount = tiles_left - num_to_place; // Remaining tiles are discarded
+
+            if num_to_place > 0 {
+                // Check if we are actually placing any tiles
+                // Simulate placing the tiles
+                current_pattern[pattern_line_index] += num_to_place;
+                remaining_space[pattern_line_index] -= num_to_place;
+            }
+
+            if discard_amount > 0 && discard_amount <= remaining_space[5] {
+                // Check if discarding is possible
+                // Simulate discarding the tiles
+                current_pattern[5] += discard_amount;
+                remaining_space[5] -= discard_amount;
+            }
+
+            // Store this as a valid move if the move respects the game rules
+            if num_to_place > 0 || discard_amount > 0 {
+                move_list.push(Move {
+                    take_from_factory_index: factory_index,
+                    color,
+                    pattern: *current_pattern,
+                });
+            }
+
+            // Undo the placement and discard (for backtracking)
+            if num_to_place > 0 {
+                current_pattern[pattern_line_index] -= num_to_place;
+                remaining_space[pattern_line_index] += num_to_place;
+            }
+
+            if discard_amount > 0 {
+                current_pattern[5] -= discard_amount;
+                remaining_space[5] += discard_amount;
+            }
+        }
+    }
+
+    // Consider the case where all tiles are discarded
+    if tiles_left <= remaining_space[5] {
+        // Simulate discarding all tiles
+        current_pattern[5] += tiles_left;
+        remaining_space[5] -= tiles_left;
+
+        // Store this as a valid move
+        move_list.push(Move {
+            take_from_factory_index: factory_index,
+            color,
+            pattern: *current_pattern,
+        });
+
+        // Undo the discard (for backtracking)
+        current_pattern[5] -= tiles_left;
+        remaining_space[5] += tiles_left;
     }
 }
 
@@ -655,6 +726,7 @@ impl GameState {
                     }
                 }
 
+                #[cfg(feature = "house_rules")]
                 find_tile_combinations(
                     *number,
                     &mut [0, 0, 0, 0, 0, 0],
@@ -663,6 +735,16 @@ impl GameState {
                     factory_index as u8,
                     TileColor::from(color),
                     0,
+                );
+
+                #[cfg(not(feature = "house_rules"))]
+                find_tile_combinations(
+                    *number,
+                    &mut [0, 0, 0, 0, 0, 0],
+                    &mut remaining_space,
+                    move_list,
+                    factory_index as u8,
+                    TileColor::from(color),
                 );
             }
         }

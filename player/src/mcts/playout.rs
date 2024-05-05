@@ -1,5 +1,5 @@
 use super::value::Value;
-use game::{wall::get_placed_tile_score, *};
+use game::*;
 use rand::{rngs::SmallRng, Rng, SeedableRng as _};
 
 #[rustfmt::skip]
@@ -25,6 +25,97 @@ pub fn playout(mut game_state: GameState, rng: &mut SmallRng) -> Value {
     Value::from_game_scores(game_state.get_scores())
 }
 
+#[cfg(not(feature = "house_rules"))]
+pub fn get_random_move(game_state: &mut GameState, rng: &mut SmallRng) -> Option<Move> {
+    use game::wall::WALL_COLOR_MASKS;
+
+    let is_round_over = game_state.get_factories().is_empty();
+
+    if is_round_over {
+        let is_game_over = game_state.evaluate_round();
+
+        if is_game_over {
+            return None;
+        }
+
+        game_state.fill_factories(rng);
+    }
+
+    let factories: &Factories = game_state.get_factories();
+    let current_player: usize = game_state.get_current_player().into();
+    let pattern_line_colors = game_state.get_pattern_lines_colors()[current_player];
+    let pattern_lines_occupancy = game_state.get_pattern_lines_occupancy()[current_player];
+    let wall_occupancy = game_state.get_wall_ocupancy()[current_player];
+
+    let mut random_factory_index;
+    loop {
+        random_factory_index = rng.gen_range(0..NUM_FACTORIES);
+        if !factories[random_factory_index]
+            .iter()
+            .all(|&tile| tile == 0)
+        {
+            break;
+        }
+    }
+
+    let mut random_tile_color;
+    let tile_number;
+    loop {
+        random_tile_color = rng.gen_range(0..5);
+        if factories[random_factory_index][random_tile_color] > 0 {
+            tile_number = factories[random_factory_index][random_tile_color];
+            break;
+        }
+    }
+
+    let try_ordering = PERMUTATIONS[rng.gen_range(0..PERMUTATIONS.len())];
+    let color_mask = WALL_COLOR_MASKS[random_tile_color];
+
+    let mut pattern = [0; 6];
+    let mut found_move = false;
+    for pattern_line_index in try_ordering.iter() {
+        if let Some(pattern_line_color) = pattern_line_colors[*pattern_line_index as usize] {
+            if pattern_line_color != TileColor::from(random_tile_color) {
+                continue;
+            }
+        }
+
+        let row_mask = wall::get_row_mask(*pattern_line_index as usize);
+        let tile = row_mask & color_mask;
+        let already_occupied = wall_occupancy & tile > 0;
+        if already_occupied {
+            continue;
+        }
+
+        let missing_tiles =
+            1 + pattern_line_index - pattern_lines_occupancy[*pattern_line_index as usize];
+        if missing_tiles == 0 {
+            continue;
+        }
+        let original_fill = pattern[*pattern_line_index as usize];
+        pattern[*pattern_line_index as usize] = u8::min(tile_number, missing_tiles);
+        let added_tiles = pattern[*pattern_line_index as usize] - original_fill;
+        let tiles_to_discard = tile_number - added_tiles;
+        pattern[5] = tiles_to_discard;
+
+        found_move = true;
+        break;
+    }
+
+    if !found_move {
+        pattern[5] = tile_number;
+    }
+
+    let move_ = Move {
+        take_from_factory_index: random_factory_index as u8,
+        color: TileColor::from(random_tile_color),
+        pattern,
+    };
+
+    Some(move_)
+}
+
+#[cfg(feature = "house_rules")]
 pub fn get_random_move(game_state: &mut GameState, rng: &mut SmallRng) -> Option<Move> {
     let is_round_over = game_state.get_factories().is_empty();
 
@@ -117,41 +208,64 @@ pub fn get_random_move(game_state: &mut GameState, rng: &mut SmallRng) -> Option
             }
 
             let color = TileColor::from(tile_color);
-
             let mut tiles_to_discard = 0;
             let mut score: f32 = 0.0;
-            let maximum_tiles = missing_tiles[tile_color].iter().sum();
-
-            if number_of_tiles > maximum_tiles {
-                tiles_to_discard = number_of_tiles - maximum_tiles;
-                number_of_tiles = maximum_tiles;
-            }
-
             let mut pattern: [u8; 6] = [0; 6];
-            if maximum_tiles == 0 {
-                tiles_to_discard += number_of_tiles;
-            } else if number_of_tiles == maximum_tiles {
-                pattern = missing_tiles[tile_color];
-                score += wall_field_score[tile_color].iter().sum::<u8>() as f32;
-            } else {
-                let order = PERMUTATIONS[rng.gen_range(0..PERMUTATIONS.len())];
-                for pattern_line_index in order.iter() {
-                    let pattern_line_index = *pattern_line_index as usize;
-                    let missing_tiles = missing_tiles[tile_color][pattern_line_index];
-                    if missing_tiles == 0 {
-                        continue;
-                    }
-                    pattern[pattern_line_index] = u8::min(number_of_tiles, missing_tiles);
-                    if pattern[pattern_line_index] == missing_tiles {
-                        score += wall_field_score[pattern_line_index][tile_color] as f32;
-                    }
-                    number_of_tiles -= pattern[pattern_line_index];
-                    if number_of_tiles == 0 {
-                        break;
-                    }
+
+            // #[cfg(feature = "house_rules")]
+            {
+                let maximum_tiles = missing_tiles[tile_color].iter().sum();
+
+                if number_of_tiles > maximum_tiles {
+                    tiles_to_discard = number_of_tiles - maximum_tiles;
+                    number_of_tiles = maximum_tiles;
                 }
-                tiles_to_discard += number_of_tiles;
+
+                if maximum_tiles == 0 {
+                    tiles_to_discard += number_of_tiles;
+                } else if number_of_tiles == maximum_tiles {
+                    pattern = missing_tiles[tile_color];
+                    score += wall_field_score[tile_color].iter().sum::<u8>() as f32;
+                } else {
+                    let order = PERMUTATIONS[rng.gen_range(0..PERMUTATIONS.len())];
+                    for pattern_line_index in order.iter() {
+                        let pattern_line_index = *pattern_line_index as usize;
+                        let missing_tiles = missing_tiles[tile_color][pattern_line_index];
+                        if missing_tiles == 0 {
+                            continue;
+                        }
+                        pattern[pattern_line_index] = u8::min(number_of_tiles, missing_tiles);
+                        if pattern[pattern_line_index] == missing_tiles {
+                            score += wall_field_score[pattern_line_index][tile_color] as f32;
+                        }
+                        number_of_tiles -= pattern[pattern_line_index];
+                        if number_of_tiles == 0 {
+                            break;
+                        }
+                    }
+                    tiles_to_discard += number_of_tiles;
+                }
             }
+            // #[cfg(not(feature = "house_rules"))]
+            // {
+            //     let order = PERMUTATIONS[rng.gen_range(0..PERMUTATIONS.len())];
+            //     for pattern_line_index in order.iter() {
+            //         let pattern_line_index = *pattern_line_index as usize;
+            //         let missing_tiles = missing_tiles[tile_color][pattern_line_index];
+            //         if missing_tiles == 0 {
+            //             continue;
+            //         }
+
+            //         pattern[pattern_line_index] = u8::min(number_of_tiles, missing_tiles);
+            //         if pattern[pattern_line_index] == missing_tiles {
+            //             score += wall_field_score[pattern_line_index][tile_color] as f32;
+            //         }
+            //         number_of_tiles -= pattern[pattern_line_index];
+            //         tiles_to_discard += number_of_tiles;
+            //         break;
+            //     }
+            // }
+
             pattern[5] = tiles_to_discard;
 
             let new_floor_line_progress = floor_line_progress + tiles_to_discard as usize;
@@ -168,6 +282,7 @@ pub fn get_random_move(game_state: &mut GameState, rng: &mut SmallRng) -> Option
     }
 
     if let Some((factory_index, color, pattern)) = best_move {
+        println!("Best move: {:?}", pattern);
         let move_ = Move {
             take_from_factory_index: factory_index as u8,
             color,

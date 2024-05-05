@@ -18,3 +18,5 @@ log4rs = "1.2.0"
 two_players = []
 three_players = []
 four_players = []
+
+house_rules = []

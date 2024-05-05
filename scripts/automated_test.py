@@ -237,10 +237,10 @@ if __name__ == "__main__":
     os.chdir(os.path.join(os.path.dirname(__file__), ".."))
 
     game_config = GameConfig([
-            PlayerConfig("target/release/test_client.exe", think_time=300),
-            PlayerConfig("clients/2/10.exe", think_time=300),
+            PlayerConfig("target/release/test_client.exe", think_time=1000),
+            PlayerConfig("clients/2/2.exe", think_time=1000),
         ],
-        num_games=100,
+        num_games=300,
         num_simulations_games=10,
         stop_on_significant_difference=True
     )

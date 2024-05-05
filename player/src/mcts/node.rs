@@ -6,29 +6,13 @@ use rand::Rng as _;
 
 const EXPANSION_PROBABILITY: f64 = 0.05;
 
-// 2 players
-#[cfg(not(any(feature = "three_players", feature = "four_players")))]
-const C: f32 = 0.1;
-#[cfg(not(any(feature = "three_players", feature = "four_players")))]
-const C_BASE: f32 = 30_000.0;
-#[cfg(not(any(feature = "three_players", feature = "four_players")))]
-const C_FACTOR: f32 = std::f32::consts::SQRT_2;
+mod constants {
+    pub const C: f32 = 0.1;
+    pub const C_BASE: f32 = 30_000.0;
+    pub const C_FACTOR: f32 = std::f32::consts::SQRT_2;
+}
 
-// 3 players
-#[cfg(feature = "three_players")]
-const C: f32 = 0.1;
-#[cfg(feature = "three_players")]
-const C_BASE: f32 = 30_000.0;
-#[cfg(feature = "three_players")]
-const C_FACTOR: f32 = std::f32::consts::SQRT_2;
-
-// 4 players
-#[cfg(feature = "four_players")]
-const C: f32 = 0.1;
-#[cfg(feature = "four_players")]
-const C_BASE: f32 = 30_000.0;
-#[cfg(feature = "four_players")]
-const C_FACTOR: f32 = std::f32::consts::SQRT_2;
+use constants::*;
 
 pub struct Node {
     children: Vec<Node>,
@@ -225,7 +209,7 @@ impl Node {
             // If we expand a new child every time we iterate this node, we would never visit the same child twice. This would cause our estimations of the value of the child to be very inaccurate.
 
             // Let's just try this:
-            let desired_number_of_children = self.n.sqrt().ceil() as usize / 2;
+            let desired_number_of_children = self.n.sqrt().ceil() as usize / 8;
             if desired_number_of_children > self.children.len() {
                 // We will expand a new child
                 let mut game_state_clone = game_state.clone(); // Clone here because we don't want to modify the game state
@@ -246,7 +230,7 @@ impl Node {
             if rng.gen_bool(EXPANSION_PROBABILITY) {
                 self.expand(game_state, move_list, rng);
                 if !self.is_game_over {
-                    super::heuristic_move_generation::playout(game_state.clone(), rng)
+                    super::playout::playout(game_state.clone(), rng)
                 } else if self.n == 0. {
                     self.q = Value::from_game_scores(game_state.get_scores());
                     self.n = 1.;
@@ -255,7 +239,7 @@ impl Node {
                     self.q / self.n
                 }
             } else {
-                super::heuristic_move_generation::playout(game_state.clone(), rng)
+                super::playout::playout(game_state.clone(), rng)
             }
         } else {
             let next_child = self.select_child(current_player as usize, rng);

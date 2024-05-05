@@ -1,8 +1,8 @@
 mod event;
-mod heuristic_move_generation;
 mod node;
 mod player;
+mod playout;
 mod value;
 
-pub use heuristic_move_generation::HeuristicMoveGenerationPlayer;
 pub use player::MonteCarloTreeSearch;
+pub use playout::HeuristicMoveGenerationPlayer;
