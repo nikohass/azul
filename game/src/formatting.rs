@@ -71,15 +71,16 @@ fn player_wall_to_string(game_state: &GameState, player_index: usize) -> String 
             let bit: u32 = 1 << (y * 6 + x);
             let mut found = false;
 
-            for color in 0..NUM_TILE_COLORS {
-                if game_state.get_walls()[player_index][color] & bit > 0 {
+            for (color, color_mask) in WALL_COLOR_MASKS.iter().enumerate() {
+                let wall = game_state.get_walls()[player_index];
+                if wall & color_mask & bit > 0 {
                     string.push_str(&TileColor::from(color).to_string());
                     found = true;
                     break;
                 }
             }
 
-            if !found && game_state.get_wall_occupancy()[player_index] & bit == 0 {
+            if !found && game_state.get_walls()[player_index] & bit == 0 {
                 for (color, wall_color) in WALL_COLOR_MASKS.iter().enumerate() {
                     if wall_color & bit > 0 {
                         let (start, end) = TileColor::from(color).get_color_string();

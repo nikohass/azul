@@ -45,7 +45,7 @@ pub fn get_random_move(game_state: &mut GameState, rng: &mut SmallRng) -> Option
     let current_player: usize = game_state.get_current_player().into();
     let pattern_line_colors = game_state.get_pattern_line_colors()[current_player];
     let pattern_lines_occupancy = game_state.get_pattern_lines_occupancy()[current_player];
-    let wall_occupancy = game_state.get_wall_occupancy()[current_player];
+    let wall_occupancy = game_state.get_walls()[current_player];
 
     let mut random_factory_index;
     loop {

@@ -138,8 +138,7 @@ pub struct GameState {
     scores: [i16; NUM_PLAYERS], // For each player, how many points they have
     floor_line_progress: [u8; NUM_PLAYERS], // For each player, how many tiles they have in their penalty
 
-    walls: [[u32; NUM_TILE_COLORS]; NUM_PLAYERS], // For each player, and each color, the locations of the tiles on their wall
-    wall_occupancy: [u32; NUM_PLAYERS],           // For each player, the occupancy of their wall
+    walls: [u32; NUM_PLAYERS], // For each player, the occupancy of their wall
 
     pattern_lines_occupancy: [[u8; 5]; NUM_PLAYERS], // For each player, the occupancy of their pattern lines
     pattern_lines_colors: [[Option<TileColor>; 5]; NUM_PLAYERS], // For each player, the color of their pattern lines. If the pattern line is empty, the color is 255
@@ -196,19 +195,12 @@ impl GameState {
         self.floor_line_progress
     }
 
-    pub fn get_walls(&self) -> &[[u32; NUM_TILE_COLORS]; NUM_PLAYERS] {
-        &self.walls
+    pub fn get_walls(&self) -> [u32; NUM_PLAYERS] {
+        self.walls
     }
 
-    pub fn set_walls(&mut self, walls: [[u32; NUM_TILE_COLORS]; NUM_PLAYERS]) {
-        self.walls = walls;
-        for (player_index, wall) in self.walls.iter().enumerate() {
-            self.wall_occupancy[player_index] = wall.iter().copied().fold(0, |acc, x| acc | x);
-        }
-    }
-
-    pub fn get_wall_occupancy(&self) -> [u32; NUM_PLAYERS] {
-        self.wall_occupancy
+    pub fn set_walls(&mut self, wall: [u32; NUM_PLAYERS]) {
+        self.walls = wall;
     }
 
     pub fn get_pattern_lines_occupancy(&self) -> &[[u8; 5]; NUM_PLAYERS] {
@@ -286,13 +278,8 @@ impl GameState {
             floor_line_progress |= progress << (player_index * 8);
         }
 
-        let mut walls = [0b0_u32; NUM_PLAYERS];
-        for (wall_index, wall) in self.walls.iter().enumerate() {
-            for bitboard in wall.iter() {
-                walls[wall_index] |= bitboard;
-            }
-        }
-        let walls_string = walls
+        let walls_string = self
+            .walls
             .iter()
             .map(|v| v.to_string())
             .collect::<Vec<_>>()
@@ -443,13 +430,10 @@ impl GameState {
         }
 
         let walls_strings = entries.get(8).ok_or("No walls")?;
-        let mut walls = [[0; NUM_TILE_COLORS]; NUM_PLAYERS];
-
+        let mut walls = [0_u32; NUM_PLAYERS];
         for (wall_index, wall_string) in walls_strings.split('-').enumerate() {
             let wall_binary = wall_string.parse::<u32>().map_err(|_| "Invalid wall")?;
-            for (color_index, color_mask) in WALL_COLOR_MASKS.iter().enumerate() {
-                walls[wall_index][color_index] = wall_binary & color_mask;
-            }
+            walls[wall_index] = wall_binary;
         }
 
         let pattern_lines_strings = entries.get(9).ok_or("No pattern lines")?;
@@ -478,13 +462,6 @@ impl GameState {
             }
         }
 
-        let mut wall_occupancy = [0u32; NUM_PLAYERS];
-        for (player_index, wall) in walls.iter().enumerate() {
-            for bitboard in wall.iter() {
-                wall_occupancy[player_index] |= bitboard;
-            }
-        }
-
         let tile_taken_from_center = entries.get(11).ok_or("No tile taken from center")?;
         let tile_taken_from_center = tile_taken_from_center
             .parse::<u8>()
@@ -499,7 +476,6 @@ impl GameState {
             scores,
             floor_line_progress,
             walls,
-            wall_occupancy,
             pattern_lines_occupancy,
             pattern_lines_colors,
             next_round_starting_player,
@@ -542,12 +518,11 @@ impl GameState {
                 let new_tile = row_mask & color_mask;
                 let new_tile_pos = new_tile.trailing_zeros() as u8;
                 let score_for_tile =
-                    wall::get_placed_tile_score(self.wall_occupancy[player_index], new_tile_pos);
+                    wall::get_placed_tile_score(self.walls[player_index], new_tile_pos);
                 score += score_for_tile as i16;
 
                 // Add the tile to the wall
-                self.walls[player_index][pattern_line_color as usize] |= new_tile;
-                self.wall_occupancy[player_index] |= new_tile;
+                self.walls[player_index] |= new_tile;
 
                 // Remove the tile from the pattern line
                 self.out_of_bag[pattern_line_color as usize] += *no_tiles_in_pattern_line - 1; // -1 because one is placed on the board
@@ -570,8 +545,7 @@ impl GameState {
             self.floor_line_progress[player_index] = 0;
 
             // Check if the row is complete
-            let complete_row_exists =
-                wall::check_complete_row_exists(self.wall_occupancy[player_index]);
+            let complete_row_exists = wall::check_complete_row_exists(self.walls[player_index]);
             if complete_row_exists {
                 is_game_over = true;
             }
@@ -588,7 +562,7 @@ impl GameState {
     }
 
     fn evaluate_end_of_game(&mut self) {
-        for (player, wall_occupancy) in self.wall_occupancy.iter().enumerate() {
+        for (player, wall_occupancy) in self.walls.iter().enumerate() {
             let complete_rows = wall::count_complete_rows(*wall_occupancy);
             let complete_colums = wall::count_complete_columns(*wall_occupancy);
             let complete_colors = wall::count_full_colors(*wall_occupancy);
@@ -736,7 +710,7 @@ impl GameState {
                         // the pattern line did not have a color yet: We need to check whether we are allowed to place this color here
                         // It is not possible to place a tile in a pattern line if the corresponding row in the wall is already full
                         let wall_mask = WALL_COLOR_MASKS[color];
-                        let wall_occupancy = self.wall_occupancy[current_player];
+                        let wall_occupancy = self.walls[current_player];
                         let row_mask: u32 = wall::get_row_mask(pattern_line_index);
                         if wall_occupancy & row_mask & wall_mask > 0 {
                             remaining_space[pattern_line_index] = 0;
@@ -803,45 +777,6 @@ impl GameState {
             }
         }
 
-        // Make sure there are no tiles of different colors on the same position on the wall
-        for player in 0..NUM_PLAYERS {
-            let mut occupancy: u32 = 0b0;
-            for color in 0..NUM_TILE_COLORS {
-                let bitboard = self.walls[player][color];
-                if bitboard & occupancy > 0 {
-                    is_valid = false;
-                    println!(
-                        "Player {} has tiles of different colors on the same position on the wall",
-                        player
-                    );
-                }
-                if self.wall_occupancy[player] & bitboard != bitboard {
-                    is_valid = false;
-                    println!(
-                        "Player {} has tiles on the wall that are not in the occupancy",
-                        player
-                    );
-                }
-                occupancy |= bitboard;
-            }
-        }
-
-        // Make sure occupancy is correct
-        for player in 0..NUM_PLAYERS {
-            let mut calculated_occupancy: u32 = 0b0;
-            for color in 0..NUM_TILE_COLORS {
-                let bitboard = self.walls[player][color];
-                calculated_occupancy |= bitboard;
-            }
-            if calculated_occupancy != self.wall_occupancy[player] {
-                is_valid = false;
-                println!(
-                    "Player {} has wrong occupancy. Expected: {:b} Actual: {:b}",
-                    player, calculated_occupancy, self.wall_occupancy[player]
-                );
-            }
-        }
-
         // Check pattern line color assignment / occupancy match
         for player in 0..NUM_PLAYERS {
             for pattern_line in 0..5 {
@@ -886,8 +821,9 @@ impl GameState {
         }
 
         for player in 0..NUM_PLAYERS {
-            for (color, wall) in self.walls[player].iter().enumerate() {
-                tile_count[color] += wall.count_ones() as u8;
+            for (color_index, wall) in WALL_COLOR_MASKS.iter().enumerate() {
+                let color = wall & self.walls[player];
+                tile_count[color_index] += color.count_ones() as u8;
             }
         }
 
@@ -926,8 +862,7 @@ impl GameState {
             factories: Factories::empty(),
             scores: [0; NUM_PLAYERS],
             floor_line_progress: [0; NUM_PLAYERS],
-            walls: [[0; NUM_TILE_COLORS]; NUM_PLAYERS],
-            wall_occupancy: [0; NUM_PLAYERS],
+            walls: [0; NUM_PLAYERS],
             current_player: PlayerMarker::new(0),
             pattern_lines_occupancy: [[0; 5]; NUM_PLAYERS],
             pattern_lines_colors: [[None; 5]; NUM_PLAYERS],
@@ -990,9 +925,8 @@ mod tests {
                     game_state.floor_line_progress, reconstructed_game_state.floor_line_progress,
                     "Floor line progress"
                 );
-                assert_eq!(game_state.walls, reconstructed_game_state.walls, "Walls");
                 assert_eq!(
-                    game_state.wall_occupancy, reconstructed_game_state.wall_occupancy,
+                    game_state.walls, reconstructed_game_state.walls,
                     "Wall occupancy"
                 );
                 assert_eq!(

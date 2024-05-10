@@ -120,17 +120,12 @@ impl GameState {
     }
 
     #[getter]
-    fn walls(&self) -> [[u32; NUM_TILE_COLORS]; NUM_PLAYERS] {
-        *self.0.get_walls()
+    fn walls(&self) -> [u32; NUM_PLAYERS] {
+        self.0.get_walls()
     }
 
-    fn set_walls(&mut self, walls: [[u32; NUM_TILE_COLORS]; NUM_PLAYERS]) {
+    fn set_walls(&mut self, walls: [u32; NUM_PLAYERS]) {
         self.0.set_walls(walls);
-    }
-
-    #[getter]
-    fn get_wall_occupancy(&self) -> [u32; NUM_PLAYERS] {
-        self.0.get_wall_occupancy()
     }
 
     #[getter]
