@@ -45,7 +45,7 @@ impl From<TileColor> for char {
             TileColor::Blue => 'B',
             TileColor::Yellow => 'Y',
             TileColor::Red => 'R',
-            TileColor::Green => 'K',
+            TileColor::Green => 'G',
             TileColor::White => 'W',
         }
     }
@@ -57,7 +57,7 @@ impl From<char> for TileColor {
             'B' => Self::Blue,
             'Y' => Self::Yellow,
             'R' => Self::Red,
-            'K' => Self::Green,
+            'G' => Self::Green,
             'W' => Self::White,
             _ => panic!("Invalid color: {}", color),
         }

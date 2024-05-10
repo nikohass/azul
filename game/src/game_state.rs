@@ -200,7 +200,14 @@ impl GameState {
         &self.walls
     }
 
-    pub fn get_wall_ocupancy(&self) -> [u32; NUM_PLAYERS] {
+    pub fn set_walls(&mut self, walls: [[u32; NUM_TILE_COLORS]; NUM_PLAYERS]) {
+        self.walls = walls;
+        for (player_index, wall) in self.walls.iter().enumerate() {
+            self.wall_occupancy[player_index] = wall.iter().copied().fold(0, |acc, x| acc | x);
+        }
+    }
+
+    pub fn get_wall_occupancy(&self) -> [u32; NUM_PLAYERS] {
         self.wall_occupancy
     }
 
@@ -208,8 +215,19 @@ impl GameState {
         &self.pattern_lines_occupancy
     }
 
-    pub fn get_pattern_lines_colors(&self) -> &[[Option<TileColor>; 5]; NUM_PLAYERS] {
+    pub fn set_pattern_lines_occupancy(&mut self, pattern_lines_occupancy: [[u8; 5]; NUM_PLAYERS]) {
+        self.pattern_lines_occupancy = pattern_lines_occupancy;
+    }
+
+    pub fn get_pattern_line_colors(&self) -> &[[Option<TileColor>; 5]; NUM_PLAYERS] {
         &self.pattern_lines_colors
+    }
+
+    pub fn set_pattern_line_colors(
+        &mut self,
+        pattern_lines_colors: [[Option<TileColor>; 5]; NUM_PLAYERS],
+    ) {
+        self.pattern_lines_colors = pattern_lines_colors;
     }
 
     pub fn get_tile_taken_from_center(&self) -> bool {

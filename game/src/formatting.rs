@@ -79,7 +79,7 @@ fn player_wall_to_string(game_state: &GameState, player_index: usize) -> String 
                 }
             }
 
-            if !found && game_state.get_wall_ocupancy()[player_index] & bit == 0 {
+            if !found && game_state.get_wall_occupancy()[player_index] & bit == 0 {
                 for (color, wall_color) in WALL_COLOR_MASKS.iter().enumerate() {
                     if wall_color & bit > 0 {
                         let (start, end) = TileColor::from(color).get_color_string();
@@ -101,7 +101,7 @@ fn player_pattern_board_to_string(game_state: &GameState, player_index: usize) -
     let mut string = String::new();
 
     let pattern_line_occupancy = game_state.get_pattern_lines_occupancy()[player_index];
-    let pattern_colors = game_state.get_pattern_lines_colors()[player_index];
+    let pattern_colors = game_state.get_pattern_line_colors()[player_index];
     for pattern_index in 0..5 {
         let pattern_color: Option<TileColor> = pattern_colors[pattern_index];
         let color = if let Some(pattern_color) = pattern_color {

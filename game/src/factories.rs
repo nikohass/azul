@@ -47,6 +47,13 @@ impl std::ops::IndexMut<usize> for Factories {
     }
 }
 
+impl From<[Factory; NUM_FACTORIES]> for Factories {
+    #[inline]
+    fn from(factories: [Factory; NUM_FACTORIES]) -> Self {
+        Factories { factories }
+    }
+}
+
 impl Factories {
     #[inline]
     pub fn empty() -> Self {
