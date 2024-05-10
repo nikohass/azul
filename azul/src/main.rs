@@ -7,7 +7,7 @@ use player::{
 };
 use rand::{rngs::SmallRng, SeedableRng as _};
 
-async fn configure_players() -> Vec<Box<dyn Player>> {
+fn configure_players() -> Vec<Box<dyn Player>> {
     let mut players = Vec::new();
 
     loop {
@@ -43,7 +43,8 @@ async fn configure_players() -> Vec<Box<dyn Player>> {
                 println!("Set thinking time for MCTS (ms):");
                 let time = read_line().parse::<u64>().unwrap_or(1000).max(100);
 
-                mcts.set_time(time).await;
+                mcts.set_time(time);
+                mcts.set_pondering(true);
                 Box::new(mcts)
             }
             _ => {
@@ -141,8 +142,7 @@ fn display_rules() {
     println!("{}", example_game_state);
 }
 
-#[tokio::main]
-async fn main() {
+fn main() {
     loop {
         println!("1: Start new game");
         println!("2: Display rules");
@@ -156,9 +156,9 @@ async fn main() {
         let mut rng = SmallRng::from_entropy();
         match read_line().trim() {
             "1" => {
-                let mut players = configure_players().await;
+                let mut players = configure_players();
                 let game_state = GameState::new(&mut rng);
-                if let Err(err) = game::match_::run_match(game_state, &mut players, true).await {
+                if let Err(err) = game::match_::run_match(game_state, &mut players, true) {
                     println!("Error: {:?}", err);
                 }
             }

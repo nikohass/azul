@@ -2,7 +2,6 @@
 members = [
     "game",
     "playground",
-    "backend_server",
     "player",
     "test_server",
     "test_client", "azul",

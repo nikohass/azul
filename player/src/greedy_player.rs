@@ -14,7 +14,6 @@ impl Default for GreedyPlayer {
     }
 }
 
-#[async_trait::async_trait]
 impl Player for GreedyPlayer {
     fn get_name(&self) -> &str {
         &self.name
@@ -24,7 +23,7 @@ impl Player for GreedyPlayer {
         self.name = name.to_string();
     }
 
-    async fn get_move(&mut self, game_state: &game::GameState) -> game::Move {
+    fn get_move(&mut self, game_state: &game::GameState) -> game::Move {
         let mut game_state = game_state.clone();
         game_state.get_possible_moves(&mut self.move_list, &mut SmallRng::from_entropy());
         let mut best_move = self.move_list[0];

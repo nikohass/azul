@@ -52,9 +52,11 @@ def run_test_server(num_players):
             return TestStatus.SERVER_ERROR
 
 class PlayerConfig:
-    def __init__(self, executable: str, think_time: int):
+    def __init__(self, executable: str, think_time: int, allow_pondering: bool = False):
         self.executable = executable
         self.think_time = think_time
+        self.allow_pondering = allow_pondering
+
         self.index = None
 
     def to_toml(self, index: int) -> str:
@@ -63,6 +65,7 @@ class PlayerConfig:
         result = f"[player_{name}]\n"
         result += f"executable = \"{self.executable}\"\n"
         result += f"think_time = {self.think_time}\n"
+        result += f"allow_pondering = {str(self.allow_pondering).lower()}\n"
         return result
 
 class GameConfig:
@@ -237,8 +240,8 @@ if __name__ == "__main__":
     os.chdir(os.path.join(os.path.dirname(__file__), ".."))
 
     game_config = GameConfig([
-            PlayerConfig("target/release/test_client.exe", think_time=1000),
-            PlayerConfig("clients/2/2.exe", think_time=1000),
+            PlayerConfig("target/release/test_client.exe", think_time=3000, allow_pondering=True),
+            PlayerConfig("target/release/test_client.exe", think_time=3000, allow_pondering=False),
         ],
         num_games=300,
         num_simulations_games=10,

@@ -1,4 +1,4 @@
-use std::vec;
+use std::{sync::Arc, vec};
 
 use clap::Parser;
 use config::{Config, File, FileFormat};
@@ -6,13 +6,15 @@ use rand::{rngs::SmallRng, SeedableRng};
 use serde::Deserialize;
 
 mod client;
-use async_mutex::MutexGuard;
+use async_mutex::{Mutex, MutexGuard};
 use client::Client;
 use game::{
-    init_logging,
     match_::{self, MatchStatistcs},
-    GameError, GameState, Player, SharedState, NUM_PLAYERS,
+    GameError, GameState, Player, NUM_PLAYERS,
 };
+
+mod logging;
+use logging::init_logging;
 
 #[derive(Parser, Debug)]
 #[clap(about, version, author)]
@@ -34,6 +36,7 @@ struct GameConfig {
 struct PlayerConfig {
     pub executable: String,
     pub think_time: u64,
+    pub allow_pondering: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -45,16 +48,12 @@ struct AppConfig {
     pub player_four: Option<PlayerConfig>,
 }
 
-async fn run_match(
-    players: &mut [Box<dyn Player>],
-    verbose: bool,
-) -> Result<MatchStatistcs, GameError> {
+fn run_match(players: &mut [Box<dyn Player>], verbose: bool) -> Result<MatchStatistcs, GameError> {
     match_::run_match(
         GameState::new(&mut SmallRng::from_entropy()),
         players,
         verbose,
     )
-    .await
 }
 
 #[tokio::main]
@@ -110,8 +109,8 @@ async fn main() {
 
     log::info!("Length of game queue: {}", game_queue.len());
 
-    let game_queue = SharedState::new(game_queue);
-    let game_results: SharedState<Vec<MatchStatistcs>> = SharedState::new(Vec::new());
+    let game_queue: Arc<Mutex<Vec<Vec<usize>>>> = Arc::new(Mutex::new(game_queue));
+    let game_results: Arc<Mutex<Vec<MatchStatistcs>>> = Arc::new(Mutex::new(Vec::new()));
 
     let verbose = app_config.game.verbose;
 
@@ -136,11 +135,12 @@ async fn main() {
                 let mut ordered_clients: Vec<Box<dyn Player>> = Vec::new();
                 for &i in &next_order {
                     let mut client = Client::from_path(&players_clone[i - 1].executable, verbose);
-                    client.set_time(players_clone[i - 1].think_time).await;
+                    client.set_time(players_clone[i - 1].think_time);
+                    client.set_pondering(players_clone[i - 1].allow_pondering);
                     ordered_clients.push(Box::new(client));
                 }
 
-                let stats = run_match(&mut ordered_clients, verbose).await;
+                let stats = run_match(&mut ordered_clients, verbose);
                 let mut stats = match stats {
                     Ok(stats) => stats,
                     Err(e) => {

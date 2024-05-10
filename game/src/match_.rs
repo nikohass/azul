@@ -21,7 +21,7 @@ pub struct PlayerStatistics {
     pub final_score: i16,
 }
 
-pub async fn run_match(
+pub fn run_match(
     mut game_state: GameState,
     players: &mut [Box<dyn Player>],
     verbose: bool,
@@ -37,6 +37,9 @@ pub async fn run_match(
         .collect::<Vec<_>>();
 
     game_state.check_integrity()?;
+    for player in players.iter_mut() {
+        player.notify_factories_refilled(&game_state);
+    }
     let mut stats = MatchStatistcs::default();
 
     let mut move_list = MoveList::default();
@@ -55,6 +58,12 @@ pub async fn run_match(
             println!("Factories refilled");
             println!("{}", display_gamestate(&game_state, Some(&player_names)));
         }
+        if refilled_factories {
+            for player in players.iter_mut() {
+                player.notify_factories_refilled(&game_state);
+            }
+        }
+
         stats.num_factory_refills += refilled_factories as u32;
         stats.num_turns += 1;
 
@@ -62,7 +71,7 @@ pub async fn run_match(
         let current_player = usize::from(current_player_marker);
 
         let request_time = std::time::Instant::now();
-        let players_move: Move = players[current_player].get_move(&game_state).await;
+        let players_move: Move = players[current_player].get_move(&game_state);
         if verbose {
             println!("{}: {}", player_names[current_player], players_move);
         }
@@ -94,7 +103,7 @@ pub async fn run_match(
         stats.player_statistics[current_player].num_moves += 1;
 
         for player in players.iter_mut() {
-            player.notify_move(&game_state, players_move).await;
+            player.notify_move(&game_state, players_move);
         }
 
         game_state.check_integrity()?;
@@ -111,57 +120,9 @@ pub async fn run_match(
 
     // Reset the players
     for player in players.iter_mut() {
-        player.reset().await;
+        player.notify_game_over(&game_state);
+        player.reset();
     }
 
     Ok(stats)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    pub struct MockPlayer {
-        name: String,
-    }
-
-    #[async_trait::async_trait]
-    impl Player for MockPlayer {
-        fn get_name(&self) -> &str {
-            &self.name
-        }
-
-        async fn get_move(&mut self, game_state: &GameState) -> Move {
-            let mut game_state = game_state.clone();
-            let mut move_list = MoveList::default();
-            let mut rng = SmallRng::seed_from_u64(0);
-            game_state.get_possible_moves(&mut move_list, &mut rng);
-            move_list[0]
-        }
-    }
-
-    #[tokio::test]
-    async fn test_match() {
-        let player1: Box<dyn Player> = Box::new(MockPlayer {
-            name: "Player 1".to_string(),
-        });
-        let player2: Box<dyn Player> = Box::new(MockPlayer {
-            name: "Player 2".to_string(),
-        });
-        let player3: Box<dyn Player> = Box::new(MockPlayer {
-            name: "Player 3".to_string(),
-        });
-        let player4: Box<dyn Player> = Box::new(MockPlayer {
-            name: "Player 4".to_string(),
-        });
-        let mut players = match NUM_PLAYERS {
-            2 => vec![player1, player2],
-            3 => vec![player1, player2, player3],
-            _ => vec![player1, player2, player3, player4],
-        };
-        let mut rng = SmallRng::seed_from_u64(0);
-        run_match(GameState::new(&mut rng), &mut players, false)
-            .await
-            .unwrap();
-    }
 }

@@ -24,7 +24,6 @@ impl Default for HumanCommandLinePlayer {
     }
 }
 
-#[async_trait::async_trait]
 impl Player for HumanCommandLinePlayer {
     fn get_name(&self) -> &str {
         &self.name
@@ -34,7 +33,7 @@ impl Player for HumanCommandLinePlayer {
         self.name = name.to_string();
     }
 
-    async fn get_move(&mut self, game_state: &GameState) -> Move {
+    fn get_move(&mut self, game_state: &GameState) -> Move {
         let mut game_state = game_state.clone();
         let mut rng = SmallRng::from_entropy();
         game_state.get_possible_moves(&mut self.move_list, &mut rng);

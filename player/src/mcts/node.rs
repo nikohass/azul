@@ -293,6 +293,7 @@ impl Node {
         }
     }
 
+    #[allow(dead_code)]
     pub fn count_nodes(&self) -> ChildCount {
         let mut total_child_count = match self.previous_event {
             Event::Probabilistic(_) => ChildCount {

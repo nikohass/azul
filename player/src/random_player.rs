@@ -7,7 +7,6 @@ pub struct RandomPlayer {
     rng: rand::rngs::SmallRng,
 }
 
-#[async_trait::async_trait]
 impl Player for RandomPlayer {
     fn get_name(&self) -> &str {
         &self.name
@@ -17,7 +16,7 @@ impl Player for RandomPlayer {
         self.name = name.to_string();
     }
 
-    async fn get_move(&mut self, game_state: &GameState) -> Move {
+    fn get_move(&mut self, game_state: &GameState) -> Move {
         let mut game_state = game_state.clone();
         game_state.get_possible_moves(&mut self.move_list, &mut self.rng);
         self.move_list[self.rng.gen_range(0..self.move_list.len())]

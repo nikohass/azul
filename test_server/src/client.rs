@@ -50,8 +50,7 @@ impl Player for Client {
         &self.path
     }
 
-    async fn get_move(&mut self, game_state: &GameState) -> Move {
-        // let name = self.name();
+    fn get_move(&mut self, game_state: &GameState) -> Move {
         if self.did_panic() {
             panic!("Client panicked");
         }
@@ -62,7 +61,6 @@ impl Player for Client {
             .unwrap()
             .write_all(msg.as_bytes())
             .unwrap();
-        // let start_time = Instant::now();
         let mut stdout = self.stdout.lock().unwrap();
         let mut read = BufReader::new(&mut *stdout);
         let mut line = String::new();
@@ -87,7 +85,7 @@ impl Player for Client {
         Move::deserialize_string(&line)
     }
 
-    async fn notify_move(&mut self, new_game_state: &GameState, move_: Move) {
+    fn notify_move(&mut self, new_game_state: &GameState, move_: Move) {
         let mut msg = format!(
             "notify_move {} {}",
             new_game_state.serialize_string(),
@@ -101,8 +99,18 @@ impl Player for Client {
             .unwrap();
     }
 
-    async fn set_time(&mut self, time: u64) {
+    fn set_time(&mut self, time: u64) {
         let mut msg = format!("time {}", time);
+        msg.push('\n');
+        self.stdin
+            .lock()
+            .unwrap()
+            .write_all(msg.as_bytes())
+            .unwrap();
+    }
+
+    fn set_pondering(&mut self, pondering: bool) {
+        let mut msg = format!("pondering {}", pondering);
         msg.push('\n');
         self.stdin
             .lock()

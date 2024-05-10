@@ -1,5 +1,7 @@
 #![allow(unused_imports)]
 
+use std::time::Duration;
+
 use game::{match_::run_match, *};
 use player::{
     command_line_player::HumanCommandLinePlayer,
@@ -12,16 +14,17 @@ use rand::{rngs::SmallRng, SeedableRng};
 async fn main() {
     let mut rng = SmallRng::from_entropy();
     // let game_state = GameState::deserialize_string("2_1_1_30266756869_0_4099-8449-196864-196609-65539-0_65864703_0_1099599-68440990_12901679104-8590065664_50331647-12868452351_0").unwrap();
+    let game_state = GameState::new(&mut rng);
     let mut players: Vec<Box<dyn Player>> = Vec::new();
+    // players.push(Box::<HumanCommandLinePlayer>::default());
     for _ in 0..NUM_PLAYERS {
         let mut player = MonteCarloTreeSearch::default();
-        player.set_time(20_000).await;
+        player.set_time(25000);
+        player.set_pondering(true);
         players.push(Box::new(player));
     }
-    // // players.push(Box::<HumanCommandLinePlayer>::default());
-    // run_match(game_state, &mut players, true).await.unwrap();
-    let game_state = GameState::new(&mut rng);
-    let _stats = run_match(game_state, &mut players, true).await.unwrap();
+    run_match(game_state, &mut players, true).unwrap();
+    // let _stats = run_match(game_state, &mut players, true).await.unwrap();
     // let scores = stats
     //     .player_statistics
     //     .iter()
@@ -36,13 +39,21 @@ async fn main() {
     // // let game_state = GameState::deserialize_string("2_0_1_56086956810_197377_0-65554-8209-0-0-8623554817_65799146_0_132-295172_4311875840-12918456832_12952011263-17196581631_0").unwrap();
     // let game_state = GameState::deserialize_string("2_0_0_64694194190_0_0-0-65569-0-0-8623555072_65537000_0_0-0_4295163905-33554944_17163157251-1095300481279_0").unwrap();
     // let mut mcts = MonteCarloTreeSearch::default();
-    // mcts.set_time(60000 * 30).await;
+    // mcts.set_pondering(true).await;
     // mcts.get_move(&game_state).await;
+    // // mcts.start_pondering();
 
-    // let pv = mcts.get_principal_variation();
+    // tokio::time::sleep(Duration::from_secs(10)).await;
+
+    // mcts.stop_pondering();
+
+    // let pv = mcts.get_principal_variation().await;
     // for event in pv.iter() {
     //     println!("{}", event);
     // }
+
+    // mcts.set_time(60000 * 30).await;
+    // mcts.get_move(&game_state).await;
 
     // mcts.store_tree(0.0);
     // // let value = Value::from_game_scores([71_i16, 54_i16, 71_i16, 81_i16]);
