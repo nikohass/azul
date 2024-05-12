@@ -1,6 +1,7 @@
 use pyo3::{pyclass, pymethods};
 
 #[pyclass]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct PlayerMarker(pub game::PlayerMarker);
 
 #[pymethods]

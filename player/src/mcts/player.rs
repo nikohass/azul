@@ -1,4 +1,5 @@
 use super::node::Node;
+use super::value::Value;
 use crate::mcts::event::Event;
 use game::*;
 use rand::{rngs::SmallRng, SeedableRng};
@@ -87,7 +88,8 @@ impl MonteCarloTreeSearch {
                     }
                     do_iterations(root_node, &root_game_state, 100, &mut rng);
                     #[cfg(not(feature = "mute"))]
-                    if last_log_time.elapsed().as_secs() > 30 {
+                    // if last_log_time.elapsed().as_secs() > 30 {
+                    if last_log_time.elapsed().as_millis() > 500 {
                         pv.truncate(0);
                         root_node.build_pv(&mut root_game_state.clone(), &mut pv);
                         println!(
@@ -225,7 +227,7 @@ impl MonteCarloTreeSearch {
         best_move
     }
 
-    pub async fn store_tree(&self, min_visits: f32) {
+    pub fn store_tree(&self, min_visits: f32) {
         let mut current_id = 0;
         let mut data = String::from("digraph G {\n"); // Start of the DOT graph
                                                       // Settings for the graph
@@ -242,12 +244,21 @@ impl MonteCarloTreeSearch {
         println!("Tree stored in logs/tree.dot");
     }
 
-    pub async fn get_principal_variation(&mut self) -> Vec<Event> {
+    pub fn get_principal_variation(&mut self) -> Vec<Event> {
         let mut pv: Vec<Event> = Vec::new();
         if let Some(root_node) = &mut self.root_node.lock().unwrap().as_mut() {
             root_node.build_pv(&mut self.root_game_state.clone(), &mut pv);
         }
         pv
+    }
+
+    pub fn get_value(&self) -> Option<Value> {
+        self.root_node
+            .lock()
+            .unwrap()
+            .as_ref()
+            .as_ref()
+            .map(|root_node| root_node.get_value())
     }
 }
 

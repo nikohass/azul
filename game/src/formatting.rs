@@ -116,7 +116,11 @@ fn player_pattern_board_to_string(game_state: &GameState, player_index: usize) -
             string.push(' ');
         }
         let count = pattern_line_occupancy[pattern_index] as usize;
-        let missing = pattern_index + 1 - count;
+        let mut missing = pattern_index + 1 - count; // If you intentionally do wrong moves this integer underflow causes infinite memory allocation
+        if missing > 10 {
+            println!("There are too many tiles in the pattern line."); // This fix is just for displaying the game state after the integrity check fails while debugging
+            missing = 0;
+        }
         for _ in 0..missing {
             string.push_str(". ");
         }
@@ -136,6 +140,8 @@ fn player_pattern_board_to_string(game_state: &GameState, player_index: usize) -
 }
 
 pub fn display_gamestate(game_state: &GameState, player_names: Option<&Vec<String>>) -> String {
+    let player_names = player_names.filter(|&player_names| player_names.len() == NUM_PLAYERS);
+
     // Empty line for spacing
     let mut empty_line = " ".to_string();
     for _ in 0..NUM_PLAYERS - 1 {

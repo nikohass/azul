@@ -129,7 +129,7 @@ pub enum MoveGenerationResult {
     Continue,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct GameState {
     bag: Bag, // For each color, how many tiles are left in the bag
     out_of_bag: Bag,
@@ -148,23 +148,29 @@ pub struct GameState {
     tile_taken_from_center: bool,
 }
 
-impl std::fmt::Debug for GameState {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.serialize_string())
-    }
-}
-
 impl GameState {
     pub fn get_current_player(&self) -> PlayerMarker {
         self.current_player
+    }
+
+    pub fn set_current_player(&mut self, player: PlayerMarker) {
+        self.current_player = player;
     }
 
     pub fn get_next_round_starting_player(&self) -> PlayerMarker {
         self.next_round_starting_player
     }
 
+    pub fn set_next_round_starting_player(&mut self, player: PlayerMarker) {
+        self.next_round_starting_player = player;
+    }
+
     pub fn get_scores(&self) -> [i16; NUM_PLAYERS] {
         self.scores
+    }
+
+    pub fn set_scores(&mut self, scores: [i16; NUM_PLAYERS]) {
+        self.scores = scores;
     }
 
     pub fn get_bag(&self) -> Bag {
@@ -193,6 +199,10 @@ impl GameState {
 
     pub fn get_floor_line_progress(&self) -> [u8; NUM_PLAYERS] {
         self.floor_line_progress
+    }
+
+    pub fn set_floor_line_progress(&mut self, progress: [u8; NUM_PLAYERS]) {
+        self.floor_line_progress = progress;
     }
 
     pub fn get_walls(&self) -> [u32; NUM_PLAYERS] {
@@ -224,6 +234,10 @@ impl GameState {
 
     pub fn get_tile_taken_from_center(&self) -> bool {
         self.tile_taken_from_center
+    }
+
+    pub fn set_tile_taken_from_center(&mut self, taken: bool) {
+        self.tile_taken_from_center = taken;
     }
 
     pub fn serialize_string(&self) -> String {
@@ -755,12 +769,13 @@ impl GameState {
 
     pub fn check_integrity(&self) -> Result<(), GameError> {
         let mut is_valid = true;
+        let mut error_description = String::new();
 
         // Make sure the bag has less or equal than 20 tiles of each color
         for color in self.bag.iter() {
             if *color > 20 {
                 is_valid = false;
-                println!("Bag has more than 20 tiles of a color");
+                error_description.push_str("Bag has more than 20 tiles of a color\n");
             }
         }
 
@@ -773,7 +788,7 @@ impl GameState {
             if tile_count > 4 {
                 // In the rare case that you run out of tiles again while there are none left in the lid, start the new round as usual even though not all Factory displays are properly filled.
                 is_valid = false;
-                println!("Factory has {} tiles", tile_count);
+                error_description.push_str(&format!("Factory has {} tiles\n", tile_count));
             }
         }
 
@@ -784,13 +799,19 @@ impl GameState {
                 match color {
                     None => {
                         if self.pattern_lines_occupancy[player][pattern_line] != 0 {
-                            println!("There are tiles in pattern line {} of player {} but they don't have a color", pattern_line, player);
+                            error_description.push_str(&format!(
+                                "There are tiles in pattern line {} of player {} but they don't have a color\n",
+                                pattern_line, player
+                            ));
                             is_valid = false;
                         }
                     }
                     Some(_color) => {
                         if self.pattern_lines_occupancy[player][pattern_line] == 0 {
-                            println!("There are no tiles in pattern line {} of player {} but the line has a color {:?}", pattern_line, player, color);
+                            error_description.push_str(&format!(
+                                "There are no tiles in pattern line {} of player {} but the line has a color {:?}\n",
+                                pattern_line, player, color
+                            ));
                             is_valid = false;
                         }
                     }
@@ -830,12 +851,13 @@ impl GameState {
         // Make sure the total number of tiles is 20 for each
         let sum_tiles_in_game: u8 = tile_count.iter().sum();
         if sum_tiles_in_game != 100 {
-            println!(
-                "The sum of the tiles does not add up to 100. {:?} = {}",
+            error_description.push_str(&format!(
+                "The sum of the tiles does not add up to 100. {:?} = {}\n",
                 tile_count,
-                tile_count.iter().sum::<u8>(),
-            );
-            println!("{}", self);
+                tile_count.iter().sum::<u8>()
+            ));
+            error_description.push_str(&format!("{}\n", self));
+
             is_valid = false;
         }
         for (color, number) in tile_count.iter().enumerate() {
@@ -851,7 +873,7 @@ impl GameState {
 
         match is_valid {
             true => Ok(()),
-            false => Err(GameError::InvalidGameState),
+            false => Err(GameError::InvalidGameState(error_description)),
         }
     }
 

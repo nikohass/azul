@@ -8,3 +8,4 @@ default_config.toml
 .vscode
 build_wheel.bat
 */selenium
+*/__pycache__

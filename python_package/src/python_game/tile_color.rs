@@ -1,4 +1,4 @@
-use pyo3::{exceptions::PyValueError, pyclass, pymethods, PyResult};
+use pyo3::{basic::CompareOp, exceptions::PyValueError, pyclass, pymethods, PyResult};
 
 #[pyclass]
 #[derive(Clone, Copy)]
@@ -17,6 +17,7 @@ impl TileColor {
             _ => return Err(PyValueError::new_err(format!("Invalid color: {}", color))),
         })
     }
+
     fn __str__(&self) -> String {
         format!("{}", self.0)
     }
@@ -31,5 +32,13 @@ impl TileColor {
 
     fn __int__(&self) -> u8 {
         self.0.into()
+    }
+
+    fn __richcmp__(&self, other: Self, op: CompareOp) -> bool {
+        match op {
+            CompareOp::Eq => self.0 == other.0,
+            CompareOp::Ne => self.0 != other.0,
+            _ => false,
+        }
     }
 }

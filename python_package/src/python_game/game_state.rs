@@ -1,5 +1,7 @@
 use super::{move_::Move, player_marker::PlayerMarker, tile_color::TileColor};
-use game::{Factories, Factory, MoveList, NUM_FACTORIES, NUM_PLAYERS, NUM_TILE_COLORS};
+use game::{
+    display_gamestate, Factories, Factory, MoveList, NUM_FACTORIES, NUM_PLAYERS, NUM_TILE_COLORS,
+};
 use pyo3::{basic::CompareOp, exceptions::PyValueError, pyclass, pymethods, PyResult};
 use rand::{rngs::SmallRng, SeedableRng as _};
 
@@ -39,28 +41,45 @@ impl MoveGenerationResult {
 }
 
 #[pyclass]
-pub struct GameState(pub game::GameState);
+#[derive(Clone)]
+pub struct GameState(pub game::GameState, Option<Vec<String>>);
 
 #[pymethods]
 impl GameState {
     #[new]
     fn new(fen: Option<&str>) -> PyResult<Self> {
-        Ok(Self(match fen {
-            None => {
-                let mut rng = SmallRng::from_entropy();
-                game::GameState::new(&mut rng)
-            }
-            Some(fen) => game::GameState::deserialize_string(fen)
-                .map_err(|e| PyValueError::new_err(format!("Invalid FEN: {}", e)))?,
-        }))
+        Ok(Self(
+            match fen {
+                None => {
+                    let mut rng = SmallRng::from_entropy();
+                    game::GameState::new(&mut rng)
+                }
+                Some(fen) => game::GameState::deserialize_string(fen)
+                    .map_err(|e| PyValueError::new_err(format!("Invalid FEN: {}", e)))?,
+            },
+            None,
+        ))
+    }
+
+    fn set_player_names(&mut self, names: Option<Vec<String>>) {
+        self.1 = names;
+    }
+
+    #[getter]
+    fn player_names(&self) -> Option<Vec<String>> {
+        self.1.clone()
+    }
+
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), self.1.clone())
     }
 
     fn __str__(&self) -> String {
-        format!("{}", self.0)
+        display_gamestate(&self.0, self.1.as_ref())
     }
 
     fn __repr__(&self) -> String {
-        format!("{}", self.0)
+        display_gamestate(&self.0, self.1.as_ref())
     }
 
     #[getter]
@@ -68,32 +87,41 @@ impl GameState {
         PlayerMarker(self.0.get_current_player())
     }
 
+    fn set_current_player(&mut self, player: PlayerMarker) {
+        self.0.set_current_player(player.0);
+    }
+
     #[getter]
     fn next_round_starting_player(&self) -> PlayerMarker {
         PlayerMarker(self.0.get_next_round_starting_player())
     }
 
-    #[getter]
-    fn scores(&self) -> Vec<i16> {
-        self.0.get_scores().to_vec()
+    fn set_next_round_starting_player(&mut self, player: PlayerMarker) {
+        self.0.set_next_round_starting_player(player.0);
     }
 
     #[getter]
-    fn bag(&self) -> Vec<u8> {
-        self.0.get_bag().to_vec()
+    fn scores(&self) -> [i16; NUM_PLAYERS] {
+        self.0.get_scores()
     }
 
-    fn set_bag(&mut self, bag: Vec<u8>) -> PyResult<()> {
-        let bag: [u8; NUM_TILE_COLORS] = bag
-            .try_into()
-            .map_err(|_| PyValueError::new_err("Bag must have 5 elements"))?;
+    fn set_scores(&mut self, scores: [i16; NUM_PLAYERS]) {
+        self.0.set_scores(scores);
+    }
+
+    #[getter]
+    fn bag(&self) -> [u8; NUM_TILE_COLORS] {
+        self.0.get_bag()
+    }
+
+    fn set_bag(&mut self, bag: [u8; NUM_TILE_COLORS]) -> PyResult<()> {
         self.0.set_bag(bag);
         Ok(())
     }
 
     #[getter]
-    fn out_of_bag(&self) -> Vec<u8> {
-        self.0.get_out_of_bag().to_vec()
+    fn out_of_bag(&self) -> [u8; NUM_TILE_COLORS] {
+        self.0.get_out_of_bag()
     }
 
     fn set_out_of_bag(&mut self, out_of_bag: Vec<u8>) -> PyResult<()> {
@@ -115,8 +143,12 @@ impl GameState {
     }
 
     #[getter]
-    fn floor_line_progress(&self) -> Vec<u8> {
-        self.0.get_floor_line_progress().to_vec()
+    fn floor_line_progress(&self) -> [u8; NUM_PLAYERS] {
+        self.0.get_floor_line_progress()
+    }
+
+    fn set_floor_line_progress(&mut self, progress: [u8; NUM_PLAYERS]) {
+        self.0.set_floor_line_progress(progress);
     }
 
     #[getter]
@@ -163,6 +195,10 @@ impl GameState {
         self.0.get_tile_taken_from_center()
     }
 
+    fn set_tile_taken_from_center(&mut self, taken: bool) {
+        self.0.set_tile_taken_from_center(taken);
+    }
+
     #[getter]
     fn fen(&self) -> String {
         self.0.serialize_string()
@@ -183,6 +219,10 @@ impl GameState {
     fn check_integrity(&self) -> PyResult<()> {
         self.0
             .check_integrity()
-            .map_err(|_| PyValueError::new_err("Integrity check failed.".to_string()))
+            .map_err(|e: game::GameError| PyValueError::new_err(e.to_string()))
+    }
+
+    fn evaluate_round(&mut self) -> bool {
+        self.0.evaluate_round()
     }
 }
