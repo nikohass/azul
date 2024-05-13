@@ -54,7 +54,7 @@ impl Player for Client {
         if self.did_panic() {
             panic!("Client panicked");
         }
-        let mut msg = format!("get_move {}", game_state.serialize_string());
+        let mut msg = format!("get_move {}", game_state.to_fen());
         msg.push('\n');
         self.stdin
             .lock()
@@ -88,7 +88,7 @@ impl Player for Client {
     fn notify_move(&mut self, new_game_state: &GameState, move_: Move) {
         let mut msg = format!(
             "notify_move {} {}",
-            new_game_state.serialize_string(),
+            new_game_state.to_fen(),
             move_.serialize_string()
         );
         msg.push('\n');

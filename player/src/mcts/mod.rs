@@ -1,4 +1,4 @@
-mod event;
+mod edge;
 mod node;
 mod player;
 mod playout;

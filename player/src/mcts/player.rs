@@ -1,6 +1,6 @@
 use super::node::Node;
 use super::value::Value;
-use crate::mcts::event::Event;
+use crate::mcts::edge::Edge;
 use game::*;
 use rand::{rngs::SmallRng, SeedableRng};
 use std::sync::mpsc;
@@ -46,7 +46,7 @@ impl MonteCarloTreeSearch {
             .check_integrity()
             .expect("Trying to set root with invalid game state.");
 
-        if self.root_game_state.serialize_string() == game_state.serialize_string()
+        if self.root_game_state.to_fen() == game_state.to_fen()
             && self.root_node.lock().unwrap().is_some()
         {
             #[cfg(not(feature = "mute"))]
@@ -68,7 +68,7 @@ impl MonteCarloTreeSearch {
         let (tx, rx) = mpsc::channel::<()>();
 
         #[cfg(not(feature = "mute"))]
-        let mut pv: Vec<Event> = Vec::with_capacity(100);
+        let mut pv: Vec<Edge> = Vec::with_capacity(100);
         let is_pondering = self.is_pondering.clone();
 
         std::thread::spawn(move || {
@@ -106,7 +106,7 @@ impl MonteCarloTreeSearch {
                             root_node.get_value(),
                             pv.len(),
                             pv.iter()
-                                .map(|event| event.to_string())
+                                .map(|edge| edge.to_string())
                                 .collect::<Vec<_>>()
                                 .join(", ")
                         );
@@ -139,16 +139,13 @@ impl MonteCarloTreeSearch {
 
     fn search(&mut self, game_state: &GameState) -> Move {
         #[cfg(not(feature = "mute"))]
-        println!(
-            "Searching move using MCTS. Fen: {}",
-            game_state.serialize_string()
-        );
+        println!("Searching move using MCTS. Fen: {}", game_state.to_fen());
 
         let start_time = Instant::now();
         self.stop_pondering();
         self.set_root(game_state);
         let mut rng = SmallRng::from_entropy();
-        let mut pv: Vec<Event> = Vec::with_capacity(100);
+        let mut pv: Vec<Edge> = Vec::with_capacity(100);
         let mut iterations_per_ms = 1.; // Initial guess on the lower end for four players, will be adjusted later
         let mut completed_iterations: u64 = 0;
         let search_start_time = Instant::now();
@@ -241,7 +238,7 @@ impl MonteCarloTreeSearch {
                     completed_iterations,
                     root_node.get_value(),
                     pv.iter()
-                        .map(|event| event.to_string())
+                        .map(|edge| edge.to_string())
                         .collect::<Vec<_>>()
                         .join(", ")
                 );
@@ -270,7 +267,7 @@ impl MonteCarloTreeSearch {
                 completed_iterations,
                 iterations_per_ms * 1000.,
                 pv.iter()
-                    .map(|event| event.to_string())
+                    .map(|edge| edge.to_string())
                     .collect::<Vec<_>>()
                     .join(", "),
             );
@@ -309,8 +306,8 @@ impl MonteCarloTreeSearch {
         println!("Tree stored in logs/tree.dot");
     }
 
-    pub fn get_principal_variation(&mut self) -> Vec<Event> {
-        let mut pv: Vec<Event> = Vec::new();
+    pub fn get_principal_variation(&mut self) -> Vec<Edge> {
+        let mut pv: Vec<Edge> = Vec::new();
         if let Some(root_node) = &mut self.root_node.lock().unwrap().as_mut() {
             root_node.build_pv(&mut self.root_game_state.clone(), &mut pv);
         }
@@ -379,7 +376,7 @@ impl Player for MonteCarloTreeSearch {
         new_game_state
             .check_integrity()
             .expect("Trying to set root with invalid game state.");
-        if new_game_state.serialize_string() == self.root_game_state.serialize_string() {
+        if new_game_state.to_fen() == self.root_game_state.to_fen() {
             return;
         }
 
@@ -387,7 +384,7 @@ impl Player for MonteCarloTreeSearch {
         println!(
             "Notifying MCTS of move {}. Fen: {}",
             last_move,
-            new_game_state.serialize_string()
+            new_game_state.to_fen()
         );
         self.stop_pondering();
         let mut root_node = self.root_node.lock().unwrap();
@@ -397,7 +394,7 @@ impl Player for MonteCarloTreeSearch {
             .and_then(|root_node| root_node.take_child_with_move(last_move))
         {
             self.root_game_state.do_move(last_move);
-            if new_game_state.serialize_string() == self.root_game_state.serialize_string() {
+            if new_game_state.to_fen() == self.root_game_state.to_fen() {
                 self.root_game_state = new_game_state.clone();
                 *root_node = Some(new_root_node);
                 #[cfg(not(feature = "mute"))]

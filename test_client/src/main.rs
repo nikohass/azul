@@ -18,12 +18,12 @@ async fn main() {
         let command_type = entries[0];
         match command_type {
             "get_move" => {
-                let game_state = GameState::deserialize_string(entries.get(1).unwrap()).unwrap();
+                let game_state = GameState::from_fen(entries.get(1).unwrap()).unwrap();
                 let move_ = player.get_move(&game_state);
                 println!("move_response {}", move_.serialize_string());
             }
             "notify_move" => {
-                let game_state = GameState::deserialize_string(entries.get(1).unwrap()).unwrap();
+                let game_state = GameState::from_fen(entries.get(1).unwrap()).unwrap();
                 let move_ = Move::deserialize_string(entries.get(2).unwrap());
                 player.notify_move(&game_state, move_);
             }

@@ -240,7 +240,7 @@ impl GameState {
         self.tile_taken_from_center = taken;
     }
 
-    pub fn serialize_string(&self) -> String {
+    pub fn to_fen(&self) -> String {
         let number_of_players = NUM_PLAYERS as u8;
         let bag = (self.bag[0] as usize)
             | (self.bag[1] as usize) << 8
@@ -349,7 +349,7 @@ impl GameState {
         )
     }
 
-    pub fn deserialize_string(string: &str) -> Result<Self, String> {
+    pub fn from_fen(string: &str) -> Result<Self, String> {
         let entries: Vec<&str> = string.split('_').collect();
 
         let number_of_players = entries.first().ok_or("No number of players")?;
@@ -899,7 +899,7 @@ impl GameState {
 impl std::fmt::Display for GameState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut string = crate::formatting::display_gamestate(self, None);
-        string.push_str(self.serialize_string().as_str());
+        string.push_str(self.to_fen().as_str());
         write!(f, "{}", string)
     }
 }
@@ -930,9 +930,8 @@ mod tests {
                 println!("{}", game_state);
                 game_state.check_integrity().unwrap();
 
-                let string = game_state.serialize_string();
-                let reconstructed_game_state =
-                    GameState::deserialize_string(string.as_str()).unwrap();
+                let string = game_state.to_fen();
+                let reconstructed_game_state = GameState::from_fen(string.as_str()).unwrap();
                 assert_eq!(game_state.bag, reconstructed_game_state.bag, "Bag");
                 assert_eq!(
                     game_state.out_of_bag, reconstructed_game_state.out_of_bag,

@@ -1,4 +1,4 @@
-use super::event::{Event, ProbabilisticOutcome};
+use super::edge::{Edge, ProbabilisticOutcome};
 use super::value::Value;
 use game::*;
 use rand::rngs::SmallRng;
@@ -16,7 +16,7 @@ use constants::*;
 
 pub struct Node {
     children: Vec<Node>,
-    previous_event: Event, // The edge from the parent to this node
+    edge: Edge, // The edge from the parent to this node
     n: f32,
     q: Value,
     is_game_over: bool,
@@ -25,7 +25,7 @@ pub struct Node {
 
 impl std::fmt::Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.previous_event)
+        write!(f, "{:?}", self.edge)
     }
 }
 
@@ -33,7 +33,7 @@ impl Node {
     pub fn new_deterministic(previous_move: Move) -> Self {
         Node {
             children: Vec::new(),
-            previous_event: Event::Deterministic(previous_move),
+            edge: Edge::Deterministic(previous_move),
             n: 0.,
             q: Value::default(),
             is_game_over: false,
@@ -44,7 +44,7 @@ impl Node {
     pub fn new_probabilistic(outcome: ProbabilisticOutcome) -> Self {
         Node {
             children: Vec::new(),
-            previous_event: Event::Probabilistic(outcome),
+            edge: Edge::Probabilistic(outcome),
             n: 0.,
             q: Value::default(),
             is_game_over: false,
@@ -80,9 +80,9 @@ impl Node {
     }
 
     pub fn get_move(&self) -> Option<Move> {
-        match self.previous_event {
-            Event::Deterministic(move_) => Some(move_),
-            Event::Probabilistic(_) => None,
+        match self.edge {
+            Edge::Deterministic(move_) => Some(move_),
+            Edge::Probabilistic(_) => None,
         }
     }
 
@@ -243,7 +243,7 @@ impl Node {
             }
         } else {
             let next_child = self.select_child(current_player as usize, rng);
-            next_child.previous_event.apply_to_game_state(game_state);
+            next_child.edge.apply_to_game_state(game_state);
             next_child.iteration(game_state, move_list, rng)
         };
 
@@ -252,7 +252,7 @@ impl Node {
         (delta, depth + 1)
     }
 
-    pub fn build_pv(&mut self, game_state: &mut GameState, pv: &mut Vec<Event>) {
+    pub fn build_pv(&mut self, game_state: &mut GameState, pv: &mut Vec<Edge>) {
         if self.children.is_empty() {
             return;
         }
@@ -260,8 +260,8 @@ impl Node {
         let player_index = usize::from(game_state.get_current_player());
         let child = self.best_child(player_index);
 
-        child.previous_event.apply_to_game_state(game_state);
-        pv.push(child.previous_event.clone());
+        child.edge.apply_to_game_state(game_state);
+        pv.push(child.edge.clone());
 
         child.build_pv(game_state, pv);
     }
@@ -287,20 +287,20 @@ impl Node {
         }
 
         let child = self.best_child(player_index);
-        match child.previous_event {
-            Event::Deterministic(move_) => Some(move_),
-            Event::Probabilistic(_) => None,
+        match child.edge {
+            Edge::Deterministic(move_) => Some(move_),
+            Edge::Probabilistic(_) => None,
         }
     }
 
     #[allow(dead_code)]
     pub fn count_nodes(&self) -> ChildCount {
-        let mut total_child_count = match self.previous_event {
-            Event::Probabilistic(_) => ChildCount {
+        let mut total_child_count = match self.edge {
+            Edge::Probabilistic(_) => ChildCount {
                 deterministic: 0,
                 probabilistic: 1,
             },
-            Event::Deterministic(_) => ChildCount {
+            Edge::Deterministic(_) => ChildCount {
                 deterministic: 1,
                 probabilistic: 0,
             },

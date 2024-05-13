@@ -54,7 +54,7 @@ impl GameState {
                     let mut rng = SmallRng::from_entropy();
                     game::GameState::new(&mut rng)
                 }
-                Some(fen) => game::GameState::deserialize_string(fen)
+                Some(fen) => game::GameState::from_fen(fen)
                     .map_err(|e| PyValueError::new_err(format!("Invalid FEN: {}", e)))?,
             },
             None,
@@ -201,7 +201,7 @@ impl GameState {
 
     #[getter]
     fn fen(&self) -> String {
-        self.0.serialize_string()
+        self.0.to_fen()
     }
 
     fn do_move(&mut self, move_: Move) {

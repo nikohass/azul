@@ -1,7 +1,7 @@
-use pyo3::{pyclass, pymethods};
+use pyo3::{basic::CompareOp, pyclass, pymethods};
 
 #[pyclass]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy)]
 pub struct PlayerMarker(pub game::PlayerMarker);
 
 #[pymethods]
@@ -29,5 +29,13 @@ impl PlayerMarker {
 
     fn __repr__(&self) -> String {
         format!("PlayerMarker({})", self.__int__())
+    }
+
+    fn __richcmp__(&self, other: Self, op: CompareOp) -> bool {
+        match op {
+            CompareOp::Eq => self.0 == other.0,
+            CompareOp::Ne => self.0 != other.0,
+            _ => false,
+        }
     }
 }
