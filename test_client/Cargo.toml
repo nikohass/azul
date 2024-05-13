@@ -9,3 +9,4 @@ edition = "2021"
 game = { path = "../game" }
 player = { path = "../player" }
 tokio = { version = "1.33", features = ["full"] }
+serde_json = "1.0.68"

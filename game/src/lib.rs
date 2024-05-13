@@ -6,6 +6,7 @@ mod move_;
 mod move_list;
 mod player;
 mod tile_color;
+mod time_control;
 pub mod wall;
 
 pub use factories::{Factories, Factory};
@@ -19,6 +20,7 @@ pub use move_list::MoveList;
 pub use player::{Player, PlayerMarker};
 pub use tile_color::TileColor;
 pub use tile_color::NUM_TILE_COLORS;
+pub use time_control::TimeControl;
 pub use wall::field_at;
 
 #[derive(Debug, PartialEq)]

@@ -1,5 +1,5 @@
 use super::NUM_PLAYERS;
-use crate::{move_::Move, GameState};
+use crate::{move_::Move, GameState, TimeControl};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PlayerMarker(u8);
@@ -37,7 +37,7 @@ pub trait Player: Send + Sync {
     fn notify_move(&mut self, _new_game_state: &GameState, _move_: Move) {}
     fn notify_factories_refilled(&mut self, _game_state: &GameState) {}
     fn notify_game_over(&mut self, _game_state: &GameState) {}
-    fn set_time(&mut self, _time: u64) {}
+    fn set_time(&mut self, _time: TimeControl) {}
     fn set_pondering(&mut self, _pondering: bool) {}
     fn reset(&mut self) {}
 }

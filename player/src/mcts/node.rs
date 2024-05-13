@@ -195,7 +195,7 @@ impl Node {
         game_state: &mut GameState,
         move_list: &mut MoveList,
         rng: &mut SmallRng,
-    ) -> Value {
+    ) -> (Value, u16) {
         #[cfg(debug_assertions)]
         game_state.check_integrity().unwrap();
 
@@ -226,7 +226,7 @@ impl Node {
             }
         }
 
-        let delta: Value = if self.children.is_empty() {
+        let (delta, depth) = if self.children.is_empty() {
             if rng.gen_bool(EXPANSION_PROBABILITY) {
                 self.expand(game_state, move_list, rng);
                 if !self.is_game_over {
@@ -234,9 +234,9 @@ impl Node {
                 } else if self.n == 0. {
                     self.q = Value::from_game_scores(game_state.get_scores());
                     self.n = 1.;
-                    self.q
+                    (self.q, 0)
                 } else {
-                    self.q / self.n
+                    (self.q / self.n, 0)
                 }
             } else {
                 super::playout::playout(game_state.clone(), rng)
@@ -249,7 +249,7 @@ impl Node {
 
         self.backpropagate(delta);
 
-        delta
+        (delta, depth + 1)
     }
 
     pub fn build_pv(&mut self, game_state: &mut GameState, pv: &mut Vec<Event>) {

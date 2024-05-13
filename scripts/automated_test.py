@@ -52,9 +52,9 @@ def run_test_server(num_players):
             return TestStatus.SERVER_ERROR
 
 class PlayerConfig:
-    def __init__(self, executable: str, think_time: int, allow_pondering: bool = False):
+    def __init__(self, executable: str, time_control: str, allow_pondering: bool = False):
         self.executable = executable
-        self.think_time = think_time
+        self.time_control = time_control
         self.allow_pondering = allow_pondering
 
         self.index = None
@@ -64,7 +64,7 @@ class PlayerConfig:
         self.index = index
         result = f"[player_{name}]\n"
         result += f"executable = \"{self.executable}\"\n"
-        result += f"think_time = {self.think_time}\n"
+        result += f"time_control = {self.time_control}\n"
         result += f"allow_pondering = {str(self.allow_pondering).lower()}\n"
         return result
 
@@ -75,14 +75,14 @@ class GameConfig:
         self.num_simulations_games = num_simulations_games
         self.constant_ordering = constant_ordering
         self.stop_on_significant_difference = stop_on_significant_difference
-    
+
     def to_toml(self) -> str:
         result = "[game]\n"
         result += f"num_games = {self.num_games}\n"
         result += f"num_simultaneous_games = {self.num_simulations_games}\n"
         result += f"constant_ordering = {str(self.constant_ordering).lower()}\n"
         result += "verbose = false\n"
-        
+
         for i, player in enumerate(self.players):
             result += player.to_toml(i)
 
@@ -240,8 +240,16 @@ if __name__ == "__main__":
     os.chdir(os.path.join(os.path.dirname(__file__), ".."))
 
     game_config = GameConfig([
-            PlayerConfig("target/release/test_client.exe", think_time=2500, allow_pondering=False),
-            PlayerConfig("clients/2/2.exe", think_time=2500, allow_pondering=False),
+            PlayerConfig(
+                "target/release/test_client.exe", 
+                time_control="""{ type = "SuddenDeath", total_milliseconds = 10000 }""", 
+                allow_pondering=False
+            ),
+            PlayerConfig(
+                "target/release/test_client.exe", 
+                time_control="""{ type = "SuddenDeath", total_milliseconds = 10000 }""", 
+                allow_pondering=False
+            ),
         ],
         num_games=300,
         num_simulations_games=10,

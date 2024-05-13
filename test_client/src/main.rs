@@ -1,4 +1,4 @@
-use game::{GameState, Move, Player as _};
+use game::{GameState, Move, Player as _, TimeControl};
 use player::mcts::MonteCarloTreeSearch as Player;
 
 // use player::random_player::RandomPlayer as Player;
@@ -31,8 +31,11 @@ async fn main() {
                 player = Player::default();
             }
             "time" => {
-                let time = entries.get(1).unwrap().parse::<u64>().unwrap();
-                player.set_time(time);
+                let time_str = entries.get(1).unwrap();
+                match serde_json::from_str::<TimeControl>(time_str) {
+                    Ok(time) => player.set_time(time),
+                    Err(e) => println!("Error parsing time control: {}", e),
+                }
             }
             "pondering" => {
                 let pondering = entries.get(1).unwrap().parse::<bool>().unwrap();

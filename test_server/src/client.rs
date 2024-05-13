@@ -1,4 +1,4 @@
-use game::{GameState, Move, Player};
+use game::{GameState, Move, Player, TimeControl};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::{Arc, Mutex};
@@ -99,8 +99,9 @@ impl Player for Client {
             .unwrap();
     }
 
-    fn set_time(&mut self, time: u64) {
-        let mut msg = format!("time {}", time);
+    fn set_time(&mut self, time: TimeControl) {
+        let mut msg = serde_json::to_string(&time).unwrap();
+        msg = format!("time {}", msg);
         msg.push('\n');
         self.stdin
             .lock()

@@ -1,4 +1,4 @@
-use crate::python_game::{game_state::GameState, move_::Move};
+use crate::python_game::{game_state::GameState, move_::Move, time_control::TimeControl};
 use game::{Player, NUM_PLAYERS};
 use pyo3::{pyclass, pymethods};
 
@@ -41,8 +41,8 @@ impl MonteCarloTreeSearch {
         Move(self.0.get_move(&state.0))
     }
 
-    fn set_time(&mut self, time: u64) {
-        self.0.set_time(time);
+    fn set_time(&mut self, time: TimeControl) {
+        self.0.set_time(time.0);
     }
 
     fn set_pondering(&mut self, pondering: bool) {

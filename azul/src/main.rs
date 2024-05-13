@@ -43,7 +43,9 @@ fn configure_players() -> Vec<Box<dyn Player>> {
                 println!("Set thinking time for MCTS (ms):");
                 let time = read_line().parse::<u64>().unwrap_or(1000).max(100);
 
-                mcts.set_time(time);
+                mcts.set_time(game::TimeControl::ConstantTimePerMove {
+                    milliseconds_per_move: time,
+                });
                 mcts.set_pondering(true);
                 Box::new(mcts)
             }

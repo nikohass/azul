@@ -1,6 +1,6 @@
 use game::*;
 
-#[derive(Debug, Clone)] // TODO: Default just for swapping root
+#[derive(Debug, Clone)]
 pub struct ProbabilisticOutcome {
     pub factories: Factories,
     pub bag: Bag,

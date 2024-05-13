@@ -11,9 +11,13 @@ use std::{
 
 pub struct MonteCarloTreeSearch {
     name: String,
+    time_control: TimeControl,
+    elapsed_time: u64,
+    bonus_time: u64,
+
     root_node: Arc<Mutex<Option<Node>>>,
     root_game_state: GameState,
-    time_limit: u64,
+
     stop_pondering_sender: Option<mpsc::Sender<()>>,
     allow_pondering: bool,
     is_pondering: Arc<Mutex<bool>>,
@@ -22,13 +26,18 @@ pub struct MonteCarloTreeSearch {
 fn do_iterations(
     root_node: &mut Node,
     root_game_state: &GameState,
-    iterations: usize,
+    iterations: u64,
     rng: &mut SmallRng,
-) {
+) -> f32 {
     let mut move_list = MoveList::new();
+    let mut sum_game_length = 0.0;
     for _ in 0..iterations {
-        root_node.iteration(&mut root_game_state.clone(), &mut move_list, rng);
+        let (_, game_length) =
+            root_node.iteration(&mut root_game_state.clone(), &mut move_list, rng);
+        sum_game_length += game_length as f32;
     }
+
+    sum_game_length
 }
 
 impl MonteCarloTreeSearch {
@@ -141,7 +150,7 @@ impl MonteCarloTreeSearch {
         let mut rng = SmallRng::from_entropy();
         let mut pv: Vec<Event> = Vec::with_capacity(100);
         let mut iterations_per_ms = 1.; // Initial guess on the lower end for four players, will be adjusted later
-        let mut completed_iterations: usize = 0;
+        let mut completed_iterations: u64 = 0;
         let search_start_time = Instant::now();
 
         let factories: &[[u8; 5]; NUM_FACTORIES] = game_state.get_factories();
@@ -154,12 +163,14 @@ impl MonteCarloTreeSearch {
 
         #[cfg(not(feature = "mute"))]
         println!(
-            "    Left Depth Iterations Value{} Principal variation",
+            "    Left PV-Depth Iterations Value{}Principal variation",
             " ".repeat(NUM_PLAYERS * 5 - "Value".len())
         );
 
         // Scope in which the root node is locked
         let best_move;
+        let mut sum_game_length = 0.0;
+        let mut expected_game_length = f32::NAN;
         {
             let mut root_node = self.root_node.lock().unwrap();
             let root_node = root_node.as_mut().unwrap();
@@ -168,14 +179,65 @@ impl MonteCarloTreeSearch {
                 pv.truncate(0);
                 root_node.build_pv(&mut self.root_game_state.clone(), &mut pv);
 
-                let time_left: i64 =
-                    self.time_limit as i64 - start_time.elapsed().as_millis() as i64;
+                let (iterations, time_info) = match self.time_control {
+                    TimeControl::ConstantTimePerMove {
+                        milliseconds_per_move,
+                    } => {
+                        let time_left: i64 =
+                            milliseconds_per_move as i64 - start_time.elapsed().as_millis() as i64;
+                        let time_info = format!("{}ms", time_left);
+                        if time_left < 30 {
+                            (0, time_info)
+                        } else {
+                            (
+                                ((time_left as f32 / 6.).min(5000.) * iterations_per_ms).max(1.)
+                                    as u64,
+                                time_info,
+                            )
+                        }
+                    }
+                    TimeControl::ConstantIterationsPerMove {
+                        iterations_per_move,
+                    } => {
+                        let remaining_iterations = iterations_per_move - completed_iterations;
+                        let next_iterations =
+                            remaining_iterations.min(200_000.min(iterations_per_move / 10));
+                        (next_iterations, format!("{}", remaining_iterations))
+                    }
+                    TimeControl::SuddenDeath { total_milliseconds } => {
+                        // let total_remaining_time = total_milliseconds as i64 - self.elapsed_time as i64;// - start_time.elapsed().as_millis() as i64;
+                        let total_time_for_this_search = (total_milliseconds as f32
+                            - self.elapsed_time as f32)
+                            / (expected_game_length - 1.0)
+                            * NUM_PLAYERS as f32;
+                        let remaining_time =
+                            total_time_for_this_search - start_time.elapsed().as_millis() as f32;
+                        let time_info: String = format!(
+                            "{:.0}ms",
+                            remaining_time + total_milliseconds as f32 - self.elapsed_time as f32
+                        );
+                        if expected_game_length.is_nan() {
+                            (1000, time_info)
+                        } else if remaining_time < 30.0 {
+                            (0, time_info)
+                        } else {
+                            // let time_left = total_remaining_time as f32 / expected_game_length;
+                            // println!("{}", remaining_time);
+                            (
+                                ((remaining_time / 6.).min(5000.) * iterations_per_ms).max(1.)
+                                    as u64,
+                                time_info,
+                            )
+                        }
+                    }
+                    _ => panic!("Time control not implemented."),
+                };
 
                 #[cfg(not(feature = "mute"))]
                 println!(
-                    "{:6}ms {:5} {:10} {:18} {}",
-                    time_left,
-                    pv.len(),
+                    "{:>8} {:>8} {:10} {:18} {}",
+                    time_info,
+                    format!("{}/≈{:.1}", pv.len(), expected_game_length - 1.0),
                     completed_iterations,
                     root_node.get_value(),
                     pv.iter()
@@ -184,14 +246,14 @@ impl MonteCarloTreeSearch {
                         .join(", ")
                 );
 
-                if time_left < 30 {
+                if iterations == 0 {
                     break;
                 }
 
-                let iterations =
-                    ((time_left as f32 / 6.).min(5000.) * iterations_per_ms).max(1.) as usize;
-                do_iterations(root_node, &self.root_game_state, iterations, &mut rng);
+                sum_game_length +=
+                    do_iterations(root_node, &self.root_game_state, iterations, &mut rng);
                 completed_iterations += iterations;
+                expected_game_length = sum_game_length / completed_iterations as f32;
 
                 let elapsed_time = search_start_time.elapsed().as_micros() as f32 / 1000.;
                 if elapsed_time > 0. {
@@ -224,6 +286,9 @@ impl MonteCarloTreeSearch {
             game_state.do_move(best_move);
             self.notify_move(&game_state, best_move);
         }
+
+        self.elapsed_time += start_time.elapsed().as_millis() as u64;
+
         best_move
     }
 
@@ -269,7 +334,11 @@ impl Default for MonteCarloTreeSearch {
             name: "Monte Carlo Tree Search".to_string(),
             root_node: Arc::new(Mutex::new(None)),
             root_game_state: GameState::new(&mut rng),
-            time_limit: 6000,
+            time_control: TimeControl::ConstantTimePerMove {
+                milliseconds_per_move: 6000,
+            },
+            elapsed_time: 0,
+            bonus_time: 0,
             stop_pondering_sender: None,
             allow_pondering: false,
             is_pondering: Arc::new(Mutex::new(false)),
@@ -291,8 +360,10 @@ impl Player for MonteCarloTreeSearch {
         self.search(game_state)
     }
 
-    fn set_time(&mut self, time: u64) {
-        self.time_limit = time;
+    fn set_time(&mut self, time_control: TimeControl) {
+        self.elapsed_time = 0;
+        self.bonus_time = 0;
+        self.time_control = time_control;
     }
 
     fn set_pondering(&mut self, pondering: bool) {
@@ -353,6 +424,8 @@ impl Player for MonteCarloTreeSearch {
     fn reset(&mut self) {
         self.stop_pondering();
         *self.root_node.lock().unwrap() = None;
+        self.elapsed_time = 0;
+        self.bonus_time = 0;
     }
 
     fn notify_factories_refilled(&mut self, game_state: &GameState) {

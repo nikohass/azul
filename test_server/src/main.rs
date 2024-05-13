@@ -10,7 +10,7 @@ use async_mutex::{Mutex, MutexGuard};
 use client::Client;
 use game::{
     match_::{self, MatchStatistcs},
-    GameError, GameState, Player, NUM_PLAYERS,
+    GameError, GameState, Player, TimeControl, NUM_PLAYERS,
 };
 
 mod logging;
@@ -35,7 +35,7 @@ struct GameConfig {
 #[derive(Debug, Deserialize, Clone)]
 struct PlayerConfig {
     pub executable: String,
-    pub think_time: u64,
+    pub time_control: TimeControl,
     pub allow_pondering: bool,
 }
 
@@ -135,7 +135,7 @@ async fn main() {
                 let mut ordered_clients: Vec<Box<dyn Player>> = Vec::new();
                 for &i in &next_order {
                     let mut client = Client::from_path(&players_clone[i - 1].executable, verbose);
-                    client.set_time(players_clone[i - 1].think_time);
+                    client.set_time(players_clone[i - 1].time_control.clone());
                     client.set_pondering(players_clone[i - 1].allow_pondering);
                     ordered_clients.push(Box::new(client));
                 }
