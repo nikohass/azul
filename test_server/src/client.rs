@@ -44,7 +44,6 @@ impl Client {
     }
 }
 
-#[async_trait::async_trait]
 impl Player for Client {
     fn get_name(&self) -> &str {
         &self.path

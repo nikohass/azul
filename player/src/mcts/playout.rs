@@ -313,7 +313,6 @@ impl Default for HeuristicMoveGenerationPlayer {
     }
 }
 
-#[async_trait::async_trait]
 impl Player for HeuristicMoveGenerationPlayer {
     fn get_move(&mut self, game_state: &GameState) -> Move {
         let mut game_state = game_state.clone();

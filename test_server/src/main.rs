@@ -1,4 +1,4 @@
-use std::{sync::Arc, vec};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use clap::Parser;
 use config::{Config, File, FileFormat};
@@ -6,7 +6,6 @@ use rand::{rngs::SmallRng, SeedableRng};
 use serde::Deserialize;
 
 mod client;
-use async_mutex::{Mutex, MutexGuard};
 use client::Client;
 use game::{
     match_::{self, MatchStatistcs},
@@ -56,8 +55,7 @@ fn run_match(players: &mut [Box<dyn Player>], verbose: bool) -> Result<MatchStat
     )
 }
 
-#[tokio::main]
-async fn main() {
+fn main() {
     init_logging("test_server");
     let cli = Cli::parse();
 
@@ -120,9 +118,9 @@ async fn main() {
         let game_results_clone = game_results.clone();
         let players_clone = players.clone();
 
-        let handle = tokio::spawn(async move {
+        let handle = std::thread::spawn(move || {
             loop {
-                let mut game_queue_locked = game_queue_clone.lock().await;
+                let mut game_queue_locked = game_queue_clone.lock().unwrap();
                 if game_queue_locked.is_empty() {
                     break;
                 }
@@ -156,7 +154,7 @@ async fn main() {
                     reordered_stats[original_index - 1] = stats.player_statistics[index].clone();
                 }
                 stats.player_statistics = reordered_stats.try_into().expect("Incorrect length");
-                let mut game_results_lock = game_results_clone.lock().await;
+                let mut game_results_lock = game_results_clone.lock().unwrap();
                 game_results_lock.push(stats);
 
                 print_stats(game_results_lock);
@@ -166,7 +164,7 @@ async fn main() {
     }
 
     for handle in handles {
-        match handle.await {
+        match handle.join() {
             Ok(_) => log::debug!("Task completed successfully"),
             Err(e) => log::error!("Game ended with an error: {:?}", e),
         }
