@@ -16,25 +16,41 @@ fn main() {
     let game_state = GameState::new(&mut rng);
     let mut players: Vec<Box<dyn Player>> = Vec::new();
     // players.push(Box::<HumanCommandLinePlayer>::default());
-    for i in 0..NUM_PLAYERS {
+    for _i in 0..NUM_PLAYERS {
         let mut player = MonteCarloTreeSearch::default();
         // player.set_time(TimeControl::ConstantTimePerMove {
         //     milliseconds_per_move: 5000,
         // });
-        if i == 0 {
-            player.set_time(TimeControl::SuddenDeath {
-                total_milliseconds: 30_000,
-            });
-        } else {
-            player.set_time(TimeControl::ConstantTimePerMove {
-                milliseconds_per_move: 1000,
-            });
-        }
+        // player.set_time(TimeControl::ConstantIterationsPerMove {
+        //     iterations_per_move: 10000,
+        // });
+        player.set_time(TimeControl::SuddenDeath {
+            total_milliseconds: 60_000 * 5,
+        });
+        // player.set_time(TimeControl::Incremental {
+        //     total_milliseconds: 120_000,
+        //     increment_milliseconds: 24_000,
+        // });
+        // player.set_time(TimeControl::RealTimeIncremental {
+        //     base_time_milliseconds: 60_000 * 2 + 12_000,
+        //     increment_milliseconds: 24_000,
+        //     max_time_milliseconds: 60_000 * 2 + 12_000,
+        // });
 
         player.set_pondering(false);
         players.push(Box::new(player));
     }
-    run_match(game_state, &mut players, true).unwrap();
+
+    let start_time = std::time::Instant::now();
+    let _stats = run_match(game_state, &mut players, true).unwrap();
+    // let num_turns = stats.num_turns;
+    // let expected_duration = 0 * NUM_PLAYERS as u64 + 200 * (num_turns as u64);
+    let elapsed_time = start_time.elapsed();
+    println!("Elapsed time: {:?}", elapsed_time);
+    // println!(
+    //     "Expected duration: {:?}",
+    //     Duration::from_millis(expected_duration)
+    // );
     // let mut game_state = GameState::deserialize_string("2_0_0_68955345170_0_65809-4354-0-0-0-8590000384_65537000_1_0-0_33751553-12918456832_1095216858113-16712447_1").unwrap();
     // println!("{}", game_state);
 

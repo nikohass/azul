@@ -1,24 +1,21 @@
 use super::node::Node;
+use super::time_control::MctsTimeControl;
 use super::value::Value;
 use crate::mcts::edge::Edge;
 use game::*;
 use rand::{rngs::SmallRng, SeedableRng};
-use std::sync::mpsc;
 use std::{
-    sync::{Arc, Mutex},
+    sync::{atomic::AtomicBool, atomic::Ordering, Arc, Mutex},
     time::Instant,
 };
 
 pub struct MonteCarloTreeSearch {
     name: String,
-    time_control: TimeControl,
-    elapsed_time: u64,
-    bonus_time: u64,
-
+    time_control: MctsTimeControl,
     root_node: Arc<Mutex<Option<Node>>>,
     root_game_state: GameState,
 
-    stop_pondering_sender: Option<mpsc::Sender<()>>,
+    stop_flag: Arc<AtomicBool>,
     allow_pondering: bool,
     is_pondering: Arc<Mutex<bool>>,
 }
@@ -34,7 +31,7 @@ fn do_iterations(
     for _ in 0..iterations {
         let (_, game_length) =
             root_node.iteration(&mut root_game_state.clone(), &mut move_list, rng);
-        sum_game_length += game_length as f32;
+        sum_game_length += game_length as f32 - 1.0;
     }
 
     sum_game_length
@@ -65,12 +62,12 @@ impl MonteCarloTreeSearch {
         let mut rng = SmallRng::from_entropy();
         let root_node = self.root_node.clone();
         let root_game_state = self.root_game_state.clone();
-        let (tx, rx) = mpsc::channel::<()>();
+        let stop_flag = Arc::new(AtomicBool::new(false));
 
         #[cfg(not(feature = "mute"))]
         let mut pv: Vec<Edge> = Vec::with_capacity(100);
         let is_pondering = self.is_pondering.clone();
-
+        let stop_flag_clone = stop_flag.clone();
         std::thread::spawn(move || {
             {
                 let mut is_pondering = is_pondering.lock().unwrap();
@@ -88,17 +85,16 @@ impl MonteCarloTreeSearch {
             let mut last_log_time = Instant::now();
             #[cfg(not(feature = "mute"))]
             let mut iterations = 0;
-            while rx.try_recv().is_err() {
-                let mut root_node = root_node.lock().unwrap();
-                if let Some(root_node) = root_node.as_mut() {
+            let mut root_node = root_node.lock().unwrap();
+            if let Some(root_node) = root_node.as_mut() {
+                while !stop_flag_clone.load(Ordering::Relaxed) {
                     #[cfg(not(feature = "mute"))]
                     {
                         iterations += 100;
                     }
                     do_iterations(root_node, &root_game_state, 100, &mut rng);
                     #[cfg(not(feature = "mute"))]
-                    // if last_log_time.elapsed().as_secs() > 30 {
-                    if last_log_time.elapsed().as_millis() > 500 {
+                    if last_log_time.elapsed().as_secs() > 30 {
                         pv.truncate(0);
                         root_node.build_pv(&mut root_game_state.clone(), &mut pv);
                         println!(
@@ -112,8 +108,6 @@ impl MonteCarloTreeSearch {
                         );
                         last_log_time = Instant::now();
                     }
-                } else {
-                    break;
                 }
             }
 
@@ -128,18 +122,20 @@ impl MonteCarloTreeSearch {
                 *is_pondering = false;
             }
         });
-        self.stop_pondering_sender = Some(tx);
+        self.stop_flag = stop_flag;
     }
 
     pub fn stop_pondering(&mut self) {
-        if let Some(sender) = self.stop_pondering_sender.take() {
-            let _ = sender.send(());
-        }
+        self.stop_flag.store(true, Ordering::Relaxed);
     }
 
     fn search(&mut self, game_state: &GameState) -> Move {
         #[cfg(not(feature = "mute"))]
-        println!("Searching move using MCTS. Fen: {}", game_state.to_fen());
+        println!(
+            "Searching move using MCTS. Fen: {}, Time Control: {}",
+            game_state.to_fen(),
+            self.time_control
+        );
 
         let start_time = Instant::now();
         self.stop_pondering();
@@ -159,15 +155,28 @@ impl MonteCarloTreeSearch {
         }
 
         #[cfg(not(feature = "mute"))]
-        println!(
-            "    Left PV-Depth Iterations Value{}Principal variation",
-            " ".repeat(NUM_PLAYERS * 5 - "Value".len())
-        );
+        {
+            let player_string = (0..NUM_PLAYERS)
+                .map(|i| format!("  V{}", i + 1))
+                .collect::<Vec<String>>()
+                .join(" ");
+            println!(
+                "{:>10} {:>3} {:>9} {} {:>8} {:>8} {:>8} {:>2}",
+                "Iterations",
+                "PVd",
+                "Avg.Plies",
+                player_string,
+                "Stop",
+                "Total",
+                "Speed",
+                "Principal Variation"
+            );
+        }
 
         // Scope in which the root node is locked
         let best_move;
         let mut sum_game_length = 0.0;
-        let mut expected_game_length = f32::NAN;
+        let mut estimated_remaining_plies = f32::NAN;
         {
             let mut root_node = self.root_node.lock().unwrap();
             let root_node = root_node.as_mut().unwrap();
@@ -176,71 +185,31 @@ impl MonteCarloTreeSearch {
                 pv.truncate(0);
                 root_node.build_pv(&mut self.root_game_state.clone(), &mut pv);
 
-                let (iterations, time_info) = match self.time_control {
-                    TimeControl::ConstantTimePerMove {
-                        milliseconds_per_move,
-                    } => {
-                        let time_left: i64 =
-                            milliseconds_per_move as i64 - start_time.elapsed().as_millis() as i64;
-                        let time_info = format!("{}ms", time_left);
-                        if time_left < 30 {
-                            (0, time_info)
-                        } else {
-                            (
-                                ((time_left as f32 / 6.).min(5000.) * iterations_per_ms).max(1.)
-                                    as u64,
-                                time_info,
-                            )
-                        }
-                    }
-                    TimeControl::ConstantIterationsPerMove {
-                        iterations_per_move,
-                    } => {
-                        let remaining_iterations = iterations_per_move - completed_iterations;
-                        let next_iterations =
-                            remaining_iterations.min(200_000.min(iterations_per_move / 10));
-                        (next_iterations, format!("{}", remaining_iterations))
-                    }
-                    TimeControl::SuddenDeath { total_milliseconds } => {
-                        // let total_remaining_time = total_milliseconds as i64 - self.elapsed_time as i64;// - start_time.elapsed().as_millis() as i64;
-                        let total_time_for_this_search = (total_milliseconds as f32
-                            - self.elapsed_time as f32)
-                            / (expected_game_length - 1.0)
-                            * NUM_PLAYERS as f32;
-                        let remaining_time =
-                            total_time_for_this_search - start_time.elapsed().as_millis() as f32;
-                        let time_info: String = format!(
-                            "{:.0}ms",
-                            remaining_time + total_milliseconds as f32 - self.elapsed_time as f32
-                        );
-                        if expected_game_length.is_nan() {
-                            (1000, time_info)
-                        } else if remaining_time < 30.0 {
-                            (0, time_info)
-                        } else {
-                            // let time_left = total_remaining_time as f32 / expected_game_length;
-                            // println!("{}", remaining_time);
-                            (
-                                ((remaining_time / 6.).min(5000.) * iterations_per_ms).max(1.)
-                                    as u64,
-                                time_info,
-                            )
-                        }
-                    }
-                    _ => panic!("Time control not implemented."),
-                };
+                let (iterations, remaining_time_info) = self.time_control.get_num_next_iterations(
+                    search_start_time,
+                    completed_iterations,
+                    iterations_per_ms,
+                    estimated_remaining_plies,
+                );
 
                 #[cfg(not(feature = "mute"))]
                 println!(
-                    "{:>8} {:>8} {:10} {:18} {}",
-                    time_info,
-                    format!("{}/≈{:.1}", pv.len(), expected_game_length - 1.0),
+                    "{:10} {:3} {:>9} {} {:>8} {:>8} {:>8} {}",
                     completed_iterations,
+                    pv.len(),
+                    format!("{:.1}", estimated_remaining_plies),
                     root_node.get_value(),
+                    remaining_time_info
+                        .time_left_for_search
+                        .map_or("N/A".to_string(), |v| format!("{}ms", v)),
+                    remaining_time_info
+                        .time_left_for_game
+                        .map_or("N/A".to_string(), |v| format!("{}ms", v)),
+                    format!("{:.0}/ms", iterations_per_ms),
                     pv.iter()
                         .map(|edge| edge.to_string())
                         .collect::<Vec<_>>()
-                        .join(", ")
+                        .join(", "),
                 );
 
                 if iterations == 0 {
@@ -250,11 +219,11 @@ impl MonteCarloTreeSearch {
                 sum_game_length +=
                     do_iterations(root_node, &self.root_game_state, iterations, &mut rng);
                 completed_iterations += iterations;
-                expected_game_length = sum_game_length / completed_iterations as f32;
+                estimated_remaining_plies = sum_game_length / completed_iterations as f32;
 
-                let elapsed_time = search_start_time.elapsed().as_micros() as f32 / 1000.;
+                let elapsed_time = search_start_time.elapsed().as_micros() as f64 / 1000.;
                 if elapsed_time > 0. {
-                    iterations_per_ms = completed_iterations as f32 / elapsed_time
+                    iterations_per_ms = completed_iterations as f64 / elapsed_time
                 }
             }
 
@@ -283,8 +252,6 @@ impl MonteCarloTreeSearch {
             game_state.do_move(best_move);
             self.notify_move(&game_state, best_move);
         }
-
-        self.elapsed_time += start_time.elapsed().as_millis() as u64;
 
         best_move
     }
@@ -331,12 +298,10 @@ impl Default for MonteCarloTreeSearch {
             name: "Monte Carlo Tree Search".to_string(),
             root_node: Arc::new(Mutex::new(None)),
             root_game_state: GameState::new(&mut rng),
-            time_control: TimeControl::ConstantTimePerMove {
+            time_control: MctsTimeControl::new(TimeControl::ConstantTimePerMove {
                 milliseconds_per_move: 6000,
-            },
-            elapsed_time: 0,
-            bonus_time: 0,
-            stop_pondering_sender: None,
+            }),
+            stop_flag: Arc::new(AtomicBool::new(false)),
             allow_pondering: false,
             is_pondering: Arc::new(Mutex::new(false)),
         }
@@ -357,9 +322,7 @@ impl Player for MonteCarloTreeSearch {
     }
 
     fn set_time(&mut self, time_control: TimeControl) {
-        self.elapsed_time = 0;
-        self.bonus_time = 0;
-        self.time_control = time_control;
+        self.time_control = MctsTimeControl::new(time_control);
     }
 
     fn set_pondering(&mut self, pondering: bool) {
@@ -420,8 +383,7 @@ impl Player for MonteCarloTreeSearch {
     fn reset(&mut self) {
         self.stop_pondering();
         *self.root_node.lock().unwrap() = None;
-        self.elapsed_time = 0;
-        self.bonus_time = 0;
+        self.time_control.reset();
     }
 
     fn notify_factories_refilled(&mut self, game_state: &GameState) {

@@ -20,6 +20,11 @@ pub enum TimeControl {
         // The player will spend a constant amount of iterations per move without any time control
         iterations_per_move: u64,
     },
+    RealTimeIncremental {
+        base_time_milliseconds: u64,
+        increment_milliseconds: u64,
+        max_time_milliseconds: u64,
+    },
 }
 
 impl Display for TimeControl {
@@ -46,6 +51,15 @@ impl Display for TimeControl {
             } => {
                 write!(f, "Constant Iterations Per Move: {}", iterations_per_move)
             }
+            TimeControl::RealTimeIncremental {
+                base_time_milliseconds,
+                increment_milliseconds,
+                max_time_milliseconds,
+            } => write!(
+                f,
+                "Real Time Incremental: {}ms base, {}ms increment, {}ms max",
+                base_time_milliseconds, increment_milliseconds, max_time_milliseconds
+            ),
         }
     }
 }
