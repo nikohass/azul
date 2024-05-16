@@ -81,7 +81,7 @@ impl Player for Client {
             line.truncate(0);
         }
         line.pop();
-        Move::deserialize_string(&line)
+        Move::deserialize_string(&line).unwrap()
     }
 
     fn notify_move(&mut self, new_game_state: &GameState, move_: Move) {

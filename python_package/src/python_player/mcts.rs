@@ -69,4 +69,20 @@ impl MonteCarloTreeSearch {
     fn value(&self) -> Option<[f32; NUM_PLAYERS]> {
         self.0.get_value().map(|v| v.into())
     }
+
+    fn set_root(&mut self, state: &GameState) {
+        self.0.set_root(&state.0);
+    }
+
+    fn get_best_move(&mut self) -> Option<Move> {
+        self.0.get_best_move().map(Move)
+    }
+
+    fn get_evaluated_moves(&mut self) -> Vec<(Move, [f32; NUM_PLAYERS])> {
+        self.0
+            .get_evaluated_moves()
+            .iter()
+            .map(|(m, v)| (Move(*m), <[f32; NUM_PLAYERS]>::from(*v)))
+            .collect()
+    }
 }

@@ -3,7 +3,7 @@ use super::time_control::MctsTimeControl;
 use super::value::Value;
 use crate::mcts::edge::Edge;
 use game::*;
-use rand::{rngs::SmallRng, SeedableRng};
+use rand::{rngs::SmallRng, Rng as _, SeedableRng};
 use std::{
     sync::{atomic::AtomicBool, atomic::Ordering, Arc, Mutex},
     time::Instant,
@@ -38,7 +38,9 @@ fn do_iterations(
 }
 
 impl MonteCarloTreeSearch {
-    fn set_root(&mut self, game_state: &GameState) {
+    pub fn set_root(&mut self, game_state: &GameState) {
+        println!("Setting root with game state: {}", game_state.to_fen());
+        self.stop_pondering();
         game_state
             .check_integrity()
             .expect("Trying to set root with invalid game state.");
@@ -51,7 +53,9 @@ impl MonteCarloTreeSearch {
         } else {
             self.root_game_state = game_state.clone();
             *self.root_node.lock().unwrap() = Some(Node::new_deterministic(Move::DUMMY));
+            println!("No parts of the tree from previous search could be kept.");
         }
+        self.start_pondering();
     }
 
     pub fn start_pondering(&mut self) {
@@ -64,8 +68,6 @@ impl MonteCarloTreeSearch {
         let root_game_state = self.root_game_state.clone();
         let stop_flag = Arc::new(AtomicBool::new(false));
 
-        #[cfg(not(feature = "mute"))]
-        let mut pv: Vec<Edge> = Vec::with_capacity(100);
         let is_pondering = self.is_pondering.clone();
         let stop_flag_clone = stop_flag.clone();
         std::thread::spawn(move || {
@@ -80,28 +82,36 @@ impl MonteCarloTreeSearch {
             }
 
             #[cfg(not(feature = "mute"))]
+            println!(
+                "Starting pondering on game state: {}",
+                root_game_state.to_fen()
+            );
             let ponder_start_time = Instant::now();
-            #[cfg(not(feature = "mute"))]
+            let mut completed_iterations = 0;
+            let mut iterations_per_step = 100;
             let mut last_log_time = Instant::now();
             #[cfg(not(feature = "mute"))]
-            let mut iterations = 0;
-            let mut root_node = root_node.lock().unwrap();
-            if let Some(root_node) = root_node.as_mut() {
-                while !stop_flag_clone.load(Ordering::Relaxed) {
+            let mut principal_variation: Vec<Edge> = Vec::new();
+            while !stop_flag_clone.load(Ordering::Relaxed) {
+                let mut root_node = root_node.lock().unwrap();
+                if let Some(root_node) = root_node.as_mut() {
+                    do_iterations(root_node, &root_game_state, iterations_per_step, &mut rng);
+                    completed_iterations += iterations_per_step;
+                    let elapsed_time = ponder_start_time.elapsed().as_micros() as f64 / 1000.;
+                    let iterations_per_ms = completed_iterations as f64 / elapsed_time;
+                    iterations_per_step = (iterations_per_ms as u64).max(1);
+
                     #[cfg(not(feature = "mute"))]
-                    {
-                        iterations += 100;
-                    }
-                    do_iterations(root_node, &root_game_state, 100, &mut rng);
-                    #[cfg(not(feature = "mute"))]
-                    if last_log_time.elapsed().as_secs() > 30 {
-                        pv.truncate(0);
-                        root_node.build_pv(&mut root_game_state.clone(), &mut pv);
+                    if last_log_time.elapsed().as_secs() > 1 {
+                        principal_variation.truncate(0);
+                        root_node.build_pv(&mut root_game_state.clone(), &mut principal_variation);
                         println!(
-                            "Pondering - Value: {:7} PV-Depth: {} PV: {}",
+                            "Pondering - Iterations: {} Iterations/ms: {:.2} Value: {} PV: {}",
+                            completed_iterations,
+                            iterations_per_ms,
                             root_node.get_value(),
-                            pv.len(),
-                            pv.iter()
+                            principal_variation
+                                .iter()
                                 .map(|edge| edge.to_string())
                                 .collect::<Vec<_>>()
                                 .join(", ")
@@ -115,7 +125,7 @@ impl MonteCarloTreeSearch {
             println!(
                 "Pondering stopped after {}ms with {} iterations.",
                 ponder_start_time.elapsed().as_millis(),
-                iterations
+                completed_iterations
             );
             {
                 let mut is_pondering = is_pondering.lock().unwrap();
@@ -138,7 +148,6 @@ impl MonteCarloTreeSearch {
         );
 
         let start_time = Instant::now();
-        self.stop_pondering();
         self.set_root(game_state);
         let mut rng = SmallRng::from_entropy();
         let mut pv: Vec<Edge> = Vec::with_capacity(100);
@@ -244,7 +253,17 @@ impl MonteCarloTreeSearch {
             let player_index = usize::from(game_state.get_current_player());
             #[cfg(not(feature = "mute"))]
             println!("{:?}", root_node.count_nodes());
-            best_move = root_node.best_move(player_index).unwrap();
+            best_move = if let Some(best_move) = root_node.best_move(player_index) {
+                best_move
+            } else {
+                // Random move
+                println!("The search terminated without a best move. Making a random move.");
+                let mut move_list = MoveList::new();
+                game_state
+                    .clone()
+                    .get_possible_moves(&mut move_list, &mut rng);
+                move_list[rng.gen_range(0..move_list.len())]
+            };
         }
 
         {
@@ -288,6 +307,31 @@ impl MonteCarloTreeSearch {
             .as_ref()
             .as_ref()
             .map(|root_node| root_node.get_value())
+    }
+
+    pub fn get_best_move(&self) -> Option<Move> {
+        self.root_node
+            .lock()
+            .unwrap()
+            .as_mut()
+            .and_then(|root_node| root_node.best_move(0))
+    }
+
+    pub fn get_evaluated_moves(&self) -> Vec<(Move, Value)> {
+        if let Some(root_node) = self.root_node.lock().unwrap().as_ref() {
+            let children = root_node.get_children();
+            let mut move_list = Vec::with_capacity(children.len());
+            for child in children.iter() {
+                let move_ = match child.get_move() {
+                    Some(m) => m,
+                    None => continue,
+                };
+                move_list.push((move_, child.get_value()));
+            }
+            move_list
+        } else {
+            Vec::new()
+        }
     }
 }
 

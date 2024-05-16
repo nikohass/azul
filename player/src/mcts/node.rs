@@ -86,6 +86,10 @@ impl Node {
         }
     }
 
+    pub fn get_children(&self) -> &[Node] {
+        &self.children
+    }
+
     pub fn take_child_with_move(self, move_: Move) -> Option<Node> {
         let mut children = self.children;
         let mut index = None;

@@ -1,5 +1,5 @@
 use super::tile_color::TileColor;
-use pyo3::{pyclass, pymethods};
+use pyo3::{exceptions::PyValueError, pyclass, pymethods, PyResult};
 
 #[pyclass]
 #[derive(Clone, Copy)]
@@ -26,5 +26,16 @@ impl Move {
 
     fn is_discard_only(&self) -> bool {
         self.0.is_discard_only()
+    }
+
+    fn serialize_string(&self) -> String {
+        self.0.serialize_string()
+    }
+
+    #[staticmethod]
+    fn deserialize_string(string: &str) -> PyResult<Self> {
+        Ok(Self(
+            game::Move::deserialize_string(string).map_err(PyValueError::new_err)?,
+        ))
     }
 }

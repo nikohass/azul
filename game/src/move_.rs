@@ -34,20 +34,33 @@ impl Move {
         result
     }
 
-    pub fn deserialize_string(string: &str) -> Self {
+    pub fn deserialize_string(string: &str) -> Result<Self, String> {
         let mut chars = string.chars();
-        let take_from_factory_index = chars.next().unwrap().to_digit(10).unwrap() as u8;
-        let color = TileColor::from(chars.next().unwrap());
+        let take_from_factory_index = chars
+            .next()
+            .ok_or("Not enough characters in string".to_string())?
+            .to_digit(10)
+            .ok_or("Invalid factory index".to_string())?
+            as u8;
+        let color = TileColor::from(
+            chars
+                .next()
+                .ok_or("Not enough characters in string".to_string())?,
+        );
         let mut pattern = [0; 6];
         let pattern_str: String = chars.collect();
         for (i, chunk) in pattern_str.as_bytes().chunks(2).enumerate() {
-            pattern[i] = std::str::from_utf8(chunk).unwrap().parse::<u8>().unwrap();
+            pattern[i] = std::str::from_utf8(chunk)
+                .map_err(|_| "Invalid pattern".to_string())?
+                .parse::<u8>()
+                .map_err(|_| "Invalid pattern".to_string())?;
         }
-        Self {
+
+        Ok(Self {
             take_from_factory_index,
             color,
             pattern,
-        }
+        })
     }
 
     pub fn is_discard_only(&self) -> bool {
