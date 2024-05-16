@@ -554,6 +554,11 @@ impl GameState {
             score -= penalty as i16;
 
             self.scores[player_index] += score;
+            #[cfg(not(feature = "house_rules"))]
+            {
+                // Make sure no player falls below 0 points
+                self.scores[player_index] = self.scores[player_index].max(0);
+            }
 
             // Reset
             self.floor_line_progress[player_index] = 0;
@@ -576,13 +581,57 @@ impl GameState {
     }
 
     fn evaluate_end_of_game(&mut self) {
+        let mut players_complete_rows = [0; NUM_PLAYERS];
+        let mut players_with_highest_score = [false; NUM_PLAYERS];
+        let mut highest_score = i16::MIN;
+        let mut num_players_with_highest_score = 0;
+
         for (player, wall_occupancy) in self.walls.iter().enumerate() {
             let complete_rows = wall::count_complete_rows(*wall_occupancy);
+            players_complete_rows[player] = complete_rows;
             let complete_colums = wall::count_complete_columns(*wall_occupancy);
             let complete_colors = wall::count_full_colors(*wall_occupancy);
             let score =
                 complete_rows as i16 * 2 + complete_colums as i16 * 7 + complete_colors as i16 * 10;
             self.scores[player] += score;
+
+            #[allow(clippy::comparison_chain)]
+            if self.scores[player] > highest_score {
+                highest_score = self.scores[player];
+                players_with_highest_score = [false; NUM_PLAYERS];
+                players_with_highest_score[player] = true;
+                num_players_with_highest_score = 1;
+            } else if self.scores[player] == highest_score {
+                players_with_highest_score[player] = true;
+                num_players_with_highest_score += 1;
+            }
+        }
+
+        // In case of a tie, the player with the most complete rows wins
+        if num_players_with_highest_score > 1 {
+            let mut max_complete_rows = 0;
+            let mut player_with_most_rows = usize::MAX;
+            let mut tie_for_most_rows = false;
+
+            for player in 0..NUM_PLAYERS {
+                if players_with_highest_score[player] {
+                    #[allow(clippy::comparison_chain)]
+                    if players_complete_rows[player] > max_complete_rows {
+                        max_complete_rows = players_complete_rows[player];
+                        player_with_most_rows = player;
+                        tie_for_most_rows = false;
+                    } else if players_complete_rows[player] == max_complete_rows {
+                        tie_for_most_rows = true;
+                    }
+                }
+            }
+
+            // Add +1 to the score of the player with the most complete rows if there's no tie for rows
+            if !tie_for_most_rows && player_with_most_rows != usize::MAX {
+                // Since this function does not return a game result we add +1 to the winning player so that they actually win
+                // It would be better if we could distinguish between a tie and a win without having to add +1 to the score
+                self.scores[player_with_most_rows] += 1;
+            }
         }
     }
 

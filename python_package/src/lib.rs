@@ -14,6 +14,7 @@ fn azul4(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<python_game::tile_color::TileColor>()?;
     m.add_class::<python_game::move_::Move>()?;
     m.add_class::<python_game::game_state::MoveGenerationResult>()?;
+    m.add_class::<python_game::time_control::TimeControl>()?;
     m.add_class::<python_player::mcts::MonteCarloTreeSearch>()?;
     Ok(())
 }
