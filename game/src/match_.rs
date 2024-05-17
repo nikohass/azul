@@ -73,7 +73,10 @@ pub fn run_match(
         let request_time = std::time::Instant::now();
         let players_move: Move = players[current_player].get_move(&game_state);
         if verbose {
-            println!("{}: {}", player_names[current_player], players_move);
+            println!(
+                "{}: {} {:?}",
+                player_names[current_player], players_move, players_move
+            );
         }
         let response_time = std::time::Instant::now();
         let response_time = response_time.duration_since(request_time).as_millis() as u64;

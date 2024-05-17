@@ -24,9 +24,9 @@ fn main() {
         // player.set_time(TimeControl::ConstantIterationsPerMove {
         //     iterations_per_move: 10000,
         // });
-        player.set_time(TimeControl::SuddenDeath {
-            total_milliseconds: 60_000 * 5,
-        });
+        // player.set_time(TimeControl::SuddenDeath {
+        //     total_milliseconds: 60_000 * 5,
+        // });
         // player.set_time(TimeControl::Incremental {
         //     total_milliseconds: 120_000,
         //     increment_milliseconds: 24_000,
@@ -41,12 +41,12 @@ fn main() {
         players.push(Box::new(player));
     }
 
-    let start_time = std::time::Instant::now();
+    // let start_time = std::time::Instant::now();
     let _stats = run_match(game_state, &mut players, true).unwrap();
     // let num_turns = stats.num_turns;
     // let expected_duration = 0 * NUM_PLAYERS as u64 + 200 * (num_turns as u64);
-    let elapsed_time = start_time.elapsed();
-    println!("Elapsed time: {:?}", elapsed_time);
+    // let elapsed_time = start_time.elapsed();
+    // println!("Elapsed time: {:?}", elapsed_time);
     // println!(
     //     "Expected duration: {:?}",
     //     Duration::from_millis(expected_duration)

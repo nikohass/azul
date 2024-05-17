@@ -81,7 +81,7 @@ impl HumanCommandLinePlayer {
         loop {
             let mut available_factories = HashSet::new();
             for move_ in remaining_moves.iter() {
-                available_factories.insert(move_.take_from_factory_index);
+                available_factories.insert(move_.factory_index);
             }
             let mut options = available_factories
                 .iter()
@@ -125,7 +125,7 @@ impl HumanCommandLinePlayer {
             }
 
             // Remove all moves from all other factories
-            remaining_moves.retain(|move_| move_.take_from_factory_index == factory_number - 1);
+            remaining_moves.retain(|move_| move_.factory_index == factory_number - 1);
             return PromptResult::Continue;
         }
     }
@@ -188,21 +188,15 @@ impl HumanCommandLinePlayer {
             }
             let mut options = HashSet::new();
             for move_ in remaining_moves.iter() {
-                let pattern = move_.pattern;
-                for (i, &count) in pattern.iter().enumerate() {
-                    if count > 0 {
-                        options.insert(i);
-                    }
-                }
+                options.insert(move_.pattern_line_index as usize);
             }
-            println!("Select pattern line(s) to place tiles on:");
+            println!("Select pattern line to place tiles on:");
             let line_description = ["1st", "2nd", "3rd", "4th", "5th", "floor"];
             for (i, description) in line_description.iter().enumerate() {
                 if options.contains(&i) {
                     println!("{}: {}", i + 1, description);
                 }
             }
-            println!("Enter all pattern lines you want to place tiles on in the format '1226' (for the 1st and 2nd pattern line discarding one):");
 
             let mut input = String::new();
             if std::io::stdin().read_line(&mut input).is_err() {
@@ -213,42 +207,17 @@ impl HumanCommandLinePlayer {
                 return PromptResult::Reset;
             }
 
-            let pattern_line = match parse_pattern_line(&input, remaining_moves) {
-                Some(pattern_line) => pattern_line,
-                None => continue,
+            let pattern_line = match input.trim().parse::<u8>() {
+                Ok(pattern_line) => pattern_line,
+                Err(_) => {
+                    println!("Invalid pattern line number");
+                    continue;
+                }
             };
 
             // Remove all moves with other pattern lines
-            remaining_moves.retain(|move_| move_.pattern == pattern_line);
+            remaining_moves.retain(|move_| move_.pattern_line_index == pattern_line - 1);
             return PromptResult::Continue;
         }
     }
-}
-
-fn parse_pattern_line(input: &str, remaining_moves: &[Move]) -> Option<[u8; 6]> {
-    let mut pattern_line = [0; 6];
-    for character in input.chars() {
-        let index = match character.to_digit(10) {
-            Some(index) => index,
-            None => {
-                continue;
-            }
-        };
-        let index = index as usize - 1;
-        if index >= 6 {
-            println!("Invalid pattern line {}", index + 1);
-            return None;
-        }
-        pattern_line[index] += 1;
-    }
-
-    let move_ = remaining_moves
-        .iter()
-        .find(|move_| move_.pattern == pattern_line);
-    if move_.is_none() {
-        println!("No moves with pattern line {:?} from factory", pattern_line);
-        return None;
-    }
-
-    Some(pattern_line)
 }

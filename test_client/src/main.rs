@@ -23,7 +23,7 @@ fn main() {
             }
             "notify_move" => {
                 let game_state = GameState::from_fen(entries.get(1).unwrap()).unwrap();
-                let move_ = Move::deserialize_string(entries.get(2).unwrap());
+                let move_ = Move::deserialize_string(entries.get(2).unwrap()).unwrap();
                 player.notify_move(&game_state, move_);
             }
             "reset" => {
@@ -45,7 +45,5 @@ fn main() {
                 // Ignore to allow backwards compatibility
             }
         }
-
-        // Parse command
     }
 }
