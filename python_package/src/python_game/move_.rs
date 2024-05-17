@@ -8,11 +8,19 @@ pub struct Move(pub game::Move);
 #[pymethods]
 impl Move {
     #[new]
-    fn new(factory_index: u8, tile_color: TileColor, pattern: [u8; 6]) -> Self {
+    fn new(
+        factory_index: u8,
+        tile_color: TileColor,
+        pattern_line_index: u8,
+        discards: u8,
+        places: u8,
+    ) -> Self {
         Self(game::Move {
-            take_from_factory_index: factory_index,
+            factory_index,
             color: tile_color.0,
-            pattern,
+            pattern_line_index,
+            discards,
+            places,
         })
     }
 

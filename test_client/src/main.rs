@@ -45,7 +45,5 @@ fn main() {
                 // Ignore to allow backwards compatibility
             }
         }
-
-        // Parse command
     }
 }

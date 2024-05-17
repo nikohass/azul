@@ -76,8 +76,6 @@ pub fn get_random_move(game_state: &mut GameState, rng: &mut SmallRng) -> Option
     let try_ordering = PERMUTATIONS[rng.gen_range(0..PERMUTATIONS.len())];
     let color_mask = WALL_COLOR_MASKS[random_tile_color];
 
-    let mut pattern = [0; 6];
-    let mut found_move = false;
     for pattern_line_index in try_ordering.iter() {
         if let Some(pattern_line_color) = pattern_line_colors[*pattern_line_index as usize] {
             if pattern_line_color != TileColor::from(random_tile_color) {
@@ -92,32 +90,31 @@ pub fn get_random_move(game_state: &mut GameState, rng: &mut SmallRng) -> Option
             continue;
         }
 
-        let missing_tiles =
+        let pattern_line_space =
             1 + pattern_line_index - pattern_lines_occupancy[*pattern_line_index as usize];
-        if missing_tiles == 0 {
+        if pattern_line_space == 0 {
             continue;
         }
-        let original_fill = pattern[*pattern_line_index as usize];
-        pattern[*pattern_line_index as usize] = u8::min(tile_number, missing_tiles);
-        let added_tiles = pattern[*pattern_line_index as usize] - original_fill;
-        let tiles_to_discard = tile_number - added_tiles;
-        pattern[5] = tiles_to_discard;
 
-        found_move = true;
-        break;
+        let can_place = tile_number.min(pattern_line_space);
+        let cannot_place = tile_number - can_place;
+
+        return Some(Move {
+            factory_index: random_factory_index as u8,
+            color: TileColor::from(random_tile_color as u8),
+            pattern_line_index: *pattern_line_index,
+            discards: cannot_place,
+            places: can_place,
+        });
     }
 
-    if !found_move {
-        pattern[5] = tile_number;
-    }
-
-    let move_ = Move {
-        take_from_factory_index: random_factory_index as u8,
-        color: TileColor::from(random_tile_color),
-        pattern,
-    };
-
-    Some(move_)
+    Some(Move {
+        factory_index: random_factory_index as u8,
+        color: TileColor::from(random_tile_color as u8),
+        pattern_line_index: 5, // Discard
+        discards: tile_number,
+        places: 0,
+    })
 }
 
 #[cfg(feature = "house_rules")]

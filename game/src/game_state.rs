@@ -7,118 +7,7 @@ use crate::wall::{self, WALL_COLOR_MASKS};
 use crate::{GameError, NUM_PLAYERS};
 use rand::rngs::SmallRng;
 
-#[cfg(debug_assertions)]
-use rand::SeedableRng as _;
-
 pub const FLOOR_LINE_PENALTY: [u8; 8] = [0, 1, 2, 4, 6, 8, 11, 14];
-
-#[cfg(feature = "house_rules")]
-fn find_tile_combinations(
-    tiles_left: u8,
-    current_pattern: &mut [u8; 6],
-    remaining_space: &mut [u8; 6],
-    move_list: &mut MoveList,
-    factory_index: u8,
-    color: TileColor,
-    start_index: usize,
-) {
-    if tiles_left == 0 {
-        move_list.push(Move {
-            take_from_factory_index: factory_index,
-            color,
-            pattern: *current_pattern,
-        });
-        return;
-    }
-
-    for pattern_line_index in start_index..6 {
-        if remaining_space[pattern_line_index] > 0 {
-            remaining_space[pattern_line_index] -= 1;
-            current_pattern[pattern_line_index] += 1;
-            find_tile_combinations(
-                tiles_left - 1,
-                current_pattern,
-                remaining_space,
-                move_list,
-                factory_index,
-                color,
-                pattern_line_index,
-            );
-            remaining_space[pattern_line_index] += 1;
-            current_pattern[pattern_line_index] -= 1;
-        }
-    }
-}
-
-#[cfg(not(feature = "house_rules"))]
-fn find_tile_combinations(
-    tiles_left: u8,
-    current_pattern: &mut [u8; 6],
-    remaining_space: &mut [u8; 6],
-    move_list: &mut MoveList,
-    factory_index: u8,
-    color: TileColor,
-) {
-    // Handle placing some tiles and optionally discarding the rest
-    for pattern_line_index in 0..5 {
-        // Iterate through possible numbers of tiles to place in this line
-        for num_to_place in 1..=tiles_left.min(remaining_space[pattern_line_index]) {
-            let discard_amount = tiles_left - num_to_place; // Remaining tiles are discarded
-
-            if num_to_place > 0 {
-                // Check if we are actually placing any tiles
-                // Simulate placing the tiles
-                current_pattern[pattern_line_index] += num_to_place;
-                remaining_space[pattern_line_index] -= num_to_place;
-            }
-
-            if discard_amount > 0 && discard_amount <= remaining_space[5] {
-                // Check if discarding is possible
-                // Simulate discarding the tiles
-                current_pattern[5] += discard_amount;
-                remaining_space[5] -= discard_amount;
-            }
-
-            // Store this as a valid move if the move respects the game rules
-            if num_to_place > 0 || discard_amount > 0 {
-                move_list.push(Move {
-                    take_from_factory_index: factory_index,
-                    color,
-                    pattern: *current_pattern,
-                });
-            }
-
-            // Undo the placement and discard (for backtracking)
-            if num_to_place > 0 {
-                current_pattern[pattern_line_index] -= num_to_place;
-                remaining_space[pattern_line_index] += num_to_place;
-            }
-
-            if discard_amount > 0 {
-                current_pattern[5] -= discard_amount;
-                remaining_space[5] += discard_amount;
-            }
-        }
-    }
-
-    // Consider the case where all tiles are discarded
-    if tiles_left <= remaining_space[5] {
-        // Simulate discarding all tiles
-        current_pattern[5] += tiles_left;
-        remaining_space[5] -= tiles_left;
-
-        // Store this as a valid move
-        move_list.push(Move {
-            take_from_factory_index: factory_index,
-            color,
-            pattern: *current_pattern,
-        });
-
-        // Undo the discard (for backtracking)
-        current_pattern[5] -= tiles_left;
-        remaining_space[5] += tiles_left;
-    }
-}
 
 pub type Bag = [u8; NUM_TILE_COLORS];
 
@@ -554,11 +443,9 @@ impl GameState {
             score -= penalty as i16;
 
             self.scores[player_index] += score;
-            #[cfg(not(feature = "house_rules"))]
-            {
-                // Make sure no player falls below 0 points
-                self.scores[player_index] = self.scores[player_index].max(0);
-            }
+
+            // Make sure no player falls below 0 points
+            self.scores[player_index] = self.scores[player_index].max(0);
 
             // Reset
             self.floor_line_progress[player_index] = 0;
@@ -636,28 +523,16 @@ impl GameState {
     }
 
     pub fn do_move(&mut self, mov: Move) {
-        #[cfg(debug_assertions)]
-        {
-            let mut move_list = MoveList::default();
-            self.clone()
-                .get_possible_moves(&mut move_list, &mut SmallRng::from_entropy());
-            let is_valid_move = move_list.into_iter().any(|m| *m == mov);
-            if !is_valid_move {
-                println!("{}", self);
-                println!("{}", mov);
-                println!("{:?}", move_list);
-                panic!("The move is not valid");
-            }
-        }
         let current_player: usize = self.current_player.into();
-        let take_from_factory_index = mov.take_from_factory_index as usize;
+        let factory_index = mov.factory_index as usize;
         let color = mov.color as usize;
-        let factory_content: [u8; 5] = self.factories[take_from_factory_index];
+        let factory: [u8; 5] = self.factories[factory_index];
+        let pattern_line_index = mov.pattern_line_index as usize;
 
         // Step 1: Put the remaining tiles in the center
-        if take_from_factory_index == CENTER_FACTORY_INDEX {
+        if factory_index == CENTER_FACTORY_INDEX {
             // If we took tiles from the center, we only remove the color we took
-            self.factories[take_from_factory_index][color] = 0;
+            self.factories[factory_index][color] = 0;
             if !self.tile_taken_from_center {
                 // If we are the first player to take tiles from the center in this round, we become the starting player for the next round and advance the floor line
                 self.next_round_starting_player = self.current_player;
@@ -665,58 +540,26 @@ impl GameState {
                 self.tile_taken_from_center = true;
             }
         } else {
-            // Only put the tiles in the center if we are not taking from the center
-
-            for (color_index, factory_content) in factory_content.iter().enumerate() {
-                // For each tile color in the factory, put the tiles into the center if they are not the color we took
+            // For each tile color in the factory, put the tiles into the center if they are not the color we took
+            for (color_index, factory) in factory.iter().enumerate() {
                 if color_index != color {
-                    self.factories[CENTER_FACTORY_INDEX][color_index] += factory_content;
+                    self.factories[CENTER_FACTORY_INDEX][color_index] += factory;
                 }
             }
 
             // If we took tiles from a factory, we empty it completely
-            self.factories[take_from_factory_index] = [0; NUM_TILE_COLORS];
+            self.factories[factory_index] = [0; NUM_TILE_COLORS];
         }
 
         // Step 2. Place the tiles in the pattern lines or discard them
-        for pattern_line_index in 0..5 {
-            // Update / Check color of pattern line
-            if mov.pattern[pattern_line_index] > 0 {
-                #[cfg(debug_assertions)]
-                {
-                    let pattern_line_color_match = {
-                        if let Some(pattern_line_color) =
-                            self.pattern_lines_colors[current_player][pattern_line_index]
-                        {
-                            pattern_line_color == mov.color
-                        } else {
-                            true
-                        }
-                    };
-                    if !pattern_line_color_match {
-                        println!("{}", self);
-                        println!("{}", mov);
-                        println!(
-                            "{:?}",
-                            self.pattern_lines_colors[current_player][pattern_line_index]
-                        );
-                        println!("{}", mov.color);
-                    }
-                    debug_assert!(
-                        pattern_line_color_match,
-                        "Pattern line color does not match"
-                    )
-                }
-                // Set the color of the pattern line
-                self.pattern_lines_colors[current_player][pattern_line_index] = Some(mov.color);
-            }
-            // Add the new tile to the pattern line of the player
-            self.pattern_lines_occupancy[current_player][pattern_line_index] +=
-                mov.pattern[pattern_line_index];
+        if pattern_line_index != 5 {
+            self.pattern_lines_colors[current_player][pattern_line_index] = Some(mov.color);
+            self.pattern_lines_occupancy[current_player][pattern_line_index] += mov.places;
         }
+
         // Advance the floor line if the move discards tiles
-        self.floor_line_progress[current_player] += mov.pattern[5];
-        self.out_of_bag[color] += mov.pattern[5]; // Discarded patterns are added to the out_of_bag. They will be put bag into the bag at the end of the round
+        self.floor_line_progress[current_player] += mov.discards;
+        self.out_of_bag[color] += mov.discards; // Discarded patterns are added to the out_of_bag. They will be put bag into the bag at the end of the round
 
         // Advance the player
         self.current_player = self.current_player.next();
@@ -736,11 +579,16 @@ impl GameState {
         if is_round_over {
             let is_game_over = self.evaluate_round();
 
+            #[cfg(debug_assertions)]
+            self.check_integrity().unwrap();
+
             if is_game_over {
                 return MoveGenerationResult::GameOver;
             }
 
             self.fill_factories(rng);
+            #[cfg(debug_assertions)]
+            self.check_integrity().unwrap();
         }
 
         let current_player: usize = self.current_player.into();
@@ -750,57 +598,58 @@ impl GameState {
         let player_pattern_line_colors: [Option<TileColor>; 5] =
             self.pattern_lines_colors[current_player];
 
+        // We will use this to keep track of the remaining space in our pattern lines
+        let mut remaining_space: [u8; 5] = [1, 2, 3, 4, 5]; // 255 is the floor line
+        for (pattern_line_index, number_of_tiles) in player_pattern_lines.iter().enumerate() {
+            // Subtract the number of tiles already in the pattern line from the total space
+            remaining_space[pattern_line_index] -= *number_of_tiles;
+        }
+
+        let wall = self.walls[current_player];
         // Iterate over all factory and all color combinations
         for (factory_index, factory) in self.factories.iter().enumerate() {
             for (color, number) in factory.iter().enumerate() {
+                // If there are no tiles of this color in the factory, skip it
                 if *number == 0 {
-                    continue; // Skip the move gen if there are no tiles of this color in the factory
+                    continue;
                 }
 
-                // We will use this to keep track of the remaining space in our pattern lines
-                let mut remaining_space: [u8; 6] = [1, 2, 3, 4, 5, 255]; // 255 is the floor line
-                for (pattern_line_index, number_of_tiles) in player_pattern_lines.iter().enumerate()
-                {
-                    // Subtract the number of tiles already in the pattern line from the total space
-                    remaining_space[pattern_line_index] -= *number_of_tiles;
+                move_list.push(Move {
+                    factory_index: factory_index as u8,
+                    color: TileColor::from(color as u8),
+                    pattern_line_index: 5,
+                    discards: *number,
+                    places: 0,
+                });
 
+                for (pattern_line_index, pattern_line_space) in remaining_space.iter().enumerate() {
+                    let pattern_line_space = *pattern_line_space;
+                    let can_place = (*number).min(pattern_line_space);
+                    if can_place == 0 {
+                        continue;
+                    }
+                    let cannot_place = *number - can_place;
+
+                    // If the pattern line has a different color, skip it.
                     if let Some(existing_color) = player_pattern_line_colors[pattern_line_index] {
                         if color != usize::from(existing_color) {
-                            // If there are tiles of a different color in the patternline already, we can't put any more tiles in it, so we set the remaining space to 0
-                            remaining_space[pattern_line_index] = 0;
-                        }
-                    } else {
-                        // the pattern line did not have a color yet: We need to check whether we are allowed to place this color here
-                        // It is not possible to place a tile in a pattern line if the corresponding row in the wall is already full
-                        let wall_mask = WALL_COLOR_MASKS[color];
-                        let wall_occupancy = self.walls[current_player];
-                        let row_mask: u32 = wall::get_row_mask(pattern_line_index);
-                        if wall_occupancy & row_mask & wall_mask > 0 {
-                            remaining_space[pattern_line_index] = 0;
+                            continue;
                         }
                     }
+
+                    // If the wall at this position is already full, skip this color
+                    let wall_mask = WALL_COLOR_MASKS[color];
+                    let row_mask = wall::get_row_mask(pattern_line_index);
+                    if wall & row_mask & wall_mask == 0 {
+                        move_list.push(Move {
+                            factory_index: factory_index as u8,
+                            color: TileColor::from(color as u8),
+                            pattern_line_index: pattern_line_index as u8,
+                            discards: cannot_place,
+                            places: can_place,
+                        });
+                    }
                 }
-
-                #[cfg(feature = "house_rules")]
-                find_tile_combinations(
-                    *number,
-                    &mut [0, 0, 0, 0, 0, 0],
-                    &mut remaining_space,
-                    move_list,
-                    factory_index as u8,
-                    TileColor::from(color),
-                    0,
-                );
-
-                #[cfg(not(feature = "house_rules"))]
-                find_tile_combinations(
-                    *number,
-                    &mut [0, 0, 0, 0, 0, 0],
-                    &mut remaining_space,
-                    move_list,
-                    factory_index as u8,
-                    TileColor::from(color),
-                );
             }
         }
 

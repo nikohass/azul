@@ -1,70 +1,60 @@
 use crate::factories::CENTER_FACTORY_INDEX;
 use crate::tile_color::TileColor;
-use std::fmt::Write as _;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Move {
-    pub take_from_factory_index: u8,
-    pub color: TileColor,
-    pub pattern: [u8; 6],
+    pub factory_index: u8, // The factory from which the tiles are taken
+    pub color: TileColor,  // What color of tiles are taken
+
+    // 0..5 for the factory, 5 for the floor line
+    pub pattern_line_index: u8, // Where the tiles are placed
+
+    // Additional information for the move
+    pub discards: u8, // How many tiles are discarded
+    pub places: u8,   // How many tiles are placed
 }
 
 impl Move {
     pub const DUMMY: Self = Self {
-        take_from_factory_index: 0,
+        factory_index: 0,
         color: TileColor::Red,
-        pattern: [255; 6],
+        pattern_line_index: 0,
+        discards: 0,
+        places: 0,
     };
 
     pub fn serialize_string(&self) -> String {
-        let mut result = String::new();
-        write!(
-            result,
-            "{}{}",
-            self.take_from_factory_index,
-            char::from(self.color)
+        format!(
+            "{}{}{}{:2}{:2}",
+            self.factory_index,
+            usize::from(self.color),
+            self.pattern_line_index,
+            self.discards,
+            self.places,
         )
-        .unwrap();
-
-        self.pattern.iter().fold(&mut result, |acc, &x| {
-            write!(acc, "{:02}", x).unwrap();
-            acc
-        });
-
-        result
     }
 
     pub fn deserialize_string(string: &str) -> Result<Self, String> {
-        let mut chars = string.chars();
-        let take_from_factory_index = chars
-            .next()
-            .ok_or("Not enough characters in string".to_string())?
-            .to_digit(10)
-            .ok_or("Invalid factory index".to_string())?
-            as u8;
-        let color = TileColor::from(
-            chars
-                .next()
-                .ok_or("Not enough characters in string".to_string())?,
-        );
-        let mut pattern = [0; 6];
-        let pattern_str: String = chars.collect();
-        for (i, chunk) in pattern_str.as_bytes().chunks(2).enumerate() {
-            pattern[i] = std::str::from_utf8(chunk)
-                .map_err(|_| "Invalid pattern".to_string())?
-                .parse::<u8>()
-                .map_err(|_| "Invalid pattern".to_string())?;
-        }
-
+        let factory_index = string[0..1]
+            .parse::<u8>()
+            .map_err(|_| "Invalid factory index")?;
+        let color = TileColor::from(string[1..2].parse::<u8>().map_err(|_| "Invalid color")?);
+        let pattern_line_index = string[2..3]
+            .parse::<u8>()
+            .map_err(|_| "Invalid pattern line index")?;
+        let discards = string[3..5].parse::<u8>().map_err(|_| "Invalid discards")?;
+        let places = string[5..7].parse::<u8>().map_err(|_| "Invalid places")?;
         Ok(Self {
-            take_from_factory_index,
+            factory_index,
             color,
-            pattern,
+            pattern_line_index,
+            discards,
+            places,
         })
     }
 
     pub fn is_discard_only(&self) -> bool {
-        self.pattern.iter().take(5).all(|&x| x == 0)
+        self.places == 0
     }
 }
 
@@ -73,31 +63,33 @@ impl std::fmt::Display for Move {
         if self == &Self::DUMMY {
             return write!(f, "Dummy Move");
         }
-        let factory = if self.take_from_factory_index == CENTER_FACTORY_INDEX as u8 {
+        let factory = if self.factory_index == CENTER_FACTORY_INDEX as u8 {
             "c".to_string()
         } else {
-            format!("{}", self.take_from_factory_index + 1)
+            format!("{}", self.factory_index + 1)
         };
-        let taken_tile_count = self.pattern.iter().sum::<u8>();
-        let discards = self.pattern[5];
-        let color_string = self.color.to_string();
-
-        let mut destination_string = String::new();
-        for i in 0..5 {
-            if self.pattern[i] > 0 {
-                destination_string.push_str(&format!("{}@{}", self.pattern[i], i + 1));
-                destination_string.push(' ');
-            }
-        }
-        if discards > 0 {
-            destination_string.push_str(&format!("D{}", discards));
-        }
-        let destination_string = destination_string.trim_end();
 
         write!(
             f,
-            "{}{}{}->{}",
-            taken_tile_count, color_string, factory, destination_string
+            "{}{}{}->{}{}{}",
+            self.discards + self.places,
+            self.color,
+            factory,
+            if self.places > 0 {
+                format!("{}@{}", self.places, self.pattern_line_index + 1)
+            } else {
+                "".to_string()
+            },
+            if self.places > 0 && self.discards > 0 {
+                " "
+            } else {
+                ""
+            },
+            if self.discards > 0 {
+                format!("D{}", self.discards)
+            } else {
+                "".to_string()
+            }
         )
     }
 }
