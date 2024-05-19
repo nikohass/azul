@@ -1,5 +1,6 @@
 use crate::python_game::{game_state::GameState, move_::Move, time_control::TimeControl};
 use game::{Player, NUM_PLAYERS};
+use player::mcts::edge::Edge;
 use pyo3::{pyclass, pymethods};
 
 #[pyclass]
@@ -12,17 +13,18 @@ impl MonteCarloTreeSearch {
         Self(player::mcts::MonteCarloTreeSearch::default())
     }
 
-    fn start_pondering(&mut self) {
-        self.0.start_pondering();
+    fn start_working(&mut self) {
+        self.0.start_working();
     }
 
-    fn stop_pondering(&mut self) {
-        self.0.stop_pondering();
+    fn stop_working(&mut self) {
+        self.0.stop_working();
     }
 
-    fn get_principal_variation(&mut self) -> Vec<String> {
+    #[getter]
+    fn principal_variation(&mut self) -> Vec<String> {
         self.0
-            .get_principal_variation()
+            .principal_variation()
             .iter()
             .map(|e| format!("{}", e))
             .collect()
@@ -66,23 +68,25 @@ impl MonteCarloTreeSearch {
     }
 
     #[getter]
-    fn value(&self) -> Option<[f32; NUM_PLAYERS]> {
-        self.0.get_value().map(|v| v.into())
+    fn value(&mut self) -> Option<[f32; NUM_PLAYERS]> {
+        self.0.value().map(<[f32; NUM_PLAYERS]>::from)
     }
 
-    fn set_root(&mut self, state: &GameState) {
-        self.0.set_root(&state.0);
-    }
-
-    fn get_best_move(&mut self) -> Option<Move> {
-        self.0.get_best_move().map(Move)
-    }
-
-    fn get_evaluated_moves(&mut self) -> Vec<(Move, [f32; NUM_PLAYERS])> {
+    fn advance_root(&mut self, state: &GameState, move_: Option<Move>) {
         self.0
-            .get_evaluated_moves()
+            .advance_root(&state.0, move_.map(|m| Edge::Deterministic(m.0)));
+    }
+
+    #[getter]
+    fn policy(&mut self) -> Option<Move> {
+        self.0.policy().map(Move)
+    }
+
+    fn rated_moves(&mut self) -> Vec<(Move, f32)> {
+        self.0
+            .rated_moves()
             .iter()
-            .map(|(m, v)| (Move(*m), <[f32; NUM_PLAYERS]>::from(*v)))
+            .map(|(m, v)| (Move(*m), *v))
             .collect()
     }
 }

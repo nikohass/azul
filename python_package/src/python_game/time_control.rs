@@ -26,13 +26,6 @@ impl TimeControl {
         })
     }
 
-    #[staticmethod]
-    fn constant_iterations_per_move(iterations_per_move: u64) -> Self {
-        Self(game::TimeControl::ConstantIterationsPerMove {
-            iterations_per_move,
-        })
-    }
-
     fn __str__(&self) -> String {
         format!("{}", self.0)
     }

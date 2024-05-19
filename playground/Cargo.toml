@@ -9,3 +9,4 @@ edition = "2021"
 game = { path = "../game" }
 rand = { version = "0.8.5", features = ["small_rng"] }
 player = { path = "../player" }
+rayon = "1.5.1"

@@ -1,6 +1,6 @@
 use game::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ProbabilisticOutcome {
     pub factories: Factories,
     pub bag: Bag,
@@ -37,7 +37,7 @@ impl ProbabilisticOutcome {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Edge {
     Deterministic(Move),
     Probabilistic(ProbabilisticOutcome),

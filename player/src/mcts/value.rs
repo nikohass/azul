@@ -19,7 +19,9 @@ impl Value {
         let score_range = score_range as f32;
         for (i, &score) in game_scores.iter().enumerate() {
             let normalized_score = (score - min_score) as f32 / score_range;
-            value[i] = normalized_score;
+            // Add very small bonus for higher scores.
+            // Otherwise the program will do random moves as soon as its victory is inevitable which is perceived as arrogant by other players.
+            value[i] = normalized_score + score as f32 * 0.001;
         }
 
         // Divide by the sum of all values to normalize them

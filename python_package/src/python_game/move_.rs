@@ -46,4 +46,29 @@ impl Move {
             game::Move::deserialize_string(string).map_err(PyValueError::new_err)?,
         ))
     }
+
+    #[getter]
+    fn factory_index(&self) -> u8 {
+        self.0.factory_index
+    }
+
+    #[getter]
+    fn color(&self) -> TileColor {
+        TileColor(self.0.color)
+    }
+
+    #[getter]
+    fn pattern_line_index(&self) -> u8 {
+        self.0.pattern_line_index
+    }
+
+    #[getter]
+    fn discards(&self) -> u8 {
+        self.0.discards
+    }
+
+    #[getter]
+    fn places(&self) -> u8 {
+        self.0.places
+    }
 }

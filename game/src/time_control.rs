@@ -16,10 +16,6 @@ pub enum TimeControl {
         // The player will spend a constant amount of time per move without any time control
         milliseconds_per_move: u64,
     },
-    ConstantIterationsPerMove {
-        // The player will spend a constant amount of iterations per move without any time control
-        iterations_per_move: u64,
-    },
     RealTimeIncremental {
         base_time_milliseconds: u64,
         increment_milliseconds: u64,
@@ -46,11 +42,6 @@ impl Display for TimeControl {
             } => {
                 write!(f, "Constant Time Per Move: {}ms", milliseconds_per_move)
             }
-            TimeControl::ConstantIterationsPerMove {
-                iterations_per_move,
-            } => {
-                write!(f, "Constant Iterations Per Move: {}", iterations_per_move)
-            }
             TimeControl::RealTimeIncremental {
                 base_time_milliseconds,
                 increment_milliseconds,
@@ -60,6 +51,22 @@ impl Display for TimeControl {
                 "Real Time Incremental: {}ms base, {}ms increment, {}ms max",
                 base_time_milliseconds, increment_milliseconds, max_time_milliseconds
             ),
+        }
+    }
+}
+
+impl TimeControl {
+    pub fn get_total_time(&self) -> u64 {
+        match self {
+            TimeControl::SuddenDeath { total_milliseconds } => *total_milliseconds,
+            TimeControl::Incremental {
+                total_milliseconds, ..
+            } => *total_milliseconds,
+            TimeControl::ConstantTimePerMove { .. } => 0,
+            TimeControl::RealTimeIncremental {
+                base_time_milliseconds,
+                ..
+            } => *base_time_milliseconds,
         }
     }
 }

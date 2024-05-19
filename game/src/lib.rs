@@ -21,7 +21,7 @@ pub use player::{Player, PlayerMarker};
 pub use tile_color::TileColor;
 pub use tile_color::NUM_TILE_COLORS;
 pub use time_control::TimeControl;
-pub use wall::field_at;
+pub use wall::{field_at, WALL_COLOR_MASKS};
 
 #[derive(Debug, PartialEq)]
 pub enum GameError {

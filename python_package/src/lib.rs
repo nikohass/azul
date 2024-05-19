@@ -8,6 +8,7 @@ fn azul4(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("NUM_PLAYERS", game::NUM_PLAYERS)?;
     m.add("NUM_TILE_COLORS", game::NUM_TILE_COLORS)?;
     m.add("NUM_FACTORIES", game::NUM_FACTORIES)?;
+    m.add("WALL_COLOR_MASKS", game::WALL_COLOR_MASKS)?;
 
     m.add_class::<python_game::player_marker::PlayerMarker>()?;
     m.add_class::<python_game::game_state::GameState>()?;

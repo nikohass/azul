@@ -4,7 +4,7 @@ use game::*;
 use rand::rngs::SmallRng;
 use rand::Rng as _;
 
-const EXPANSION_PROBABILITY: f64 = 0.05;
+const MIN_VISITS_BEFORE_EXPANSION: f32 = 20.;
 
 mod constants {
     pub const C: f32 = 0.1;
@@ -79,22 +79,26 @@ impl Node {
         }
     }
 
-    pub fn get_move(&self) -> Option<Move> {
+    pub fn previous_move(&self) -> Option<Move> {
         match self.edge {
             Edge::Deterministic(move_) => Some(move_),
             Edge::Probabilistic(_) => None,
         }
     }
 
-    pub fn get_children(&self) -> &[Node] {
+    pub fn children(&self) -> &[Node] {
         &self.children
+    }
+
+    pub fn edge(&self) -> &Edge {
+        &self.edge
     }
 
     pub fn take_child_with_move(self, move_: Move) -> Option<Node> {
         let mut children = self.children;
         let mut index = None;
         for (i, child) in children.iter().enumerate() {
-            if let Some(child_move) = child.get_move() {
+            if let Some(child_move) = child.previous_move() {
                 if child_move == move_ {
                     index = Some(i);
                     break;
@@ -105,8 +109,21 @@ impl Node {
         index.map(|index| children.remove(index))
     }
 
+    pub fn take_child_with_edge(self, edge: &Edge) -> Option<Node> {
+        let mut children = self.children;
+        let mut index = None;
+        for (i, child) in children.iter().enumerate() {
+            if &child.edge == edge {
+                index = Some(i);
+                break;
+            }
+        }
+
+        index.map(|index| children.remove(index))
+    }
+
     #[inline]
-    pub fn get_value(&self) -> Value {
+    pub fn value(&self) -> Value {
         if self.n > 0. {
             self.q / self.n
         } else {
@@ -114,7 +131,7 @@ impl Node {
         }
     }
 
-    fn get_uct_value(&self, player_index: usize, parent_n: f32, c: f32) -> f32 {
+    fn uct_value(&self, player_index: usize, parent_n: f32, c: f32) -> f32 {
         if self.n > 0. {
             let mean_value = self.q[player_index] / self.n;
             mean_value + c * (parent_n.ln() / self.n).sqrt()
@@ -130,7 +147,7 @@ impl Node {
         let mut best_chuld_uct_value = std::f32::NEG_INFINITY;
 
         for (i, child) in self.children.iter().enumerate() {
-            let value = child.get_uct_value(player_index, self.n, c_adjusted);
+            let value = child.uct_value(player_index, self.n, c_adjusted);
             if value > best_chuld_uct_value {
                 best_child_index = i;
                 best_chuld_uct_value = value;
@@ -231,7 +248,8 @@ impl Node {
         }
 
         let (delta, depth) = if self.children.is_empty() {
-            if rng.gen_bool(EXPANSION_PROBABILITY) {
+            // if rng.gen_bool(EXPANSION_PROBABILITY) {
+            if self.n > MIN_VISITS_BEFORE_EXPANSION {
                 self.expand(game_state, move_list, rng);
                 if !self.is_game_over {
                     super::playout::playout(game_state.clone(), rng)
@@ -256,7 +274,7 @@ impl Node {
         (delta, depth + 1)
     }
 
-    pub fn build_pv(&mut self, game_state: &mut GameState, pv: &mut Vec<Edge>) {
+    pub fn build_principal_variation(&mut self, game_state: &mut GameState, pv: &mut Vec<Edge>) {
         if self.children.is_empty() {
             return;
         }
@@ -267,7 +285,7 @@ impl Node {
         child.edge.apply_to_game_state(game_state);
         pv.push(child.edge.clone());
 
-        child.build_pv(game_state, pv);
+        child.build_principal_variation(game_state, pv);
     }
 
     pub fn best_child(&mut self, player_index: usize) -> &mut Node {
@@ -275,7 +293,7 @@ impl Node {
         let mut best_child_value = std::f32::NEG_INFINITY;
 
         for (i, child) in self.children.iter().enumerate() {
-            let value: Value = child.get_value();
+            let value: Value = child.value();
             if value[player_index] > best_child_value {
                 best_child_index = i;
                 best_child_value = value[player_index];

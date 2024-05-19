@@ -1,7 +1,7 @@
 use crate::factories::CENTER_FACTORY_INDEX;
 use crate::tile_color::TileColor;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Move {
     pub factory_index: u8, // The factory from which the tiles are taken
     pub color: TileColor,  // What color of tiles are taken
@@ -25,7 +25,7 @@ impl Move {
 
     pub fn serialize_string(&self) -> String {
         format!(
-            "{}{}{}{:2}{:2}",
+            "{:1}{:1}{:1}{:02}{:02}",
             self.factory_index,
             usize::from(self.color),
             self.pattern_line_index,
@@ -35,6 +35,10 @@ impl Move {
     }
 
     pub fn deserialize_string(string: &str) -> Result<Self, String> {
+        if string.len() < 7 {
+            return Err("String too short".to_owned());
+        }
+
         let factory_index = string[0..1]
             .parse::<u8>()
             .map_err(|_| "Invalid factory index")?;
@@ -44,6 +48,7 @@ impl Move {
             .map_err(|_| "Invalid pattern line index")?;
         let discards = string[3..5].parse::<u8>().map_err(|_| "Invalid discards")?;
         let places = string[5..7].parse::<u8>().map_err(|_| "Invalid places")?;
+
         Ok(Self {
             factory_index,
             color,

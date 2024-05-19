@@ -239,20 +239,21 @@ if __name__ == "__main__":
     # Change the current working directory to the project root
     os.chdir(os.path.join(os.path.dirname(__file__), ".."))
 
+    # time_control="""{ type = "SuddenDeath", total_milliseconds = 10000 }""", 
     game_config = GameConfig([
             PlayerConfig(
                 "target/release/test_client.exe", 
-                time_control="""{ type = "SuddenDeath", total_milliseconds = 10000 }""", 
+                time_control="""{ type = "ConstantTimePerMove", milliseconds_per_move = 1000 }""", 
                 allow_pondering=False
             ),
             PlayerConfig(
-                "target/release/test_client.exe", 
-                time_control="""{ type = "SuddenDeath", total_milliseconds = 10000 }""", 
+                "clients/2/1.exe", 
+                time_control="""{ type = "ConstantTimePerMove", milliseconds_per_move = 1000 }""", 
                 allow_pondering=False
             ),
         ],
         num_games=300,
-        num_simulations_games=10,
+        num_simulations_games=6,
         stop_on_significant_difference=True
     )
     test = Test(game_config=game_config)

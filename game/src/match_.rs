@@ -47,6 +47,7 @@ pub fn run_match(
     loop {
         if verbose {
             println!("{}", display_gamestate(&game_state, Some(&player_names)));
+            println!("{}", game_state.to_fen());
         }
         let result = game_state.get_possible_moves(&mut move_list, &mut rng);
         let is_game_over = matches!(result, MoveGenerationResult::GameOver);
@@ -89,6 +90,7 @@ pub fn run_match(
             );
             println!("Move list: {:?}", move_list);
             println!("{}", display_gamestate(&game_state, Some(&player_names)));
+            println!("{}", game_state.to_fen());
             return Err(GameError::IllegalMove);
         }
 
@@ -113,6 +115,7 @@ pub fn run_match(
     }
     if verbose {
         println!("{}", display_gamestate(&game_state, Some(&player_names)));
+        println!("{}", game_state.to_fen());
     }
 
     // The game is over, we can get the scores

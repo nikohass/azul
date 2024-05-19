@@ -39,5 +39,6 @@ pub trait Player: Send + Sync {
     fn notify_game_over(&mut self, _game_state: &GameState) {}
     fn set_time(&mut self, _time: TimeControl) {}
     fn set_pondering(&mut self, _pondering: bool) {}
+    fn set_thread_count(&mut self, _thread_count: u32) {}
     fn reset(&mut self) {}
 }
