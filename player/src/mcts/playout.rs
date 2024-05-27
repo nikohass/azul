@@ -24,14 +24,11 @@ pub fn playout(mut game_state: GameState, rng: &mut SmallRng) -> (Value, u16) {
         playout_depth += 1;
     }
 
-    (
-        Value::from_game_scores(game_state.get_scores()),
-        playout_depth,
-    )
+    (Value::from_game_scores(game_state.scores), playout_depth)
 }
 
 pub fn get_random_move(game_state: &mut GameState, rng: &mut SmallRng) -> Option<Move> {
-    let is_round_over = game_state.get_factories().is_empty();
+    let is_round_over = game_state.factories.is_empty();
 
     if is_round_over {
         let is_game_over = game_state.evaluate_round();
@@ -43,29 +40,26 @@ pub fn get_random_move(game_state: &mut GameState, rng: &mut SmallRng) -> Option
         game_state.fill_factories(rng);
     }
 
-    let factories: &Factories = game_state.get_factories();
-    let current_player: usize = game_state.get_current_player().into();
-    let pattern_line_colors = game_state.get_pattern_line_colors()[current_player];
-    let pattern_lines_occupancy = game_state.get_pattern_lines_occupancy()[current_player];
-    let wall_occupancy = game_state.get_walls()[current_player];
+    let factories: &Factories = &game_state.factories;
+    let current_player: usize = game_state.current_player.into();
+    let pattern_line_colors = game_state.pattern_lines_colors[current_player];
+    let pattern_lines_occupancy = game_state.pattern_lines_occupancy[current_player];
+    let wall_occupancy = game_state.walls[current_player];
 
     let mut random_factory_index;
     loop {
         random_factory_index = rng.gen_range(0..NUM_FACTORIES);
-        if !factories[random_factory_index]
-            .iter()
-            .all(|&tile| tile == 0)
-        {
+        if factories[random_factory_index].iter().any(|&tile| tile > 0) {
             break;
         }
     }
 
     let mut random_tile_color;
-    let tile_number;
+    let mut tile_number;
     loop {
         random_tile_color = rng.gen_range(0..5);
-        if factories[random_factory_index][random_tile_color] > 0 {
-            tile_number = factories[random_factory_index][random_tile_color];
+        tile_number = factories[random_factory_index][random_tile_color];
+        if tile_number > 0 {
             break;
         }
     }

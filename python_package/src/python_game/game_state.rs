@@ -84,95 +84,95 @@ impl GameState {
 
     #[getter]
     fn current_player(&self) -> PlayerMarker {
-        PlayerMarker(self.0.get_current_player())
+        PlayerMarker(self.0.current_player)
     }
 
     fn set_current_player(&mut self, player: PlayerMarker) {
-        self.0.set_current_player(player.0);
+        self.0.current_player = player.0;
     }
 
     #[getter]
     fn next_round_starting_player(&self) -> PlayerMarker {
-        PlayerMarker(self.0.get_next_round_starting_player())
+        PlayerMarker(self.0.next_round_starting_player)
     }
 
     fn set_next_round_starting_player(&mut self, player: PlayerMarker) {
-        self.0.set_next_round_starting_player(player.0);
+        self.0.next_round_starting_player = player.0;
     }
 
     #[getter]
     fn scores(&self) -> [i16; NUM_PLAYERS] {
-        self.0.get_scores()
+        self.0.scores
     }
 
     fn set_scores(&mut self, scores: [i16; NUM_PLAYERS]) {
-        self.0.set_scores(scores);
+        self.0.scores = scores;
     }
 
     #[getter]
     fn bag(&self) -> [u8; NUM_TILE_COLORS] {
-        self.0.get_bag()
+        self.0.bag
     }
 
     fn set_bag(&mut self, bag: [u8; NUM_TILE_COLORS]) -> PyResult<()> {
-        self.0.set_bag(bag);
+        self.0.bag = bag;
         Ok(())
     }
 
     #[getter]
     fn out_of_bag(&self) -> [u8; NUM_TILE_COLORS] {
-        self.0.get_out_of_bag()
+        self.0.out_of_bag
     }
 
     fn set_out_of_bag(&mut self, out_of_bag: Vec<u8>) -> PyResult<()> {
         let out_of_bag: [u8; NUM_TILE_COLORS] = out_of_bag.try_into().map_err(|_| {
             PyValueError::new_err(format!("Out of bag must have {} elements", NUM_TILE_COLORS))
         })?;
-        self.0.set_out_of_bag(out_of_bag);
+        self.0.out_of_bag = out_of_bag;
         Ok(())
     }
 
     #[getter]
     fn factories(&self) -> Vec<Vec<u8>> {
-        self.0.get_factories().iter().map(|f| f.to_vec()).collect()
+        self.0.factories.iter().map(|f| f.to_vec()).collect()
     }
 
     fn set_factories(&mut self, factories: [Factory; NUM_FACTORIES]) -> PyResult<()> {
-        self.0.set_factories(Factories::from(factories));
+        self.0.factories = Factories::from(factories);
         Ok(())
     }
 
     #[getter]
     fn floor_line_progress(&self) -> [u8; NUM_PLAYERS] {
-        self.0.get_floor_line_progress()
+        self.0.floor_line_progress
     }
 
     fn set_floor_line_progress(&mut self, progress: [u8; NUM_PLAYERS]) {
-        self.0.set_floor_line_progress(progress);
+        self.0.floor_line_progress = progress;
     }
 
     #[getter]
     fn walls(&self) -> [u32; NUM_PLAYERS] {
-        self.0.get_walls()
+        self.0.walls
     }
 
     fn set_walls(&mut self, walls: [u32; NUM_PLAYERS]) {
-        self.0.set_walls(walls);
+        self.0.walls = walls;
     }
 
     #[getter]
     fn pattern_line_occupancy(&self) -> [[u8; 5]; NUM_PLAYERS] {
-        *self.0.get_pattern_lines_occupancy()
+        self.0.pattern_lines_occupancy
     }
 
-    fn set_pattern_line_occupancy(&mut self, occupancy: [[u8; 5]; NUM_PLAYERS]) {
-        self.0.set_pattern_lines_occupancy(occupancy);
+    fn set_pattern_line_occupancy(&mut self, pattern_lines_occupancy: [[u8; 5]; NUM_PLAYERS]) {
+        self.0.pattern_lines_occupancy = pattern_lines_occupancy;
     }
 
     #[getter]
     fn pattern_line_colors(&self) -> [[Option<TileColor>; 5]; NUM_PLAYERS] {
         let mut result = [[None; 5]; NUM_PLAYERS];
-        for (player_index, pattern_colors) in self.0.get_pattern_line_colors().iter().enumerate() {
+        for (player_index, pattern_colors) in self.0.pattern_lines_colors.iter().enumerate() {
             for (pattern_index, &color) in pattern_colors.iter().enumerate() {
                 result[player_index][pattern_index] = color.map(TileColor);
             }
@@ -187,16 +187,16 @@ impl GameState {
                 result[i][j] = color.map(|c| c.0);
             }
         }
-        self.0.set_pattern_line_colors(result);
+        self.0.pattern_lines_colors = result;
     }
 
     #[getter]
     fn tile_taken_from_center(&self) -> bool {
-        self.0.get_tile_taken_from_center()
+        self.0.tile_taken_from_center
     }
 
-    fn set_tile_taken_from_center(&mut self, taken: bool) {
-        self.0.set_tile_taken_from_center(taken);
+    fn set_tile_taken_from_center(&mut self, tile_taken_from_center: bool) {
+        self.0.tile_taken_from_center = tile_taken_from_center;
     }
 
     #[getter]

@@ -21,6 +21,10 @@ impl MonteCarloTreeSearch {
         self.0.stop_working();
     }
 
+    fn verbose(&mut self, verbose: bool) {
+        self.0.verbose(verbose);
+    }
+
     #[getter]
     fn principal_variation(&mut self) -> Vec<String> {
         self.0

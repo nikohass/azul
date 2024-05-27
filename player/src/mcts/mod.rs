@@ -1,9 +1,10 @@
 pub mod edge;
+pub mod neural_network;
 mod node;
 mod player;
 mod playout;
 mod time_control;
-pub mod tree;
+mod tree;
 mod value;
 
 pub use player::MonteCarloTreeSearch;

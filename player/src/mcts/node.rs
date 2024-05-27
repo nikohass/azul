@@ -7,7 +7,7 @@ use rand::Rng as _;
 const MIN_VISITS_BEFORE_EXPANSION: f32 = 20.;
 
 mod constants {
-    pub const C: f32 = 0.1;
+    pub const C: f32 = 0.2;
     pub const C_BASE: f32 = 30_000.0;
     pub const C_FACTOR: f32 = std::f32::consts::SQRT_2;
 }
@@ -52,32 +52,32 @@ impl Node {
         }
     }
 
-    pub fn store_node(
-        &self,
-        parent_id: usize,
-        current_id: &mut usize,
-        data: &mut String,
-        min_visits: f32,
-    ) {
-        let local_id: usize = *current_id;
-        if self.n < min_visits {
-            return;
-        }
+    // pub fn store_node(
+    //     &self,
+    //     parent_id: usize,
+    //     current_id: &mut usize,
+    //     data: &mut String,
+    //     min_visits: f32,
+    // ) {
+    //     let local_id: usize = *current_id;
+    //     if self.n < min_visits {
+    //         return;
+    //     }
 
-        // Write node definition
-        data.push_str(&format!("{} [label=\"{}\"];\n", local_id, self.n,));
+    //     // Write node definition
+    //     data.push_str(&format!("{} [label=\"{}\"];\n", local_id, self.n,));
 
-        // Write edge definition
-        if parent_id != local_id {
-            // avoid linking root to itself
-            data.push_str(&format!("{} -> {};\n", parent_id, local_id));
-        }
+    //     // Write edge definition
+    //     if parent_id != local_id {
+    //         // avoid linking root to itself
+    //         data.push_str(&format!("{} -> {};\n", parent_id, local_id));
+    //     }
 
-        for child in &self.children {
-            *current_id += 1;
-            child.store_node(local_id, current_id, data, min_visits);
-        }
-    }
+    //     for child in &self.children {
+    //         *current_id += 1;
+    //         child.store_node(local_id, current_id, data, min_visits);
+    //     }
+    // }
 
     pub fn previous_move(&self) -> Option<Move> {
         match self.edge {
@@ -90,24 +90,24 @@ impl Node {
         &self.children
     }
 
-    pub fn edge(&self) -> &Edge {
-        &self.edge
-    }
+    // pub fn edge(&self) -> &Edge {
+    //     &self.edge
+    // }
 
-    pub fn take_child_with_move(self, move_: Move) -> Option<Node> {
-        let mut children = self.children;
-        let mut index = None;
-        for (i, child) in children.iter().enumerate() {
-            if let Some(child_move) = child.previous_move() {
-                if child_move == move_ {
-                    index = Some(i);
-                    break;
-                }
-            }
-        }
+    // pub fn take_child_with_move(self, move_: Move) -> Option<Node> {
+    //     let mut children = self.children;
+    //     let mut index = None;
+    //     for (i, child) in children.iter().enumerate() {
+    //         if let Some(child_move) = child.previous_move() {
+    //             if child_move == move_ {
+    //                 index = Some(i);
+    //                 break;
+    //             }
+    //         }
+    //     }
 
-        index.map(|index| children.remove(index))
-    }
+    //     index.map(|index| children.remove(index))
+    // }
 
     pub fn take_child_with_edge(self, edge: &Edge) -> Option<Node> {
         let mut children = self.children;
@@ -201,9 +201,9 @@ impl Node {
 
     fn expand_probabilistic_child(&mut self, game_state: &mut GameState, children: Vec<Node>) {
         let outcome = ProbabilisticOutcome {
-            factories: game_state.get_factories().clone(),
-            out_of_bag: game_state.get_out_of_bag(),
-            bag: game_state.get_bag(),
+            factories: game_state.factories.clone(),
+            out_of_bag: game_state.out_of_bag,
+            bag: game_state.bag,
         };
         let mut child = Node::new_probabilistic(outcome);
         child.children = children;
@@ -220,7 +220,7 @@ impl Node {
         #[cfg(debug_assertions)]
         game_state.check_integrity().unwrap();
 
-        let current_player = u8::from(game_state.get_current_player());
+        let current_player = u8::from(game_state.current_player);
         if self.has_probabilistic_children {
             // All children of this node are probabilistic. When this node was "expanded", we only expanded one probabilistic outcome.
             // There would be too many possible outcomes to expand all of them, so we just expanded one.
@@ -238,9 +238,9 @@ impl Node {
                 game_state_clone.fill_factories(rng);
 
                 let outcome = ProbabilisticOutcome {
-                    factories: game_state_clone.get_factories().clone(),
-                    out_of_bag: game_state_clone.get_out_of_bag(),
-                    bag: game_state_clone.get_bag(),
+                    factories: game_state_clone.factories.clone(),
+                    out_of_bag: game_state_clone.out_of_bag,
+                    bag: game_state_clone.bag,
                 };
                 let child = Node::new_probabilistic(outcome);
                 self.children.push(child);
@@ -248,13 +248,12 @@ impl Node {
         }
 
         let (delta, depth) = if self.children.is_empty() {
-            // if rng.gen_bool(EXPANSION_PROBABILITY) {
             if self.n > MIN_VISITS_BEFORE_EXPANSION {
                 self.expand(game_state, move_list, rng);
                 if !self.is_game_over {
                     super::playout::playout(game_state.clone(), rng)
                 } else if self.n == 0. {
-                    self.q = Value::from_game_scores(game_state.get_scores());
+                    self.q = Value::from_game_scores(game_state.scores);
                     self.n = 1.;
                     (self.q, 0)
                 } else {
@@ -279,7 +278,7 @@ impl Node {
             return;
         }
 
-        let player_index = usize::from(game_state.get_current_player());
+        let player_index = usize::from(game_state.current_player);
         let child = self.best_child(player_index);
 
         child.edge.apply_to_game_state(game_state);

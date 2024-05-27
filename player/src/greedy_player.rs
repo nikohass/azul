@@ -28,11 +28,11 @@ impl Player for GreedyPlayer {
         game_state.get_possible_moves(&mut self.move_list, &mut SmallRng::from_entropy());
         let mut best_move = self.move_list[0];
         let mut best_score = -1000;
-        let me = usize::from(game_state.get_current_player());
+        let me = usize::from(game_state.current_player);
         for move_ in &self.move_list {
             let mut game_state_clone = game_state.clone();
             game_state_clone.do_move(*move_);
-            let score = game_state.get_scores()[me];
+            let score = game_state.scores[me];
             if score > best_score {
                 best_score = score;
                 best_move = *move_;

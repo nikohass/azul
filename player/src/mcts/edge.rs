@@ -11,18 +11,18 @@ impl ProbabilisticOutcome {
     pub fn apply_to_game_state(&self, game_state: &mut GameState) {
         #[cfg(debug_assertions)]
         {
-            let factories = game_state.get_factories();
+            let factories = &game_state.factories;
             assert!(factories.is_empty());
         }
         #[cfg(debug_assertions)]
         let original_game_state = game_state.clone();
 
         game_state.evaluate_round(); // This will move the tiles from the factories to the pattern lines
-        game_state.set_factories(self.factories.clone()); // Overwrite the factories with the outcome of the probabilistic event
+        game_state.factories = self.factories.clone(); // Overwrite the factories with the outcome of the probabilistic event
 
         // The number of tiles in and out of bag also changes when the factories are refilled, so overwrite those as well
-        game_state.set_out_of_bag(self.out_of_bag);
-        game_state.set_bag(self.bag);
+        game_state.out_of_bag = self.out_of_bag;
+        game_state.bag = self.bag;
 
         #[cfg(debug_assertions)]
         {
@@ -50,7 +50,7 @@ impl Edge {
             Edge::Probabilistic(outcome) => {
                 #[cfg(debug_assertions)]
                 {
-                    let factories = game_state.get_factories();
+                    let factories = &game_state.factories;
                     assert!(factories.is_empty());
                 }
                 outcome.apply_to_game_state(game_state)

@@ -242,19 +242,22 @@ if __name__ == "__main__":
     # time_control="""{ type = "SuddenDeath", total_milliseconds = 10000 }""", 
     game_config = GameConfig([
             PlayerConfig(
-                "target/release/test_client.exe", 
-                time_control="""{ type = "ConstantTimePerMove", milliseconds_per_move = 1000 }""", 
+                "target/release/test_client.exe",
+                time_control="""{ type = "ConstantTimePerMove", milliseconds_per_move = 100 }""", 
                 allow_pondering=False
             ),
             PlayerConfig(
-                "clients/2/1.exe", 
-                time_control="""{ type = "ConstantTimePerMove", milliseconds_per_move = 1000 }""", 
+                "clients/2/2.exe", 
+                time_control="""{ type = "ConstantTimePerMove", milliseconds_per_move = 100 }""", 
                 allow_pondering=False
             ),
         ],
-        num_games=300,
-        num_simulations_games=6,
+        num_games=500,
+        num_simulations_games=8,
         stop_on_significant_difference=True
     )
     test = Test(game_config=game_config)
     test.run()
+
+# 2024-05-19 23:23:13.327+02:00 - DEBUG - Player 1 - Average score: 35.62, Wins: 309, Draws: 9, Losses: 182
+# 2024-05-19 23:23:13.327+02:00 - DEBUG - Player 2 - Average score: 32.996, Wins: 182, Draws: 9, Losses: 309

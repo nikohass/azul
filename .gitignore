@@ -6,6 +6,7 @@
 default_config.toml
 /plots
 .vscode
+.vs
 online
 build_wheel.bat
 */selenium

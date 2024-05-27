@@ -1,5 +1,5 @@
 use super::time_control::{MctsTimeControl, TimeControlResult};
-use super::tree::Tree;
+use super::tree::{RootStatistics, Tree};
 use super::value::Value;
 use crate::mcts::edge::Edge;
 use crate::mcts::time_control::RemainingTimeInfo;
@@ -40,6 +40,10 @@ impl MonteCarloTreeSearch {
     pub fn principal_variation(&mut self) -> Vec<Edge> {
         self.tree.principal_variation()
     }
+
+    pub fn verbose(&mut self, verbose: bool) {
+        self.tree.verbose(verbose);
+    }
 }
 
 impl Default for MonteCarloTreeSearch {
@@ -75,23 +79,8 @@ impl Player for MonteCarloTreeSearch {
         std::thread::sleep(std::time::Duration::from_millis(15));
 
         #[cfg(not(feature = "mute"))]
-        {
-            let player_string = (0..NUM_PLAYERS)
-                .map(|i| format!("  V{}", i + 1))
-                .collect::<Vec<String>>()
-                .join(" ");
-            println!(
-                "{:>10} {:>3} {:>9} {} {:>8} {:>8} {:>8} {:>2}",
-                "Iterations",
-                "PVd",
-                "Avg.Plies",
-                player_string,
-                "Stop",
-                "Total",
-                "Speed",
-                "Principal Variation"
-            );
-        }
+        RootStatistics::print_header();
+
         loop {
             let statistics = self.tree.root_statistics();
             let time_control_result = self.time_control.how_long(search_start_time, &statistics);
@@ -105,28 +94,7 @@ impl Player for MonteCarloTreeSearch {
                 };
 
                 #[cfg(not(feature = "mute"))]
-                println!(
-                    "{:10} {:3} {:>9} {} {:>8} {:>8} {:>8} {}",
-                    statistics.visits,
-                    statistics.principal_variation.len(),
-                    format!("{:.1}", statistics.average_plies().unwrap_or(0.0)),
-                    statistics.value,
-                    remaining_time_info
-                        .current_search_allocated_time
-                        .map(|t| t - search_start_time.elapsed().as_millis() as i64)
-                        .map_or("N/A".to_string(), |v| format!("{}ms", v)),
-                    remaining_time_info
-                        .game_remaining_time
-                        .map(|t| t - search_start_time.elapsed().as_millis() as i64)
-                        .map_or("N/A".to_string(), |v| format!("{}ms", v)),
-                    format!("{:.0}/ms", statistics.speed),
-                    statistics
-                        .principal_variation
-                        .iter()
-                        .map(|edge| edge.to_string())
-                        .collect::<Vec<_>>()
-                        .join(", "),
-                );
+                statistics.print(&remaining_time_info, search_start_time);
             }
             match time_control_result {
                 TimeControlResult::ContinueFor(duration, ..) => {

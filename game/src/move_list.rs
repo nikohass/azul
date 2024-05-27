@@ -1,6 +1,8 @@
+use crate::NUM_FACTORIES;
+
 use super::Move;
 
-const MAX_MOVES: usize = 1500;
+const MAX_MOVES: usize = ((NUM_FACTORIES - 2) * 4 + 5) * 6;
 
 pub struct MoveList {
     moves: [Move; MAX_MOVES],

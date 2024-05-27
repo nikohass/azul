@@ -176,7 +176,7 @@ fn print_stats(game_results_lock: MutexGuard<Vec<MatchStatistcs>>) {
     let total_games = game_results_lock.len() as u32;
     let avg_moves = game_results_lock
         .iter()
-        .map(|stats| stats.executed_moves.len() as u32)
+        .map(|stats| stats.state_action_pairs.len() as u32)
         .sum::<u32>() as f32
         / total_games as f32;
     let avg_refills = game_results_lock

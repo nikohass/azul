@@ -61,6 +61,10 @@ impl Move {
     pub fn is_discard_only(&self) -> bool {
         self.places == 0
     }
+
+    pub fn tiles_taken(&self) -> u8 {
+        self.discards + self.places
+    }
 }
 
 impl std::fmt::Display for Move {

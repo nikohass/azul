@@ -72,7 +72,7 @@ fn player_wall_to_string(game_state: &GameState, player_index: usize) -> String 
             let mut found = false;
 
             for (color, color_mask) in WALL_COLOR_MASKS.iter().enumerate() {
-                let wall = game_state.get_walls()[player_index];
+                let wall = game_state.walls[player_index];
                 if wall & color_mask & bit > 0 {
                     string.push_str(&TileColor::from(color).to_string());
                     found = true;
@@ -80,7 +80,7 @@ fn player_wall_to_string(game_state: &GameState, player_index: usize) -> String 
                 }
             }
 
-            if !found && game_state.get_walls()[player_index] & bit == 0 {
+            if !found && game_state.walls[player_index] & bit == 0 {
                 for (color, wall_color) in WALL_COLOR_MASKS.iter().enumerate() {
                     if wall_color & bit > 0 {
                         let (start, end) = TileColor::from(color).get_color_string();
@@ -101,8 +101,8 @@ fn player_wall_to_string(game_state: &GameState, player_index: usize) -> String 
 fn player_pattern_board_to_string(game_state: &GameState, player_index: usize) -> String {
     let mut string = String::new();
 
-    let pattern_line_occupancy = game_state.get_pattern_lines_occupancy()[player_index];
-    let pattern_colors = game_state.get_pattern_line_colors()[player_index];
+    let pattern_line_occupancy = game_state.pattern_lines_occupancy[player_index];
+    let pattern_colors = game_state.pattern_lines_colors[player_index];
     for pattern_index in 0..5 {
         let pattern_color: Option<TileColor> = pattern_colors[pattern_index];
         let color = if let Some(pattern_color) = pattern_color {
@@ -154,19 +154,19 @@ pub fn display_gamestate(game_state: &GameState, player_names: Option<&Vec<Strin
     let separator_line = empty_line.replace(' ', "-").replace('|', "+");
 
     let mut string = String::new();
-    string.push_str(&format!("BAG: {}", bag_to_string(&game_state.get_bag())));
+    string.push_str(&format!("BAG: {}", bag_to_string(&game_state.bag)));
     string.push_str(&format!(
         "OUT OF BAG: {}",
-        bag_to_string(&game_state.get_out_of_bag())
+        bag_to_string(&game_state.out_of_bag)
     ));
     string.push('\n');
-    string.push_str(&factories_to_string(game_state.get_factories()));
+    string.push_str(&factories_to_string(&game_state.factories));
     string.push('\n');
 
     // Player header
     string.push(' ');
     for player_index in 0..NUM_PLAYERS {
-        if usize::from(game_state.get_current_player()) == player_index {
+        if usize::from(game_state.current_player) == player_index {
             string.push_str("\x1b[30m\x1b[47m");
         }
 
@@ -184,8 +184,7 @@ pub fn display_gamestate(game_state: &GameState, player_names: Option<&Vec<Strin
         };
         string.push_str(&format!(
             "{:23} {:3}\x1b[0m ",
-            player_name,
-            game_state.get_scores()[player_index]
+            player_name, game_state.scores[player_index]
         ));
         if player_index != NUM_PLAYERS - 1 {
             string.push_str("|  ");
@@ -231,7 +230,7 @@ pub fn display_gamestate(game_state: &GameState, player_names: Option<&Vec<Strin
     // Player floor lines
     for player_index in 0..NUM_PLAYERS {
         let mut floor_line = String::new();
-        let progress = game_state.get_floor_line_progress()[player_index]
+        let progress = game_state.floor_line_progress[player_index]
             .min(FLOOR_LINE_PENALTY.len() as u8 - 1) as usize;
 
         let mut previous_penalty = 0;
@@ -240,9 +239,8 @@ pub fn display_gamestate(game_state: &GameState, player_names: Option<&Vec<Strin
             if i > progress {
                 floor_line.push_str("\u{001b}[02m");
             } else if i == 1
-                && game_state.get_next_round_starting_player()
-                    == PlayerMarker::new(player_index as u8)
-                && game_state.get_tile_taken_from_center()
+                && game_state.next_round_starting_player == PlayerMarker::new(player_index as u8)
+                && game_state.tile_taken_from_center
             {
                 floor_line.push_str("\u{001b}[32m");
             }

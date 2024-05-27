@@ -9,7 +9,7 @@ use crate::{
 pub struct MatchStatistcs {
     pub num_turns: u32,
     pub num_factory_refills: u32,
-    pub executed_moves: Vec<(GameState, PlayerMarker, Move, u64)>,
+    pub state_action_pairs: Vec<(GameState, Move)>,
     pub player_statistics: [PlayerStatistics; NUM_PLAYERS],
     pub branching_factor: Vec<u32>,
 }
@@ -68,7 +68,7 @@ pub fn run_match(
         stats.num_factory_refills += refilled_factories as u32;
         stats.num_turns += 1;
 
-        let current_player_marker: PlayerMarker = game_state.get_current_player();
+        let current_player_marker: PlayerMarker = game_state.current_player;
         let current_player = usize::from(current_player_marker);
 
         let request_time = std::time::Instant::now();
@@ -95,12 +95,9 @@ pub fn run_match(
         }
 
         stats.branching_factor.push(move_list.len() as u32);
-        stats.executed_moves.push((
-            game_state.clone(),
-            current_player_marker,
-            players_move,
-            response_time,
-        ));
+        stats
+            .state_action_pairs
+            .push((game_state.clone(), players_move));
         stats.player_statistics[current_player]
             .executed_moves
             .push((game_state.clone(), players_move, response_time));
@@ -119,7 +116,7 @@ pub fn run_match(
     }
 
     // The game is over, we can get the scores
-    let scores: [i16; NUM_PLAYERS] = game_state.get_scores();
+    let scores: [i16; NUM_PLAYERS] = game_state.scores;
     for (i, score) in scores.iter().enumerate() {
         stats.player_statistics[i].final_score = *score;
     }

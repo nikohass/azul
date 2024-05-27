@@ -1,4 +1,4 @@
-use super::{edge::Edge, node::Node, value::Value};
+use super::{edge::Edge, node::Node, time_control::RemainingTimeInfo, value::Value};
 use game::*;
 use rand::{rngs::SmallRng, SeedableRng};
 use std::{
@@ -29,6 +29,48 @@ impl RootStatistics {
             Some(self.sum_plies as f64 / self.visits as f64)
         }
     }
+
+    pub fn print_header() {
+        let player_string = (0..NUM_PLAYERS)
+            .map(|i| format!("  V{}", i + 1))
+            .collect::<Vec<String>>()
+            .join(" ");
+        println!(
+            "{:>10} {:>3} {:>9} {} {:>8} {:>8} {:>8} {:>2}",
+            "Iterations",
+            "PVd",
+            "Avg.Plies",
+            player_string,
+            "Stop",
+            "Total",
+            "Speed",
+            "Principal Variation"
+        );
+    }
+
+    pub fn print(&self, remaining_time_info: &RemainingTimeInfo, search_start_time: Instant) {
+        println!(
+            "{:10} {:3} {:>9} {} {:>8} {:>8} {:>8} {}",
+            self.visits,
+            self.principal_variation.len(),
+            format!("{:.1}", self.average_plies().unwrap_or(0.0)),
+            self.value,
+            remaining_time_info
+                .current_search_allocated_time
+                .map(|t| t - search_start_time.elapsed().as_millis() as i64)
+                .map_or("N/A".to_string(), |v| format!("{}ms", v)),
+            remaining_time_info
+                .game_remaining_time
+                .map(|t| t - search_start_time.elapsed().as_millis() as i64)
+                .map_or("N/A".to_string(), |v| format!("{}ms", v)),
+            format!("{:.0}/ms", self.speed),
+            self.principal_variation
+                .iter()
+                .map(|edge| edge.to_string())
+                .collect::<Vec<_>>()
+                .join(", "),
+        );
+    }
 }
 
 pub struct Root {
@@ -52,6 +94,7 @@ impl Root {
 
     pub fn advance(mut self, game_state: &GameState, edge: Option<Edge>) -> Self {
         if game_state.to_fen() == self.game_state.to_fen() {
+            #[cfg(not(feature = "mute"))]
             println!(
                 "No need to advance root node, the game state is the same as the current one."
             );
@@ -61,6 +104,7 @@ impl Root {
         let edge = match edge {
             Some(edge) => edge,
             None => {
+                #[cfg(not(feature = "mute"))]
                 println!("Cannot advance root node without an edge. Falling back to the default root node.");
                 return Self::for_game_state(game_state);
             }
@@ -71,37 +115,41 @@ impl Root {
 
         match new_root_node {
             Some(new_root_node) => {
+                #[cfg(not(feature = "mute"))]
                 println!("Root node has been advanced");
+
                 edge.apply_to_game_state(&mut self.game_state);
                 Self::new(new_root_node, &self.game_state)
             }
             None => {
+                #[cfg(not(feature = "mute"))]
                 println!("Could not find the edge in the current tree. Falling back to the default root node.");
+
                 Self::for_game_state(game_state)
             }
         }
     }
 
-    pub fn node(&self) -> &Node {
-        &self.node
-    }
+    // pub fn node(&self) -> &Node {
+    //     &self.node
+    // }
 
     pub fn game_state(&self) -> &GameState {
         &self.game_state
     }
 
-    pub fn statistics(&self) -> &RootStatistics {
-        &self.statistics
-    }
+    // pub fn statistics(&self) -> &RootStatistics {
+    //     &self.statistics
+    // }
 
     pub fn value(&self) -> Value {
         self.node.value()
     }
 
-    pub fn build_principal_variation(&mut self, principal_variation: &mut Vec<Edge>) {
-        self.node
-            .build_principal_variation(&mut self.game_state.clone(), principal_variation);
-    }
+    // pub fn build_principal_variation(&mut self, principal_variation: &mut Vec<Edge>) {
+    //     self.node
+    //         .build_principal_variation(&mut self.game_state.clone(), principal_variation);
+    // }
 
     pub fn do_iterations(
         &mut self,
@@ -138,6 +186,7 @@ enum Command {
     StopWorking,
     AdvanceRoot(GameState, Option<Edge>),
     TerminateThread,
+    Verbose(bool),
 }
 
 pub struct Tree {
@@ -159,7 +208,7 @@ impl Tree {
     pub fn policy(&mut self) -> Option<Move> {
         let mut root = self.root.lock().unwrap();
         let root = root.as_mut()?;
-        let current_player = root.game_state().get_current_player();
+        let current_player = root.game_state().current_player;
         root.node.best_move(usize::from(current_player))
     }
 
@@ -174,10 +223,14 @@ impl Tree {
             .unwrap();
     }
 
+    pub fn verbose(&self, verbose: bool) {
+        self.sender.send(Command::Verbose(verbose)).unwrap();
+    }
+
     pub fn rated_moves(&mut self) -> Vec<(Move, f32)> {
         let root = self.root.lock().unwrap();
         let root = root.as_ref().unwrap();
-        let current_player = root.game_state().get_current_player();
+        let current_player = root.game_state().current_player;
         let mut rated_moves = Vec::new();
         for node in root.node.children() {
             let move_ = if let Some(move_) = node.previous_move() {
@@ -222,6 +275,8 @@ impl Default for Tree {
             let mut root_lock: Option<MutexGuard<Option<Root>>> = None;
             let mut move_list = MoveList::default();
             let mut rng = SmallRng::from_entropy();
+            let mut verbose = false;
+            let mut last_print_time = Instant::now();
 
             loop {
                 if let Ok(command) = receiver.try_recv() {
@@ -257,8 +312,15 @@ impl Default for Tree {
                             }
                         }
                         Command::TerminateThread => {
+                            #[cfg(not(feature = "mute"))]
                             println!("Terminating thread");
                             break;
+                        }
+                        Command::Verbose(v) => {
+                            verbose = v;
+                            if verbose {
+                                RootStatistics::print_header();
+                            }
                         }
                     }
                 }
@@ -278,6 +340,17 @@ impl Default for Tree {
                             root.statistics.speed = iterations_per_ms;
                             if let Ok(mut root_statistics) = root_statistics_clone.try_write() {
                                 *root_statistics = Some(root.statistics.clone());
+                            }
+
+                            if verbose && last_print_time.elapsed().as_millis() >= 500 {
+                                root.statistics.print(
+                                    &RemainingTimeInfo {
+                                        current_search_allocated_time: None,
+                                        game_remaining_time: None,
+                                    },
+                                    start_time,
+                                );
+                                last_print_time = Instant::now();
                             }
 
                             continue;

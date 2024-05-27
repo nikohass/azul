@@ -20,115 +20,24 @@ pub enum MoveGenerationResult {
 
 #[derive(Clone, Debug)]
 pub struct GameState {
-    bag: Bag, // For each color, how many tiles are left in the bag
-    out_of_bag: Bag,
-    factories: Factories, // For each factory, how many tiles of each color are in it (including the center)
+    pub bag: Bag, // For each color, how many tiles are left in the bag
+    pub out_of_bag: Bag,
+    pub factories: Factories, // For each factory, how many tiles of each color are in it (including the center)
 
-    scores: [i16; NUM_PLAYERS], // For each player, how many points they have
-    floor_line_progress: [u8; NUM_PLAYERS], // For each player, how many tiles they have in their penalty
+    pub scores: [i16; NUM_PLAYERS], // For each player, how many points they have
+    pub floor_line_progress: [u8; NUM_PLAYERS], // For each player, how many tiles they have in their penalty
 
-    walls: [u32; NUM_PLAYERS], // For each player, the occupancy of their wall
+    pub walls: [u32; NUM_PLAYERS], // For each player, the occupancy of their wall
 
-    pattern_lines_occupancy: [[u8; 5]; NUM_PLAYERS], // For each player, the occupancy of their pattern lines
-    pattern_lines_colors: [[Option<TileColor>; 5]; NUM_PLAYERS], // For each player, the color of their pattern lines. If the pattern line is empty, the color is 255
+    pub pattern_lines_occupancy: [[u8; 5]; NUM_PLAYERS], // For each player, the occupancy of their pattern lines
+    pub pattern_lines_colors: [[Option<TileColor>; 5]; NUM_PLAYERS], // For each player, the color of their pattern lines. If the pattern line is empty, the color is 255
 
-    current_player: PlayerMarker,
-    next_round_starting_player: PlayerMarker,
-    tile_taken_from_center: bool,
+    pub current_player: PlayerMarker,
+    pub next_round_starting_player: PlayerMarker,
+    pub tile_taken_from_center: bool,
 }
 
 impl GameState {
-    pub fn get_current_player(&self) -> PlayerMarker {
-        self.current_player
-    }
-
-    pub fn set_current_player(&mut self, player: PlayerMarker) {
-        self.current_player = player;
-    }
-
-    pub fn get_next_round_starting_player(&self) -> PlayerMarker {
-        self.next_round_starting_player
-    }
-
-    pub fn set_next_round_starting_player(&mut self, player: PlayerMarker) {
-        self.next_round_starting_player = player;
-    }
-
-    pub fn get_scores(&self) -> [i16; NUM_PLAYERS] {
-        self.scores
-    }
-
-    pub fn set_scores(&mut self, scores: [i16; NUM_PLAYERS]) {
-        self.scores = scores;
-    }
-
-    pub fn get_bag(&self) -> Bag {
-        self.bag
-    }
-
-    pub fn set_bag(&mut self, bag: Bag) {
-        self.bag = bag;
-    }
-
-    pub fn get_out_of_bag(&self) -> Bag {
-        self.out_of_bag
-    }
-
-    pub fn set_out_of_bag(&mut self, out_of_bag: Bag) {
-        self.out_of_bag = out_of_bag;
-    }
-
-    pub fn get_factories(&self) -> &Factories {
-        &self.factories
-    }
-
-    pub fn set_factories(&mut self, factories: Factories) {
-        self.factories = factories;
-    }
-
-    pub fn get_floor_line_progress(&self) -> [u8; NUM_PLAYERS] {
-        self.floor_line_progress
-    }
-
-    pub fn set_floor_line_progress(&mut self, progress: [u8; NUM_PLAYERS]) {
-        self.floor_line_progress = progress;
-    }
-
-    pub fn get_walls(&self) -> [u32; NUM_PLAYERS] {
-        self.walls
-    }
-
-    pub fn set_walls(&mut self, wall: [u32; NUM_PLAYERS]) {
-        self.walls = wall;
-    }
-
-    pub fn get_pattern_lines_occupancy(&self) -> &[[u8; 5]; NUM_PLAYERS] {
-        &self.pattern_lines_occupancy
-    }
-
-    pub fn set_pattern_lines_occupancy(&mut self, pattern_lines_occupancy: [[u8; 5]; NUM_PLAYERS]) {
-        self.pattern_lines_occupancy = pattern_lines_occupancy;
-    }
-
-    pub fn get_pattern_line_colors(&self) -> &[[Option<TileColor>; 5]; NUM_PLAYERS] {
-        &self.pattern_lines_colors
-    }
-
-    pub fn set_pattern_line_colors(
-        &mut self,
-        pattern_lines_colors: [[Option<TileColor>; 5]; NUM_PLAYERS],
-    ) {
-        self.pattern_lines_colors = pattern_lines_colors;
-    }
-
-    pub fn get_tile_taken_from_center(&self) -> bool {
-        self.tile_taken_from_center
-    }
-
-    pub fn set_tile_taken_from_center(&mut self, taken: bool) {
-        self.tile_taken_from_center = taken;
-    }
-
     pub fn to_fen(&self) -> String {
         let number_of_players = NUM_PLAYERS as u8;
         let bag = (self.bag[0] as usize)
