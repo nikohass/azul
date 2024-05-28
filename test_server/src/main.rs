@@ -12,8 +12,7 @@ use game::{
     GameError, GameState, Player, TimeControl, NUM_PLAYERS,
 };
 
-mod logging;
-use logging::init_logging;
+use shared::logging::init_logging;
 
 #[derive(Parser, Debug)]
 #[clap(about, version, author)]

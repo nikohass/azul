@@ -6,6 +6,7 @@ use crate::tile_color::{TileColor, NUM_TILE_COLORS};
 use crate::wall::{self, WALL_COLOR_MASKS};
 use crate::{GameError, NUM_PLAYERS};
 use rand::rngs::SmallRng;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub const FLOOR_LINE_PENALTY: [u8; 8] = [0, 1, 2, 4, 6, 8, 11, 14];
 
@@ -35,6 +36,26 @@ pub struct GameState {
     pub current_player: PlayerMarker,
     pub next_round_starting_player: PlayerMarker,
     pub tile_taken_from_center: bool,
+}
+
+impl Serialize for GameState {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let string = self.to_fen();
+        string.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for GameState {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let string = String::deserialize(deserializer)?;
+        GameState::from_fen(&string).map_err(serde::de::Error::custom)
+    }
 }
 
 impl GameState {
