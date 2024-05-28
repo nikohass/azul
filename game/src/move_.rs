@@ -1,7 +1,9 @@
+use serde::{Deserialize, Serialize};
+
 use crate::factories::CENTER_FACTORY_INDEX;
 use crate::tile_color::TileColor;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Move {
     pub factory_index: u8, // The factory from which the tiles are taken
     pub color: TileColor,  // What color of tiles are taken

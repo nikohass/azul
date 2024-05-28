@@ -4,7 +4,7 @@ members = [
     "playground",
     "player",
     "test_server",
-    "test_client", "azul", "python_package",
+    "test_client", "azul", "python_package", "replay_buffer", "shared",
 ]
 resolver = "2"
 
