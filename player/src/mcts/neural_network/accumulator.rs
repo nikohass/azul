@@ -1,10 +1,10 @@
-use game::{GameState, CENTER_FACTORY_INDEX, NUM_PLAYERS};
+use game::{
+    GameState, CENTER_FACTORY_INDEX, NUM_NON_CENTER_FACTORIES, NUM_PLAYERS,
+    NUM_POSSIBLE_FACTORY_PERMUTATIONS,
+};
 
 use super::{
-    factory_encoding::{
-        add_center_factory_encoding, add_non_center_factory_encoding, NUM_NON_CENTER_FACTORIES,
-    },
-    hashing::NUM_POSSIBLE_FACTORY_PERMUTATIONS,
+    factory_encoding::{add_center_factory_encoding, add_non_center_factory_encoding},
     layers::InputLayer,
     pattern_line_encoding::add_pattern_line_encoding,
     wall_encoding::add_wall_encoding,

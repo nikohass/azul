@@ -19,6 +19,7 @@ pub struct RootStatistics {
     pub principal_variation: Vec<Edge>,
     pub value: Value,
     pub speed: f64,
+    pub top_two_ratio: f32,
 }
 
 impl RootStatistics {
@@ -36,7 +37,7 @@ impl RootStatistics {
             .collect::<Vec<String>>()
             .join(" ");
         println!(
-            "{:>10} {:>3} {:>9} {} {:>8} {:>8} {:>8} {:>2}",
+            "{:>10} {:>3} {:>9} {} {:>8} {:>8} {:>8} {:>9} {:>2}",
             "Iterations",
             "PVd",
             "Avg.Plies",
@@ -44,13 +45,14 @@ impl RootStatistics {
             "Stop",
             "Total",
             "Speed",
+            "Top2Ratio",
             "Principal Variation"
         );
     }
 
     pub fn print(&self, remaining_time_info: &RemainingTimeInfo, search_start_time: Instant) {
         println!(
-            "{:10} {:3} {:>9} {} {:>8} {:>8} {:>8} {}",
+            "{:10} {:3} {:>9} {} {:>8} {:>8} {:>9} {:>8} {}",
             self.visits,
             self.principal_variation.len(),
             format!("{:.1}", self.average_plies().unwrap_or(0.0)),
@@ -64,6 +66,7 @@ impl RootStatistics {
                 .map(|t| t - search_start_time.elapsed().as_millis() as i64)
                 .map_or("N/A".to_string(), |v| format!("{}ms", v)),
             format!("{:.0}/ms", self.speed),
+            format!("{:.2}", self.top_two_ratio),
             self.principal_variation
                 .iter()
                 .map(|edge| edge.to_string())
@@ -177,6 +180,9 @@ impl Root {
             &mut self.statistics.principal_variation,
         );
         self.statistics.speed = f64::NAN;
+        self.statistics.top_two_ratio = self
+            .node
+            .top_two_ratio(usize::from(self.game_state.current_player));
     }
 }
 

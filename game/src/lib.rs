@@ -9,8 +9,10 @@ mod tile_color;
 mod time_control;
 pub mod wall;
 
-pub use factories::{Factories, Factory};
-pub use factories::{CENTER_FACTORY_INDEX, NUM_FACTORIES};
+pub use factories::{
+    hash_factory, unhash_factory, Factories, Factory, CENTER_FACTORY_INDEX, NUM_FACTORIES,
+    NUM_NON_CENTER_FACTORIES, NUM_POSSIBLE_FACTORY_PERMUTATIONS,
+};
 pub use formatting::display_gamestate;
 pub use game_state::Bag;
 pub use game_state::GameState;

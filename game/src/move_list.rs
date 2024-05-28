@@ -42,27 +42,52 @@ impl MoveList {
         }
         false
     }
+
+    pub fn swap(&mut self, index1: usize, index2: usize) {
+        #[cfg(debug_assertions)]
+        {
+            if index1 >= self.len || index2 >= self.len {
+                panic!("Index out of bounds");
+            }
+        }
+        self.moves.swap(index1, index2);
+    }
+
+    pub fn remove(&mut self, index: usize) {
+        #[cfg(debug_assertions)]
+        {
+            if index >= self.len {
+                panic!("Index out of bounds");
+            }
+        }
+        self.swap(index, self.len - 1);
+        self.len -= 1;
+    }
 }
 
 impl std::ops::Index<usize> for MoveList {
     type Output = Move;
 
     fn index(&self, index: usize) -> &Self::Output {
-        if index >= self.len {
-            panic!("Index out of bounds");
-        } else {
-            &self.moves[index]
+        #[cfg(debug_assertions)]
+        {
+            if index >= self.len {
+                panic!("Index out of bounds");
+            }
         }
+        &self.moves[index]
     }
 }
 
 impl std::ops::IndexMut<usize> for MoveList {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        if index >= self.len {
-            panic!("Index out of bounds");
-        } else {
-            &mut self.moves[index]
+        #[cfg(debug_assertions)]
+        {
+            if index >= self.len {
+                panic!("Index out of bounds");
+            }
         }
+        &mut self.moves[index]
     }
 }
 

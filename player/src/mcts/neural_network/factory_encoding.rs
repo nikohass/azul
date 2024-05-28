@@ -1,12 +1,10 @@
-use game::{NUM_FACTORIES, NUM_TILE_COLORS};
-
-use super::{
-    hashing::{hash_factory, NUM_POSSIBLE_FACTORY_PERMUTATIONS},
-    layers::InputLayer,
+use game::{
+    hash_factory, NUM_NON_CENTER_FACTORIES, NUM_POSSIBLE_FACTORY_PERMUTATIONS, NUM_TILE_COLORS,
 };
 
+use super::layers::InputLayer;
+
 pub const MAX_TILES_OF_COLOR_IN_CENTER: usize = 15;
-pub const NUM_NON_CENTER_FACTORIES: usize = NUM_FACTORIES - 1;
 pub const NON_CENTER_FACTORY_ENCODING_SIZE: usize =
     NUM_NON_CENTER_FACTORIES * NUM_POSSIBLE_FACTORY_PERMUTATIONS; // there are 71 possible combinations of tiles in a factory and NUM_NON_CENTER_FACTORIES opportunities for duplicates
 pub const CENTER_FACTORY_ENCODING_SIZE: usize = NUM_TILE_COLORS * MAX_TILES_OF_COLOR_IN_CENTER;

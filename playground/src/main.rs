@@ -107,6 +107,14 @@ use std::{io::Write, sync::atomic::AtomicBool};
 use std::arch::x86_64::*;
 
 fn main() {
+    let mut rng = SmallRng::from_entropy();
+    let game_state = GameState::new(&mut rng);
+    let mut players: Vec<Box<dyn Player>> = vec![
+        Box::<MonteCarloTreeSearch>::default(),
+        Box::<MonteCarloTreeSearch>::default(),
+        Box::<MonteCarloTreeSearch>::default(),
+    ];
+    run_match(game_state, &mut players, true).unwrap();
     // let move_lookup = build_move_lookup();
     // const OUTPUT_SIZE: usize = 1080;
     // assert_eq!(OUTPUT_SIZE, move_lookup.len());
