@@ -6,7 +6,7 @@ use player::{
     mcts::{
         edge::Edge,
         neural_network::layers::{DenseLayer, EfficentlyUpdatableDenseLayer, InputLayer as _},
-        HeuristicMoveGenerationPlayer, MonteCarloTreeSearch,
+        MonteCarloTreeSearch,
     },
     random_player::RandomPlayer,
 };

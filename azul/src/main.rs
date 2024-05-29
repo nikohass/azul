@@ -1,8 +1,6 @@
 use game::{GameState, Player, NUM_PLAYERS};
 use player::{
-    command_line_player::HumanCommandLinePlayer,
-    greedy_player::GreedyPlayer,
-    mcts::{HeuristicMoveGenerationPlayer, MonteCarloTreeSearch},
+    command_line_player::HumanCommandLinePlayer, mcts::MonteCarloTreeSearch,
     random_player::RandomPlayer,
 };
 use rand::{rngs::SmallRng, SeedableRng as _};
@@ -13,10 +11,8 @@ fn configure_players() -> Vec<Box<dyn Player>> {
     loop {
         println!("Select player types:");
         println!("1: Human");
-        println!("2: Greedy AI");
-        println!("3: Random AI");
-        println!("4: Heuristic AI");
-        println!("5: Monte Carlo Tree Search AI");
+        println!("2: Random AI");
+        println!("3: Monte Carlo Tree Search AI");
 
         let mut string = String::new();
         let mut read_line = || {
@@ -35,10 +31,8 @@ fn configure_players() -> Vec<Box<dyn Player>> {
 
         let mut player: Box<dyn Player> = match choice {
             1 => Box::<HumanCommandLinePlayer>::default(),
-            2 => Box::<GreedyPlayer>::default(),
-            3 => Box::<RandomPlayer>::default(),
-            4 => Box::<HeuristicMoveGenerationPlayer>::default(),
-            5 => {
+            2 => Box::<RandomPlayer>::default(),
+            3 => {
                 let mut mcts = MonteCarloTreeSearch::default();
                 println!("Set thinking time for MCTS (ms):");
                 let time = read_line().parse::<u64>().unwrap_or(1000).max(100);

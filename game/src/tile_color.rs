@@ -1,7 +1,9 @@
+use serde::{Deserialize, Serialize};
+
 pub const NUM_TILE_COLORS: usize = 5;
 
 #[repr(u8)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TileColor {
     Blue,
     Yellow,
