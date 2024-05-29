@@ -8,9 +8,11 @@ edition = "2021"
 [dependencies]
 game = { path = "../game" }
 player = { path = "../player" }
+replay_buffer = { path = "../replay_buffer" }
 
 pyo3 = { version = "0.21.2", features = ["extension-module"] }
 rand = { version = "0.8.5", features = ["small_rng"] }
+ndarray = "0.15.4"
 
 [features]
 three_players = ["game/three_players"]

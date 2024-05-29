@@ -2,7 +2,7 @@ use game::{
     hash_factory, NUM_NON_CENTER_FACTORIES, NUM_POSSIBLE_FACTORY_PERMUTATIONS, NUM_TILE_COLORS,
 };
 
-use super::layers::InputLayer;
+use super::super::layers::InputLayer;
 
 pub const MAX_TILES_OF_COLOR_IN_CENTER: usize = 15;
 pub const NON_CENTER_FACTORY_ENCODING_SIZE: usize =

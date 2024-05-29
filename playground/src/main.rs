@@ -5,8 +5,11 @@ use player::{
     command_line_player::HumanCommandLinePlayer,
     mcts::{
         edge::Edge,
-        neural_network::layers::{DenseLayer, EfficentlyUpdatableDenseLayer, InputLayer as _},
-        HeuristicMoveGenerationPlayer, MonteCarloTreeSearch,
+        neural_network::{
+            layers::{DenseLayer, EfficentlyUpdatableDenseLayer, InputLayer as _},
+            model::{Model, INPUT_SIZE},
+        },
+        MonteCarloTreeSearch,
     },
     random_player::RandomPlayer,
 };
@@ -128,23 +131,25 @@ fn main() {
     // }
 
     let mut rng = SmallRng::from_entropy();
-    let mut replay_entries = Vec::new();
-    for _ in 0..100_000 {
-        replay_entries.push(ReplayEntry {
-            game_state: GameState::new(&mut rng),
-            value: [0.0; NUM_PLAYERS],
-            iterations: 0,
-            action_value_pairs: Vec::new(),
-        })
-    }
+    let game_state = GameState::new(&mut rng);
+    println!("{}", game_state);
 
-    println!("Adding entries");
-    client.add_entries(replay_entries).unwrap();
+    let mut model = Model::default();
+    let output = model.forward();
+    println!("{:?}", output);
+    model.set_game_state(&game_state);
+    let output = model.forward();
+    println!("{:?}", output);
 
-    let sampled = client.sample_entries(10).unwrap();
-    println!("Sampled {} entries", sampled.len());
+    println!("Input size: {}", INPUT_SIZE);
 
+    // let mut players: Vec<Box<dyn Player>> = vec![
+    //     Box::<MonteCarloTreeSearch>::default(),
+    //     Box::<MonteCarloTreeSearch>::default(),
+    //     Box::<MonteCarloTreeSearch>::default(),
+    // ];
     // run_match(game_state, &mut players, true).unwrap();
+
     // let move_lookup = build_move_lookup();
     // const OUTPUT_SIZE: usize = 1080;
     // assert_eq!(OUTPUT_SIZE, move_lookup.len());
