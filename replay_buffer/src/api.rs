@@ -1,91 +1,66 @@
+use std::net::SocketAddr;
+
 use crate::buffer::ReplayEntry;
 use crate::BUFFER;
-use futures_util::stream::SplitSink;
-use futures_util::SinkExt;
-use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
-use tokio::net::TcpStream;
-use tokio_tungstenite::{accept_async, WebSocketStream};
-use tungstenite::Message;
+use warp::Filter;
 
 #[derive(Deserialize, Serialize)]
-pub enum ApiRequest {
-    AddEntries(u64, Vec<ReplayEntry>),
-    SampleEntries(u64, usize),
-    SetBufferSize(u64, usize),
+pub struct AddEntriesRequest {
+    pub entries: Vec<ReplayEntry>,
 }
 
-#[derive(Serialize, Deserialize)]
-pub enum ApiResponse {
-    Success(u64),
-    Entries(u64, Vec<ReplayEntry>),
+#[derive(Deserialize, Serialize)]
+pub struct SampleEntriesRequest {
+    pub count: usize,
 }
 
-pub async fn handle_connection(raw_stream: TcpStream) {
-    let ws_stream = accept_async(raw_stream)
-        .await
-        .expect("Failed to accept WebSocket");
-    let (mut write, mut read) = ws_stream.split();
-
-    while let Some(message) = read.next().await {
-        match message {
-            Ok(Message::Text(_)) => {
-                log::error!("Received text message. Only binary messages are supported");
-            }
-            Ok(Message::Binary(bin)) => {
-                handle_message(&mut write, bin).await;
-            }
-            Ok(Message::Ping(data)) => {
-                write
-                    .send(Message::Pong(data))
-                    .await
-                    .expect("Failed to send Pong");
-            }
-            Ok(Message::Close(reason)) => {
-                write
-                    .send(Message::Close(reason))
-                    .await
-                    .expect("Failed to close WebSocket");
-                break;
-            }
-            Err(_) => {
-                break;
-            }
-            _ => {}
-        }
-    }
+#[derive(Deserialize, Serialize)]
+pub struct SetBufferSizeRequest {
+    pub size: usize,
 }
 
-async fn handle_message(
-    write: &mut SplitSink<WebSocketStream<TcpStream>, Message>,
-    message: Vec<u8>,
-) {
-    let request: ApiRequest =
-        serde_json::from_slice(&message).expect("Failed to deserialize request");
+pub async fn run_rest_api(addr: SocketAddr) {
+    let add_entries_route = warp::path("add_entries")
+        .and(warp::post())
+        .and(warp::body::json())
+        .and_then(handle_add_entries);
 
-    let response = handle_request(request).await;
+    let sample_entries_route = warp::path("sample_entries")
+        .and(warp::post())
+        .and(warp::body::json())
+        .and_then(handle_sample_entries);
 
-    let response_bytes = serde_json::to_vec(&response).expect("Failed to serialize response");
-    write
-        .send(Message::Binary(response_bytes))
-        .await
-        .expect("Failed to send response");
+    let set_buffer_size_route = warp::path("set_buffer_size")
+        .and(warp::post())
+        .and(warp::body::json())
+        .and_then(handle_set_buffer_size);
+
+    let routes = add_entries_route
+        .or(sample_entries_route)
+        .or(set_buffer_size_route);
+
+    warp::serve(routes).run(addr).await;
 }
 
-async fn handle_request(request: ApiRequest) -> ApiResponse {
+async fn handle_add_entries(body: AddEntriesRequest) -> Result<impl warp::Reply, warp::Rejection> {
     let mut buffer = BUFFER.lock().await;
-    match request {
-        ApiRequest::AddEntries(nonce, entries) => {
-            buffer.add_entries(entries);
-            ApiResponse::Success(nonce)
-        }
-        ApiRequest::SampleEntries(nonce, n) => {
-            let entries = buffer.sample_n_entries(n, &mut rand::thread_rng());
-            ApiResponse::Entries(nonce, entries)
-        }
-        ApiRequest::SetBufferSize(nonce, size) => {
-            buffer.set_max_size(size);
-            ApiResponse::Success(nonce)
-        }
-    }
+    buffer.add_entries(body.entries);
+    Ok(warp::reply::json(&"Entries added successfully"))
+}
+
+async fn handle_sample_entries(
+    body: SampleEntriesRequest,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let buffer = BUFFER.lock().await;
+    let entries = buffer.sample_n_entries(body.count, &mut rand::thread_rng());
+    Ok(warp::reply::json(&entries))
+}
+
+async fn handle_set_buffer_size(
+    body: SetBufferSizeRequest,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let mut buffer = BUFFER.lock().await;
+    buffer.set_max_size(body.size);
+    Ok(warp::reply::json(&"Buffer size set successfully"))
 }

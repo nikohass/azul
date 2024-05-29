@@ -1,50 +1,100 @@
-use futures_util::{stream::SplitSink, SinkExt as _, StreamExt as _};
-use tokio::net::TcpStream;
-use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
-use tungstenite::Message;
-
-use crate::api::ApiRequest;
-use crate::buffer::ReplayEntry;
+use crate::{
+    api::{AddEntriesRequest, SampleEntriesRequest, SetBufferSizeRequest},
+    buffer::ReplayEntry,
+};
+use reqwest::blocking::Client;
 
 pub struct ReplayBufferClient {
-    write: SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
+    client: Client,
+    base_url: String,
 }
 
 impl ReplayBufferClient {
-    // Connect to the WebSocket server
-    pub async fn connect(url: &str) -> Self {
-        let (ws_stream, _) = connect_async(url)
-            .await
-            .expect("Failed to connect to WebSocket");
-        let (write, _) = ws_stream.split();
-
-        Self { write }
+    pub fn new(base_url: &str) -> Self {
+        Self {
+            client: Client::new(),
+            base_url: base_url.to_string(),
+        }
     }
 
-    // Send an AddEntries request
-    pub async fn add_entries(&mut self, nonce: u64, entries: Vec<ReplayEntry>) {
-        let request = ApiRequest::AddEntries(nonce, entries);
-        self.send_request(request).await;
+    pub fn add_entries(&self, entries: Vec<ReplayEntry>) -> Result<String, String> {
+        let mut responses = Vec::new();
+        const MAX_CHUNK_SIZE: usize = 100;
+
+        for chunk in entries.chunks(MAX_CHUNK_SIZE) {
+            let request = AddEntriesRequest {
+                entries: chunk.to_vec(),
+            };
+            let response = self.send_add_entries_request(request)?;
+            responses.push(response);
+        }
+
+        Ok("Entries added successfully".to_string())
     }
 
-    // Send a SampleEntries request
-    pub async fn sample_entries(&mut self, nonce: u64, count: usize) {
-        let request = ApiRequest::SampleEntries(nonce, count);
-        self.send_request(request).await;
+    pub fn sample_entries(&self, count: usize) -> Result<Vec<ReplayEntry>, String> {
+        let request = SampleEntriesRequest { count };
+        self.send_sample_entries_request(request)
     }
 
-    // Send a SetBufferSize request
-    pub async fn set_buffer_size(&mut self, nonce: u64, size: usize) {
-        let request = ApiRequest::SetBufferSize(nonce, size);
-        self.send_request(request).await;
+    pub fn set_buffer_size(&self, size: usize) -> Result<String, String> {
+        let request = SetBufferSizeRequest { size };
+        self.send_set_buffer_size_request(request)
     }
 
-    // Send a request to the server
-    async fn send_request(&mut self, request: ApiRequest) {
-        let request_bytes = serde_json::to_vec(&request).expect("Failed to serialize request");
-        self.write
-            .send(Message::Binary(request_bytes))
-            .await
-            .expect("Failed to send request");
+    fn send_add_entries_request(&self, request: AddEntriesRequest) -> Result<String, String> {
+        let url = format!("{}/add_entries", self.base_url);
+        let response = self
+            .client
+            .post(&url)
+            .json(&request)
+            .send()
+            .map_err(|e| format!("Failed to send request: {}", e))?;
+
+        if response.status().is_success() {
+            Ok("Entries added successfully".to_string())
+        } else {
+            Err(format!("Failed to add entries: {}", response.status()))
+        }
+    }
+
+    fn send_sample_entries_request(
+        &self,
+        request: SampleEntriesRequest,
+    ) -> Result<Vec<ReplayEntry>, String> {
+        let url = format!("{}/sample_entries", self.base_url);
+        let response = self
+            .client
+            .post(&url)
+            .json(&request)
+            .send()
+            .map_err(|e| format!("Failed to send request: {}", e))?;
+
+        if response.status().is_success() {
+            response
+                .json::<Vec<ReplayEntry>>()
+                .map_err(|e| format!("Failed to parse response: {}", e))
+        } else {
+            Err(format!("Failed to sample entries: {}", response.status()))
+        }
+    }
+
+    fn send_set_buffer_size_request(
+        &self,
+        request: SetBufferSizeRequest,
+    ) -> Result<String, String> {
+        let url = format!("{}/set_buffer_size", self.base_url);
+        let response = self
+            .client
+            .post(&url)
+            .json(&request)
+            .send()
+            .map_err(|e| format!("Failed to send request: {}", e))?;
+
+        if response.status().is_success() {
+            Ok("Buffer size set successfully".to_string())
+        } else {
+            Err(format!("Failed to set buffer size: {}", response.status()))
+        }
     }
 }

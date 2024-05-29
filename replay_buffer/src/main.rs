@@ -75,14 +75,7 @@ async fn main() {
         *lock = database_directory;
     }
 
-    let server_task = async {
-        let listener = TcpListener::bind(addr)
-            .await
-            .expect("Failed to bind TCP listener");
-        while let Ok((stream, _)) = listener.accept().await {
-            tokio::spawn(api::handle_connection(stream));
-        }
-    };
+    let server_task = api::run_rest_api(addr);
 
     let ctrl_c_handler = handle_shutdown();
 

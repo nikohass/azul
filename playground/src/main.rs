@@ -13,6 +13,7 @@ use player::{
 use rand::rngs::{SmallRng, StdRng};
 use rand::{thread_rng, Rng, SeedableRng};
 use rayon::prelude::*;
+use replay_buffer::{buffer::ReplayEntry, ReplayBufferClient};
 use std::{
     cell::RefCell,
     collections::HashSet,
@@ -107,14 +108,43 @@ use std::{io::Write, sync::atomic::AtomicBool};
 use std::arch::x86_64::*;
 
 fn main() {
+    // let mut rng = SmallRng::from_entropy();
+    // let game_state = GameState::new(&mut rng);
+    // let mut players: Vec<Box<dyn Player>> = vec![
+    //     Box::<MonteCarloTreeSearch>::default(),
+    //     Box::<MonteCarloTreeSearch>::default(),
+    //     Box::<MonteCarloTreeSearch>::default(),
+    // ];
+
+    let mut client = ReplayBufferClient::new("http://127.0.0.1:3044");
+    client.set_buffer_size(100_000).unwrap();
+    client.set_buffer_size(90_000).unwrap();
+    // let result = client.sample_entries(10);
+    // match result {
+    //     ApiResponse::Entries(_, entries) => {
+    //         println!("Received {} entries", entries.len());
+    //     }
+    //     _ => panic!("Unexpected response"),
+    // }
+
     let mut rng = SmallRng::from_entropy();
-    let game_state = GameState::new(&mut rng);
-    let mut players: Vec<Box<dyn Player>> = vec![
-        Box::<MonteCarloTreeSearch>::default(),
-        Box::<MonteCarloTreeSearch>::default(),
-        Box::<MonteCarloTreeSearch>::default(),
-    ];
-    run_match(game_state, &mut players, true).unwrap();
+    let mut replay_entries = Vec::new();
+    for _ in 0..100_000 {
+        replay_entries.push(ReplayEntry {
+            game_state: GameState::new(&mut rng),
+            value: [0.0; NUM_PLAYERS],
+            iterations: 0,
+            action_value_pairs: Vec::new(),
+        })
+    }
+
+    println!("Adding entries");
+    client.add_entries(replay_entries).unwrap();
+
+    let sampled = client.sample_entries(10).unwrap();
+    println!("Sampled {} entries", sampled.len());
+
+    // run_match(game_state, &mut players, true).unwrap();
     // let move_lookup = build_move_lookup();
     // const OUTPUT_SIZE: usize = 1080;
     // assert_eq!(OUTPUT_SIZE, move_lookup.len());
