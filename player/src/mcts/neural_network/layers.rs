@@ -27,7 +27,12 @@ impl DenseLayer {
     }
 
     pub fn forward(&self, input: &[f32], output: &mut [f32]) {
-        debug_assert!(input.len() == self.input_size);
+        debug_assert!(
+            input.len() == self.input_size,
+            "Input size: {}, Should be: {}",
+            input.len(),
+            self.input_size
+        );
         debug_assert!(output.len() == self.output_size);
 
         #[cfg(target_arch = "x86_64")]

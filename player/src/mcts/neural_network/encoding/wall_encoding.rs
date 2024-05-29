@@ -3,11 +3,11 @@ use game::{
     NUM_PLAYERS,
 };
 
-use crate::mcts::neural_network::factory_encoding::FACTORY_ENCODING_SIZE;
+use crate::mcts::neural_network::encoding::factory_encoding::FACTORY_ENCODING_SIZE;
 
-use super::{layers::InputLayer, pattern_line_encoding::PLAYER_PATTERN_LINE_ENCODING_SIZE};
+use super::{super::layers::InputLayer, pattern_line_encoding::PLAYER_PATTERN_LINE_ENCODING_SIZE};
 
-const PLAYER_WALL_ENCODING_SIZE: usize = 2_usize.pow(5) * 5 * 3;
+pub const PLAYER_WALL_ENCODING_SIZE: usize = 2_usize.pow(5) * 5 * 3;
 
 pub fn add_wall_encoding(wall: u32, player_index: usize, layer: &mut dyn InputLayer) {
     // Encode a players wall. The wall is encoded in 3 parts: rows, columns and diagonals.

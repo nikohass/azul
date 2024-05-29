@@ -4,10 +4,12 @@ use game::{
 };
 
 use super::{
-    factory_encoding::{add_center_factory_encoding, add_non_center_factory_encoding},
+    encoding::{
+        factory_encoding::{add_center_factory_encoding, add_non_center_factory_encoding},
+        pattern_line_encoding::add_pattern_line_encoding,
+        wall_encoding::add_wall_encoding,
+    },
     layers::InputLayer,
-    pattern_line_encoding::add_pattern_line_encoding,
-    wall_encoding::add_wall_encoding,
 };
 
 pub struct Accumulator<L: InputLayer> {
@@ -106,6 +108,10 @@ impl<L: InputLayer> Accumulator<L> {
 
     //     }
     // }
+
+    pub fn output(&self) -> &[f32] {
+        self.layer.output()
+    }
 }
 
 #[cfg(test)]

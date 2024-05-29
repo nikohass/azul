@@ -1,4 +1,4 @@
-use super::{factory_encoding::FACTORY_ENCODING_SIZE, layers::InputLayer};
+use super::{super::layers::InputLayer, factory_encoding::FACTORY_ENCODING_SIZE};
 use game::{TileColor, NUM_PLAYERS, NUM_TILE_COLORS};
 
 pub const PLAYER_PATTERN_LINE_ENCODING_SIZE: usize = 81;

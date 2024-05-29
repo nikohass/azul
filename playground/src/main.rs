@@ -5,7 +5,10 @@ use player::{
     command_line_player::HumanCommandLinePlayer,
     mcts::{
         edge::Edge,
-        neural_network::layers::{DenseLayer, EfficentlyUpdatableDenseLayer, InputLayer as _},
+        neural_network::{
+            layers::{DenseLayer, EfficentlyUpdatableDenseLayer, InputLayer as _},
+            model::{Model, INPUT_SIZE},
+        },
         MonteCarloTreeSearch,
     },
     random_player::RandomPlayer,
@@ -109,12 +112,24 @@ use std::arch::x86_64::*;
 fn main() {
     let mut rng = SmallRng::from_entropy();
     let game_state = GameState::new(&mut rng);
-    let mut players: Vec<Box<dyn Player>> = vec![
-        Box::<MonteCarloTreeSearch>::default(),
-        Box::<MonteCarloTreeSearch>::default(),
-        Box::<MonteCarloTreeSearch>::default(),
-    ];
-    run_match(game_state, &mut players, true).unwrap();
+    println!("{}", game_state);
+
+    let mut model = Model::default();
+    let output = model.forward();
+    println!("{:?}", output);
+    model.set_game_state(&game_state);
+    let output = model.forward();
+    println!("{:?}", output);
+
+    println!("Input size: {}", INPUT_SIZE);
+
+    // let mut players: Vec<Box<dyn Player>> = vec![
+    //     Box::<MonteCarloTreeSearch>::default(),
+    //     Box::<MonteCarloTreeSearch>::default(),
+    //     Box::<MonteCarloTreeSearch>::default(),
+    // ];
+    // run_match(game_state, &mut players, true).unwrap();
+
     // let move_lookup = build_move_lookup();
     // const OUTPUT_SIZE: usize = 1080;
     // assert_eq!(OUTPUT_SIZE, move_lookup.len());
