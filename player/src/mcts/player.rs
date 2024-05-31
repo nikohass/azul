@@ -25,7 +25,7 @@ impl MonteCarloTreeSearch {
         self.tree.stop_working();
     }
 
-    pub fn rated_moves(&mut self) -> Vec<(Move, f32)> {
+    pub fn rated_moves(&mut self) -> Vec<(Move, f64)> {
         self.tree.rated_moves()
     }
 

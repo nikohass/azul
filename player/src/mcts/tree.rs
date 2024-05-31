@@ -19,7 +19,7 @@ pub struct RootStatistics {
     pub principal_variation: Vec<Edge>,
     pub value: Value,
     pub speed: f64,
-    pub top_two_ratio: f32,
+    pub top_two_ratio: f64,
 }
 
 impl RootStatistics {
@@ -235,7 +235,7 @@ impl Tree {
         self.sender.send(Command::Verbose(verbose)).unwrap();
     }
 
-    pub fn rated_moves(&mut self) -> Vec<(Move, f32)> {
+    pub fn rated_moves(&mut self) -> Vec<(Move, f64)> {
         let root = self.root.lock().unwrap();
         let root = root.as_ref().unwrap();
         let current_player = root.game_state().current_player;

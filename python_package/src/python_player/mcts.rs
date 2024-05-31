@@ -72,8 +72,8 @@ impl MonteCarloTreeSearch {
     }
 
     #[getter]
-    fn value(&mut self) -> Option<[f32; NUM_PLAYERS]> {
-        self.0.value().map(<[f32; NUM_PLAYERS]>::from)
+    fn value(&mut self) -> Option<[f64; NUM_PLAYERS]> {
+        self.0.value().map(<[f64; NUM_PLAYERS]>::from)
     }
 
     fn advance_root(&mut self, state: &GameState, move_: Option<Move>) {
@@ -86,7 +86,7 @@ impl MonteCarloTreeSearch {
         self.0.policy().map(Move)
     }
 
-    fn rated_moves(&mut self) -> Vec<(Move, f32)> {
+    fn rated_moves(&mut self) -> Vec<(Move, f64)> {
         self.0
             .rated_moves()
             .iter()

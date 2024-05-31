@@ -4,12 +4,12 @@ use game::*;
 use rand::rngs::SmallRng;
 use rand::Rng as _;
 
-const MIN_VISITS_BEFORE_EXPANSION: f32 = 20.;
+const MIN_VISITS_BEFORE_EXPANSION: f64 = 20.;
 
 mod constants {
-    pub const C: f32 = 0.2;
-    pub const C_BASE: f32 = 30_000.0;
-    pub const C_FACTOR: f32 = std::f32::consts::SQRT_2;
+    pub const C: f64 = 0.2;
+    pub const C_BASE: f64 = 30_000.0;
+    pub const C_FACTOR: f64 = std::f64::consts::SQRT_2;
 }
 
 use constants::*;
@@ -17,7 +17,7 @@ use constants::*;
 pub struct Node {
     children: Vec<Node>,
     edge: Edge, // The edge from the parent to this node
-    n: f32,
+    n: f64,
     q: Value,
     is_game_over: bool,
     has_probabilistic_children: bool,
@@ -57,7 +57,7 @@ impl Node {
     //     parent_id: usize,
     //     current_id: &mut usize,
     //     data: &mut String,
-    //     min_visits: f32,
+    //     min_visits: f64,
     // ) {
     //     let local_id: usize = *current_id;
     //     if self.n < min_visits {
@@ -127,16 +127,16 @@ impl Node {
         if self.n > 0. {
             self.q / self.n
         } else {
-            Value::from([std::f32::NEG_INFINITY; NUM_PLAYERS])
+            Value::from([std::f64::NEG_INFINITY; NUM_PLAYERS])
         }
     }
 
-    fn uct_value(&self, player_index: usize, parent_n: f32, c: f32) -> f32 {
+    fn uct_value(&self, player_index: usize, parent_n: f64, c: f64) -> f64 {
         if self.n > 0. {
             let mean_value = self.q[player_index] / self.n;
             mean_value + c * (parent_n.ln() / self.n).sqrt()
         } else {
-            std::f32::INFINITY
+            std::f64::INFINITY
         }
     }
 
@@ -144,7 +144,7 @@ impl Node {
         let c_adjusted = C + C_FACTOR * ((1. + self.n + C_BASE) / C_BASE).ln();
 
         let mut best_child_index = 0;
-        let mut best_chuld_uct_value = std::f32::NEG_INFINITY;
+        let mut best_chuld_uct_value = std::f64::NEG_INFINITY;
 
         for (i, child) in self.children.iter().enumerate() {
             let value = child.uct_value(player_index, self.n, c_adjusted);
@@ -303,7 +303,7 @@ impl Node {
 
     pub fn best_child(&mut self, player_index: usize) -> &mut Node {
         let mut best_child_index = 0;
-        let mut best_child_value = std::f32::NEG_INFINITY;
+        let mut best_child_value = std::f64::NEG_INFINITY;
 
         for (i, child) in self.children.iter().enumerate() {
             let value: Value = child.value();
@@ -348,9 +348,9 @@ impl Node {
         total_child_count
     }
 
-    pub fn top_two_ratio(&self, player_index: usize) -> f32 {
-        let mut best_value = std::f32::NEG_INFINITY;
-        let mut second_best_value = std::f32::NEG_INFINITY;
+    pub fn top_two_ratio(&self, player_index: usize) -> f64 {
+        let mut best_value = std::f64::NEG_INFINITY;
+        let mut second_best_value = std::f64::NEG_INFINITY;
 
         for child in self.children.iter() {
             let value = child.value()[player_index];
@@ -362,9 +362,9 @@ impl Node {
             }
         }
 
-        if best_value == std::f32::NEG_INFINITY {
+        if best_value == std::f64::NEG_INFINITY {
             0.
-        } else if second_best_value == std::f32::NEG_INFINITY {
+        } else if second_best_value == std::f64::NEG_INFINITY {
             1.
         } else {
             best_value / second_best_value
