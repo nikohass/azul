@@ -221,6 +221,7 @@ impl Node {
         game_state: &mut GameState,
         move_list: &mut MoveList,
         rng: &mut SmallRng,
+        // model: &mut Model,
     ) -> (Value, u16) {
         #[cfg(debug_assertions)]
         game_state.check_integrity().unwrap();
@@ -257,6 +258,10 @@ impl Node {
                 self.expand(game_state, move_list, rng);
                 if !self.is_game_over {
                     super::playout::playout(game_state.clone(), rng)
+                    // model.set_game_state(game_state);
+                    // let value = model.forward();
+                    // let value = Value::from([value, 1.0 - value]);
+                    // (value, 0)
                 } else if self.n == 0. {
                     self.q = Value::from_game_scores(game_state.scores);
                     self.n = 1.;
@@ -266,6 +271,10 @@ impl Node {
                 }
             } else {
                 super::playout::playout(game_state.clone(), rng)
+                // model.set_game_state(game_state);
+                // let value = model.forward();
+                // let value = Value::from([value, 1.0 - value]);
+                // (value, 0)
             }
         } else {
             let next_child = self.select_child(current_player as usize, rng);

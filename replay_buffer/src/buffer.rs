@@ -19,12 +19,16 @@ pub struct Buffer {
 }
 
 impl Buffer {
-    pub fn with_size(max_size: usize) -> Arc<Mutex<Self>> {
-        let buffer = Arc::new(Mutex::new(Self {
+    pub fn with_size(database_dir: &str, max_size: usize) -> Arc<Mutex<Self>> {
+        let mut buffer = Self {
             entries: Vec::new(),
             max_size,
             evicted_entries: Vec::new(),
-        }));
+        };
+
+        buffer.load(database_dir);
+
+        let buffer = Arc::new(Mutex::new(buffer));
 
         let buffer_clone = buffer.clone();
         tokio::spawn(async move {
@@ -38,7 +42,7 @@ impl Buffer {
                 }
 
                 // TODO: Save the entries in swap_vec to disk
-                println!("Would save {} entries to disk", swap_vec.len());
+                // println!("Would save {} entries to disk", swap_vec.len());
                 swap_vec.clear();
             }
         });
@@ -54,6 +58,7 @@ impl Buffer {
             self.evicted_entries.extend(removed);
         }
         self.entries.extend(entries);
+        log::debug!("Buffer length: {}", self.entries.len());
     }
 
     pub fn sample_n_entries(&self, n: usize, rng: &mut impl rand::Rng) -> Vec<ReplayEntry> {
@@ -62,5 +67,19 @@ impl Buffer {
 
     pub fn set_max_size(&mut self, max_size: usize) {
         self.max_size = max_size;
+    }
+
+    pub fn store(&self, database_dir: &str) {
+        let serialized = bincode::serialize(&self.entries).unwrap();
+        let path = format!("{}/buffer.bin", database_dir);
+        std::fs::write(path, serialized).unwrap();
+    }
+
+    pub fn load(&mut self, database_dir: &str) {
+        let path = format!("{}/buffer.bin", database_dir);
+        // If the file exists, load the buffer from it
+        if let Ok(serialized) = std::fs::read(path) {
+            self.entries = bincode::deserialize(&serialized).unwrap();
+        }
     }
 }

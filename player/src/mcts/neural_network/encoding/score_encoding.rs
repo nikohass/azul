@@ -1,15 +1,15 @@
-use crate::mcts::neural_network::layers::InputLayer;
 use super::factory_encoding::FACTORY_ENCODING_SIZE;
 use super::pattern_line_encoding::PLAYER_PATTERN_LINE_ENCODING_SIZE;
 use super::wall_encoding::PLAYER_WALL_ENCODING_SIZE;
+use crate::mcts::neural_network::layers::InputLayer;
 use game::{FLOOR_LINE_PENALTY, NUM_PLAYERS};
 
 pub const ASSUMED_MAX_SCORE: i16 = 120;
-pub const PLAYER_SCORE_ENCODING_SIZE: usize = ASSUMED_MAX_SCORE as usize + FLOOR_LINE_PENALTY.len() + 1;
+pub const PLAYER_SCORE_ENCODING_SIZE: usize =
+    ASSUMED_MAX_SCORE as usize + FLOOR_LINE_PENALTY.len() + 1;
 
-pub const OFFSET_PLAYER_SCORE: usize = FACTORY_ENCODING_SIZE + (
-    PLAYER_PATTERN_LINE_ENCODING_SIZE + PLAYER_WALL_ENCODING_SIZE
-) * NUM_PLAYERS;
+pub const OFFSET_PLAYER_SCORE: usize = FACTORY_ENCODING_SIZE
+    + (PLAYER_PATTERN_LINE_ENCODING_SIZE + PLAYER_WALL_ENCODING_SIZE) * NUM_PLAYERS;
 
 pub fn add_player_score_encoding(
     player_index: usize,
@@ -25,7 +25,10 @@ pub fn add_player_score_encoding(
     }
 
     // Encode score
-    let score = (score - FLOOR_LINE_PENALTY[pattern_line_progress.min(FLOOR_LINE_PENALTY.len() - 1)] as i16).max(0).min(ASSUMED_MAX_SCORE) as usize;
+    let score = (score
+        - FLOOR_LINE_PENALTY[pattern_line_progress.min(FLOOR_LINE_PENALTY.len() - 1)] as i16)
+        .max(0)
+        .min(ASSUMED_MAX_SCORE) as usize;
     let index = offset + 1 + score;
     layer.set_input(index);
 

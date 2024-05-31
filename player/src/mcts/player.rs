@@ -29,6 +29,10 @@ impl MonteCarloTreeSearch {
         self.tree.rated_moves()
     }
 
+    pub fn action_value_pairs(&mut self) -> Vec<(Move, Value)> {
+        self.tree.action_value_pairs()
+    }
+
     pub fn value(&mut self) -> Option<Value> {
         self.tree.value()
     }

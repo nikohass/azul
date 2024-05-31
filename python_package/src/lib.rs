@@ -1,4 +1,4 @@
-use pyo3::{pymodule, types::PyModule, Bound, PyResult, Python};
+use pyo3::{pymodule, types::PyModule, wrap_pyfunction, Bound, PyResult, Python};
 
 mod python_game;
 mod python_player;
@@ -17,5 +17,12 @@ fn azul4(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<python_game::game_state::MoveGenerationResult>()?;
     m.add_class::<python_game::time_control::TimeControl>()?;
     m.add_class::<python_player::mcts::MonteCarloTreeSearch>()?;
+
+    m.add_class::<python_player::dataloader::DataLoader>()?;
+    m.add_function(wrap_pyfunction!(
+        python_player::dataloader::encode_game_state,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(python_player::dataloader::decode_move, m)?)?;
     Ok(())
 }

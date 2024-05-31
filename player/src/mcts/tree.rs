@@ -99,7 +99,8 @@ impl Root {
         if game_state.to_fen() == self.game_state.to_fen() {
             #[cfg(not(feature = "mute"))]
             println!(
-                "No need to advance root node, the game state is the same as the current one."
+                "No need to advance root node, the game state is the same as the current one. {}",
+                game_state.to_fen()
             );
             return self;
         }
@@ -108,7 +109,7 @@ impl Root {
             Some(edge) => edge,
             None => {
                 #[cfg(not(feature = "mute"))]
-                println!("Cannot advance root node without an edge. Falling back to the default root node.");
+                println!("Cannot advance root node without an edge. Falling back to the default root node for {}", game_state.to_fen());
                 return Self::for_game_state(game_state);
             }
         };
@@ -119,14 +120,14 @@ impl Root {
         match new_root_node {
             Some(new_root_node) => {
                 #[cfg(not(feature = "mute"))]
-                println!("Root node has been advanced");
+                println!("Root node has been advanced to {}", game_state.to_fen());
 
                 edge.apply_to_game_state(&mut self.game_state);
                 Self::new(new_root_node, &self.game_state)
             }
             None => {
                 #[cfg(not(feature = "mute"))]
-                println!("Could not find the edge in the current tree. Falling back to the default root node.");
+                println!("Could not find the edge in the current tree. Falling back to the default root node for {}", game_state.to_fen());
 
                 Self::for_game_state(game_state)
             }
@@ -159,6 +160,7 @@ impl Root {
         move_list: &mut MoveList,
         num_iterations: u64,
         rng: &mut SmallRng,
+        // model: &mut Model,
     ) {
         let mut sum_played_plies: u64 = 0;
         for _ in 0..num_iterations {
@@ -249,6 +251,21 @@ impl Tree {
         rated_moves
     }
 
+    pub fn action_value_pairs(&mut self) -> Vec<(Move, Value)> {
+        let root = self.root.lock().unwrap();
+        let root = root.as_ref().unwrap();
+        let mut action_value_pairs = Vec::new();
+        for node in root.node.children() {
+            let move_ = if let Some(move_) = node.previous_move() {
+                move_
+            } else {
+                continue;
+            };
+            action_value_pairs.push((move_, node.value()));
+        }
+        action_value_pairs
+    }
+
     pub fn principal_variation(&mut self) -> Vec<Edge> {
         let mut principal_variation = Vec::new();
         let mut root = self.root.lock().unwrap();
@@ -283,6 +300,8 @@ impl Default for Tree {
             let mut rng = SmallRng::from_entropy();
             let mut verbose = false;
             let mut last_print_time = Instant::now();
+            // let mut model = Model::default();
+            // model.load_from_file("./logs/model_weights.json"); // TODO:
 
             loop {
                 if let Ok(command) = receiver.try_recv() {
@@ -334,7 +353,12 @@ impl Default for Tree {
                 if running {
                     if let Some(root_lock) = &mut root_lock {
                         if let Some(root) = root_lock.as_mut() {
-                            root.do_iterations(&mut move_list, iterations_per_step, &mut rng);
+                            root.do_iterations(
+                                &mut move_list,
+                                iterations_per_step,
+                                &mut rng,
+                                // &mut model,
+                            );
                             completed_iterations += iterations_per_step;
                             // Adjust the number of iterations per step based on the time it took to complete the last step
                             let elapsed_time = start_time.elapsed().as_micros() as f64 / 1000.;

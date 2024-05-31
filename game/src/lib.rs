@@ -10,8 +10,8 @@ mod time_control;
 pub mod wall;
 
 pub use factories::{
-    hash_factory, unhash_factory, Factories, Factory, CENTER_FACTORY_INDEX, NUM_FACTORIES,
-    NUM_NON_CENTER_FACTORIES, NUM_POSSIBLE_FACTORY_PERMUTATIONS,
+    hash_factory, unhash_factory, Factories, Factory, CENTER_FACTORY_INDEX, INDEX_TO_FACTORY,
+    NUM_FACTORIES, NUM_NON_CENTER_FACTORIES, NUM_POSSIBLE_FACTORY_PERMUTATIONS,
 };
 pub use formatting::display_gamestate;
 pub use game_state::Bag;

@@ -13,6 +13,7 @@ replay_buffer = { path = "../replay_buffer" }
 pyo3 = { version = "0.21.2", features = ["extension-module"] }
 rand = { version = "0.8.5", features = ["small_rng"] }
 ndarray = "0.15.4"
+numpy = "0.21.0"
 
 [features]
 three_players = ["game/three_players"]

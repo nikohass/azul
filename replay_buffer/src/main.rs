@@ -1,11 +1,8 @@
-use async_mutex::Mutex;
-// use replay_buffer::{BUFFER, DEFAULT_BUFFER_SIZE};
-use game::NUM_PLAYERS;
 use replay_buffer::{api, BUFFER, DEFAULT_BUFFER_SIZE};
 use tokio::net::TcpListener;
 
 lazy_static::lazy_static!(
-    pub static ref DATABASE_DIRECTORY: Mutex<String> = Mutex::new("".to_string());
+    pub static ref DATABASE_DIRECTORY: String = format!("db/{}/", game::NUM_PLAYERS);
 );
 
 #[tokio::main]
@@ -16,8 +13,6 @@ async fn main() {
     let mut port: u16 = 3044;
     let mut buffer_size: usize = DEFAULT_BUFFER_SIZE;
 
-    let mut database_directory = format!("db/{}/", NUM_PLAYERS);
-
     let args: Vec<String> = std::env::args().collect();
     for i in 0..args.len() {
         match args[i].as_str() {
@@ -26,12 +21,6 @@ async fn main() {
                     .get(i + 1)
                     .and_then(|s| s.parse::<u16>().ok())
                     .expect("Expected a valid port number for the API");
-            }
-            "--database-directory" | "-d" => {
-                database_directory = args
-                    .get(i + 1)
-                    .expect("Expected a valid database directory")
-                    .to_string();
             }
             "--buffer-size" | "-b" => {
                 buffer_size = args
@@ -43,7 +32,6 @@ async fn main() {
         }
     }
 
-    log::debug!("database_directory: {}", database_directory);
     log::debug!("buffer_size: {}", buffer_size);
     log::debug!("port: {}", port);
 
@@ -69,13 +57,17 @@ async fn main() {
     }
 
     // Create the database directory if it doesn't exist
-    std::fs::create_dir_all(&database_directory).unwrap();
-    {
-        let mut lock = DATABASE_DIRECTORY.lock().await;
-        *lock = database_directory;
-    }
+    std::fs::create_dir_all(&*DATABASE_DIRECTORY).unwrap();
 
     let server_task = api::run_rest_api(addr);
+
+    let persist_task = tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+            let buffer = BUFFER.lock().await;
+            buffer.store(&DATABASE_DIRECTORY);
+        }
+    });
 
     let ctrl_c_handler = handle_shutdown();
 
@@ -91,6 +83,7 @@ async fn main() {
 
     tokio::select! {
         _ = server_task => {}
+        _ = persist_task => {}
         _ = ctrl_c_handler => {
             log::debug!("Exited due to Ctrl+C");
         }
@@ -114,6 +107,8 @@ async fn handle_shutdown() {
 
     log::debug!("Backing up data...");
 
+    let buffer = BUFFER.lock().await;
+    buffer.store(&DATABASE_DIRECTORY);
     // TODO: Backup
 
     log::info!("Backup complete, exiting.");

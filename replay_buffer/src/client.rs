@@ -46,7 +46,7 @@ impl ReplayBufferClient {
         let url = format!("{}/add_entries", self.base_url);
         let response = self
             .client
-            .post(&url)
+            .post(url)
             .json(&request)
             .send()
             .map_err(|e| format!("Failed to send request: {}", e))?;
@@ -65,7 +65,7 @@ impl ReplayBufferClient {
         let url = format!("{}/sample_entries", self.base_url);
         let response = self
             .client
-            .post(&url)
+            .post(url)
             .json(&request)
             .send()
             .map_err(|e| format!("Failed to send request: {}", e))?;
@@ -86,7 +86,7 @@ impl ReplayBufferClient {
         let url = format!("{}/set_buffer_size", self.base_url);
         let response = self
             .client
-            .post(&url)
+            .post(url)
             .json(&request)
             .send()
             .map_err(|e| format!("Failed to send request: {}", e))?;
