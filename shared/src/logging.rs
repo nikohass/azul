@@ -28,13 +28,13 @@ pub fn init_logging(log_file: &str) {
 
     let stdout = ConsoleAppender::builder()
         .encoder(Box::new(PatternEncoder::new(
-            "{d(%Y-%m-%d %H:%M:%S%.3f%Z)} - {h({l})} - {m}{n}",
+            "{d(%Y-%m-%d %H:%M:%S%.3f%Z)} - {h({l})} {m}{n}",
         )))
         .build();
 
     let logfile = FileAppender::builder()
         .encoder(Box::new(PatternEncoder::new(
-            "{d(%Y-%m-%d %H:%M:%S%.3f%Z)} - {l} - {m}{n}",
+            "{d(%Y-%m-%d %H:%M:%S%.3f%Z)} - {l} {m}{n}",
         )))
         .build(format!("logs/{}.log", log_file))
         .unwrap();

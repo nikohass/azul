@@ -1393,6 +1393,7 @@ name = "player"
 version = "0.1.0"
 dependencies = [
  "game",
+ "log",
  "ndarray",
  "rand",
  "serde",
@@ -1408,6 +1409,7 @@ dependencies = [
  "rand",
  "rayon",
  "replay_buffer",
+ "shared",
 ]
 
 [[package]]
@@ -1499,12 +1501,14 @@ name = "python_package"
 version = "0.1.0"
 dependencies = [
  "game",
+ "log",
  "ndarray",
  "numpy",
  "player",
  "pyo3",
  "rand",
  "replay_buffer",
+ "shared",
 ]
 
 [[package]]

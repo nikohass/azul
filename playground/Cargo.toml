@@ -11,3 +11,4 @@ rand = { version = "0.8.5", features = ["small_rng"] }
 player = { path = "../player" }
 replay_buffer = { path = "../replay_buffer" }
 rayon = "1.5.1"
+shared = { path = "../shared" }

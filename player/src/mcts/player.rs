@@ -76,6 +76,9 @@ impl Player for MonteCarloTreeSearch {
     }
 
     fn get_move(&mut self, game_state: &GameState) -> Move {
+        #[cfg(not(feature = "mute"))]
+        log::debug!("Searching move for game state: {}", game_state.to_fen());
+
         self.advance_root(game_state, None);
 
         let search_start_time = Instant::now();
@@ -92,7 +95,7 @@ impl Player for MonteCarloTreeSearch {
                 let remaining_time_info = match time_control_result {
                     TimeControlResult::ContinueFor(_, remaining_time_info) => remaining_time_info,
                     TimeControlResult::Stop => RemainingTimeInfo {
-                        current_search_allocated_time: Some(0),
+                        current_search_allocated_time: None,
                         game_remaining_time: None,
                     },
                 };

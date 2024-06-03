@@ -9,7 +9,9 @@ edition = "2021"
 game = { path = "../game" }
 player = { path = "../player" }
 replay_buffer = { path = "../replay_buffer" }
+shared = { path = "../shared" }
 
+log = "0.4.20"
 pyo3 = { version = "0.21.2", features = ["extension-module"] }
 rand = { version = "0.8.5", features = ["small_rng"] }
 ndarray = "0.15.4"

@@ -36,7 +36,7 @@ impl RootStatistics {
             .map(|i| format!("  V{}", i + 1))
             .collect::<Vec<String>>()
             .join(" ");
-        println!(
+        log::debug!(
             "{:>10} {:>3} {:>9} {} {:>8} {:>8} {:>8} {:>9} {:>2}",
             "Iterations",
             "PVd",
@@ -51,7 +51,7 @@ impl RootStatistics {
     }
 
     pub fn print(&self, remaining_time_info: &RemainingTimeInfo, search_start_time: Instant) {
-        println!(
+        log::debug!(
             "{:10} {:3} {:>9} {} {:>8} {:>8} {:>9} {:>8} {}",
             self.visits,
             self.principal_variation.len(),
@@ -97,19 +97,12 @@ impl Root {
 
     pub fn advance(mut self, game_state: &GameState, edge: Option<Edge>) -> Self {
         if game_state.to_fen() == self.game_state.to_fen() {
-            #[cfg(not(feature = "mute"))]
-            println!(
-                "No need to advance root node, the game state is the same as the current one. {}",
-                game_state.to_fen()
-            );
             return self;
         }
 
         let edge = match edge {
             Some(edge) => edge,
             None => {
-                #[cfg(not(feature = "mute"))]
-                println!("Cannot advance root node without an edge. Falling back to the default root node for {}", game_state.to_fen());
                 return Self::for_game_state(game_state);
             }
         };
@@ -119,41 +112,20 @@ impl Root {
 
         match new_root_node {
             Some(new_root_node) => {
-                #[cfg(not(feature = "mute"))]
-                println!("Root node has been advanced to {}", game_state.to_fen());
-
                 edge.apply_to_game_state(&mut self.game_state);
                 Self::new(new_root_node, &self.game_state)
             }
-            None => {
-                #[cfg(not(feature = "mute"))]
-                println!("Could not find the edge in the current tree. Falling back to the default root node for {}", game_state.to_fen());
-
-                Self::for_game_state(game_state)
-            }
+            None => Self::for_game_state(game_state),
         }
     }
-
-    // pub fn node(&self) -> &Node {
-    //     &self.node
-    // }
 
     pub fn game_state(&self) -> &GameState {
         &self.game_state
     }
 
-    // pub fn statistics(&self) -> &RootStatistics {
-    //     &self.statistics
-    // }
-
     pub fn value(&self) -> Value {
         self.node.value()
     }
-
-    // pub fn build_principal_variation(&mut self, principal_variation: &mut Vec<Edge>) {
-    //     self.node
-    //         .build_principal_variation(&mut self.game_state.clone(), principal_variation);
-    // }
 
     pub fn do_iterations(
         &mut self,
@@ -326,8 +298,6 @@ impl Default for Tree {
                                 }
                             } else {
                                 let mut root_lock = root_clone.lock().unwrap();
-                                // let new_root = Root::for_game_state(&game_state);
-                                // *root_lock = Some(new_root);
                                 if let Some(root) = root_lock.take() {
                                     let new_root = root.advance(&game_state, edge);
                                     *root_lock = Some(new_root);
@@ -338,7 +308,7 @@ impl Default for Tree {
                         }
                         Command::TerminateThread => {
                             #[cfg(not(feature = "mute"))]
-                            println!("Terminating thread");
+                            log::info!("Terminating thread");
                             break;
                         }
                         Command::Verbose(v) => {

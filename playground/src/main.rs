@@ -20,6 +20,7 @@ use rand::rngs::{SmallRng, StdRng};
 use rand::{thread_rng, Rng, SeedableRng};
 use rayon::prelude::*;
 use replay_buffer::{buffer::ReplayEntry, ReplayBufferClient};
+use shared::logging::init_logging;
 use std::{
     cell::RefCell,
     collections::HashSet,
@@ -59,250 +60,234 @@ OUT OF BAG: B 7	Y 4	R 8	G 12	W 0
 
 use std::arch::x86_64::*;
 
-pub fn run_match(
-    mut game_state: GameState,
-    players: &mut [MonteCarloTreeSearch],
-    verbose: bool,
-) -> Result<Vec<ReplayEntry>, GameError> {
-    let num_players = players.len();
-    if num_players != NUM_PLAYERS {
-        return Err(GameError::PlayerCountMismatch);
-    }
-
-    let player_names = players
-        .iter()
-        .map(|player| player.get_name().to_string())
-        .collect::<Vec<_>>();
-
-    game_state.check_integrity()?;
-    for player in players.iter_mut() {
-        player.notify_factories_refilled(&game_state);
-    }
-    let mut stats = Vec::new();
-
-    let mut move_list = MoveList::default();
-    let mut rng = SmallRng::from_entropy();
-    loop {
-        if verbose {
-            println!("{}", display_gamestate(&game_state, Some(&player_names)));
-            println!("{}", game_state.to_fen());
-        }
-        let result = game_state.get_possible_moves(&mut move_list, &mut rng);
-        let is_game_over = matches!(result, MoveGenerationResult::GameOver);
-        let refilled_factories = matches!(result, MoveGenerationResult::RoundOver);
-        if is_game_over {
-            break;
-        }
-        if refilled_factories && verbose {
-            println!("Factories refilled");
-            println!("{}", display_gamestate(&game_state, Some(&player_names)));
-        }
-        if refilled_factories {
-            for player in players.iter_mut() {
-                player.notify_factories_refilled(&game_state);
-            }
-        }
-
-        // stats.num_factory_refills += refilled_factories as u32;
-        // stats.num_turns += 1;
-
-        let current_player_marker: PlayerMarker = game_state.current_player;
-        let current_player = usize::from(current_player_marker);
-
-        let mut players_move: Move = players[current_player].get_move(&game_state);
-        if verbose {
-            println!(
-                "{}: {} {:?}",
-                player_names[current_player], players_move, players_move
-            );
-        }
-
-        if !move_list.contains(players_move) {
-            // If the move is not legal, return an error
-            println!(
-                "Player {} made an illegal move: {:?}",
-                current_player, players_move
-            );
-            println!("Move list: {:?}", move_list);
-            println!("{}", display_gamestate(&game_state, Some(&player_names)));
-            println!("{}", game_state.to_fen());
-            return Err(GameError::IllegalMove);
-        }
-
-        let value_f64 = players[current_player].value().unwrap();
-        let mut value: [f32; NUM_PLAYERS] = [0.0; NUM_PLAYERS];
-        for i in 0..NUM_PLAYERS {
-            value[i] = value_f64[i] as f32;
-        }
-
-        let action_value_pairs = players[current_player].action_value_pairs();
-        // .action_value_pairs()
-        // .iter()
-        // .map(|(action, value)| (action, value.into()))
-        // .collect();
-        let action_value_pairs = action_value_pairs
-            .iter()
-            .map(|(action, value)| {
-                let action = *action;
-                let value_f64: [f64; NUM_PLAYERS] = std::convert::From::from(*value);
-                let mut value: [f32; NUM_PLAYERS] = [0.0; NUM_PLAYERS];
-                for i in 0..NUM_PLAYERS {
-                    value[i] = value_f64[i] as f32;
-                }
-                (action, value)
-            })
-            .collect();
-        stats.push(ReplayEntry {
-            game_state: game_state.clone(),
-            value,
-            iterations: 0,
-            action_value_pairs,
-        });
-
-        if rng.gen_bool(0.6) {
-            players_move = move_list[rng.gen_range(0..move_list.len())];
-        }
-
-        game_state.do_move(players_move);
-
-        for player in players.iter_mut() {
-            player.notify_move(&game_state, players_move);
-        }
-
-        game_state.check_integrity()?;
-    }
-    if verbose {
-        println!("{}", display_gamestate(&game_state, Some(&player_names)));
-        println!("{}", game_state.to_fen());
-    }
-
-    // Reset the players
-    for player in players.iter_mut() {
-        player.notify_game_over(&game_state);
-        player.reset();
-    }
-
-    Ok(stats)
-}
-
-fn main() {
-    // let mut rng = SmallRng::from_entropy();
-    // // let game_state = GameState::new(&mut rng);
-    // let mut players: Vec<Box<dyn Player>> = vec![
-    //     Box::<MonteCarloTreeSearch>::default(),
-    //     Box::<MonteCarloTreeSearch>::default(),
-    // ];
-
-    let client = ReplayBufferClient::new("http://127.0.0.1:3044");
-    client.set_buffer_size(1_000_000).unwrap();
-
-    const THREADS: usize = 12;
-    let mut handles = vec![];
-
-    let (statistics_sender, statistics_receiver) = mpsc::channel();
-    let stop_flag = Arc::new(AtomicBool::new(false));
-
-    for _ in 0..THREADS {
-        let statistics_sender = statistics_sender.clone();
-        let stop_flag = stop_flag.clone();
-
-        let mut rng = SmallRng::from_entropy();
-        let handle = thread::spawn(move || loop {
-            let mut players = vec![
-                MonteCarloTreeSearch::default(),
-                MonteCarloTreeSearch::default(),
-            ];
-            for player in players.iter_mut() {
-                player.set_time(TimeControl::ConstantTimePerMove {
-                    milliseconds_per_move: 700,
-                });
-            }
-
-            let game_state = GameState::new(&mut rng);
-            let statistics = run_match(game_state, &mut players, false).unwrap();
-            if stop_flag.load(Ordering::Relaxed) {
-                return;
-            }
-            statistics_sender.send(statistics).unwrap();
-        });
-        handles.push(handle);
-    }
-
-    const NUM_STATE_ACTION_PAIRS: usize = 500_000;
-
-    let handle = thread::spawn(move || {
-        let mut state_action_pairs = Vec::new();
-        let mut saved: u64 = 0;
-        let client = ReplayBufferClient::new("http://127.0.0.1:3044");
-
-        while let Ok(statistics) = statistics_receiver.recv() {
-            println!(
-                "Received statistics with {} state-action pairs",
-                statistics.len()
-            );
-            state_action_pairs.extend(statistics);
-
-            if state_action_pairs.len() >= NUM_STATE_ACTION_PAIRS.min(100) {
-                saved += state_action_pairs.len() as u64;
-                client.add_entries(state_action_pairs.clone()).unwrap();
-                state_action_pairs.clear();
-
-                println!("Saved {} state-action pairs in total", saved);
-
-                if saved >= NUM_STATE_ACTION_PAIRS as u64 {
-                    println!("Stopping");
-                    stop_flag.store(true, Ordering::Relaxed);
-                    break;
-                }
-            }
-        }
-    });
-
-    handles.push(handle);
-
-    for handle in handles {
-        handle.join().unwrap();
-    }
-}
-
-// fn main() {
-//     let mut players: Vec<Box<dyn Player>> = vec![
-//         Box::<MonteCarloTreeSearch>::default(),
-//         Box::<MonteCarloTreeSearch>::default(),
-//     ];
-
-//     for player in players.iter_mut() {
-//         player.set_time(TimeControl::ConstantTimePerMove {
-//             milliseconds_per_move: 6_000,
-//         });
+// pub fn run_match(
+//     mut game_state: GameState,
+//     players: &mut [MonteCarloTreeSearch],
+//     verbose: bool,
+// ) -> Result<Vec<ReplayEntry>, GameError> {
+//     let num_players = players.len();
+//     if num_players != NUM_PLAYERS {
+//         return Err(GameError::PlayerCountMismatch);
 //     }
 
-//     std::thread::sleep(Duration::from_secs(1));
+//     let player_names = players
+//         .iter()
+//         .map(|player| player.get_name().to_string())
+//         .collect::<Vec<_>>();
 
+//     game_state.check_integrity()?;
+//     for player in players.iter_mut() {
+//         player.notify_factories_refilled(&game_state);
+//     }
+//     let mut stats = Vec::new();
+
+//     let mut move_list = MoveList::default();
 //     let mut rng = SmallRng::from_entropy();
-//     let game_state = GameState::new(&mut rng);
-//     run_match(game_state, &mut players, true).unwrap();
+//     loop {
+//         if verbose {
+//             println!("{}", display_gamestate(&game_state, Some(&player_names)));
+//             println!("{}", game_state.to_fen());
+//         }
+//         let result = game_state.get_possible_moves(&mut move_list, &mut rng);
+//         let is_game_over = matches!(result, MoveGenerationResult::GameOver);
+//         let refilled_factories = matches!(result, MoveGenerationResult::RoundOver);
+//         if is_game_over {
+//             break;
+//         }
+//         if refilled_factories && verbose {
+//             println!("Factories refilled");
+//             println!("{}", display_gamestate(&game_state, Some(&player_names)));
+//         }
+//         if refilled_factories {
+//             for player in players.iter_mut() {
+//                 player.notify_factories_refilled(&game_state);
+//             }
+//         }
 
-//     // let mut rng = SmallRng::from_entropy();
-//     // let mut layer = EfficentlyUpdatableDenseLayer::<8>::new(8);
-//     // layer.initialize_random(&mut rng);
+//         // stats.num_factory_refills += refilled_factories as u32;
+//         // stats.num_turns += 1;
 
-//     // layer.set_input(1);
+//         let current_player_marker: PlayerMarker = game_state.current_player;
+//         let current_player = usize::from(current_player_marker);
 
-//     // let out = layer.output();
-//     // println!("{:?}", out);
+//         let mut players_move: Move = players[current_player].get_move(&game_state);
+//         if verbose {
+//             println!(
+//                 "{}: {} {:?}",
+//                 player_names[current_player], players_move, players_move
+//             );
+//         }
 
-//     // let w = layer.weights();
-//     // layer.set_weights(w);
+//         if !move_list.contains(players_move) {
+//             // If the move is not legal, return an error
+//             println!(
+//                 "Player {} made an illegal move: {:?}",
+//                 current_player, players_move
+//             );
+//             println!("Move list: {:?}", move_list);
+//             println!("{}", display_gamestate(&game_state, Some(&player_names)));
+//             println!("{}", game_state.to_fen());
+//             return Err(GameError::IllegalMove);
+//         }
 
-//     // layer.reset();
-//     // layer.set_input(1);
-//     // let out = layer.output();
-//     // println!("{:?}", out);
+//         let value_f64 = players[current_player].value().unwrap();
+//         let mut value: [f32; NUM_PLAYERS] = [0.0; NUM_PLAYERS];
+//         for i in 0..NUM_PLAYERS {
+//             value[i] = value_f64[i] as f32;
+//         }
 
-//     // let result = load_weights_biases("./logs/model_weights.json").unwrap();
-//     // println!("{:?}", result);
+//         let action_value_pairs = players[current_player].action_value_pairs();
+//         // .action_value_pairs()
+//         // .iter()
+//         // .map(|(action, value)| (action, value.into()))
+//         // .collect();
+//         let action_value_pairs = action_value_pairs
+//             .iter()
+//             .map(|(action, value)| {
+//                 let action = *action;
+//                 let value_f64: [f64; NUM_PLAYERS] = std::convert::From::from(*value);
+//                 let mut value: [f32; NUM_PLAYERS] = [0.0; NUM_PLAYERS];
+//                 for i in 0..NUM_PLAYERS {
+//                     value[i] = value_f64[i] as f32;
+//                 }
+//                 (action, value)
+//             })
+//             .collect();
+//         stats.push(ReplayEntry {
+//             game_state: game_state.clone(),
+//             value,
+//             iterations: 0,
+//             action_value_pairs,
+//         });
+
+//         if rng.gen_bool(0.6) {
+//             players_move = move_list[rng.gen_range(0..move_list.len())];
+//         }
+
+//         game_state.do_move(players_move);
+
+//         for player in players.iter_mut() {
+//             player.notify_move(&game_state, players_move);
+//         }
+
+//         game_state.check_integrity()?;
+//     }
+//     if verbose {
+//         println!("{}", display_gamestate(&game_state, Some(&player_names)));
+//         println!("{}", game_state.to_fen());
+//     }
+
+//     // Reset the players
+//     for player in players.iter_mut() {
+//         player.notify_game_over(&game_state);
+//         player.reset();
+//     }
+
+//     Ok(stats)
 // }
+
+// fn main() {
+//     // let mut rng = SmallRng::from_entropy();
+//     // // let game_state = GameState::new(&mut rng);
+//     // let mut players: Vec<Box<dyn Player>> = vec![
+//     //     Box::<MonteCarloTreeSearch>::default(),
+//     //     Box::<MonteCarloTreeSearch>::default(),
+//     // ];
+
+//     let client = ReplayBufferClient::new("http://127.0.0.1:3044");
+//     client.set_buffer_size(1_000_000).unwrap();
+
+//     const THREADS: usize = 12;
+//     let mut handles = vec![];
+
+//     let (statistics_sender, statistics_receiver) = mpsc::channel();
+//     let stop_flag = Arc::new(AtomicBool::new(false));
+
+//     for _ in 0..THREADS {
+//         let statistics_sender = statistics_sender.clone();
+//         let stop_flag = stop_flag.clone();
+
+//         let mut rng = SmallRng::from_entropy();
+//         let handle = thread::spawn(move || loop {
+//             let mut players = vec![
+//                 MonteCarloTreeSearch::default(),
+//                 MonteCarloTreeSearch::default(),
+//             ];
+//             for player in players.iter_mut() {
+//                 player.set_time(TimeControl::ConstantTimePerMove {
+//                     milliseconds_per_move: 700,
+//                 });
+//             }
+
+//             let game_state = GameState::new(&mut rng);
+//             let statistics = run_match(game_state, &mut players, false).unwrap();
+//             if stop_flag.load(Ordering::Relaxed) {
+//                 return;
+//             }
+//             statistics_sender.send(statistics).unwrap();
+//         });
+//         handles.push(handle);
+//     }
+
+//     const NUM_STATE_ACTION_PAIRS: usize = 500_000;
+
+//     let handle = thread::spawn(move || {
+//         let mut state_action_pairs = Vec::new();
+//         let mut saved: u64 = 0;
+//         let client = ReplayBufferClient::new("http://127.0.0.1:3044");
+
+//         while let Ok(statistics) = statistics_receiver.recv() {
+//             println!(
+//                 "Received statistics with {} state-action pairs",
+//                 statistics.len()
+//             );
+//             state_action_pairs.extend(statistics);
+
+//             if state_action_pairs.len() >= NUM_STATE_ACTION_PAIRS.min(100) {
+//                 saved += state_action_pairs.len() as u64;
+//                 client.add_entries(state_action_pairs.clone()).unwrap();
+//                 state_action_pairs.clear();
+
+//                 println!("Saved {} state-action pairs in total", saved);
+
+//                 if saved >= NUM_STATE_ACTION_PAIRS as u64 {
+//                     println!("Stopping");
+//                     stop_flag.store(true, Ordering::Relaxed);
+//                     break;
+//                 }
+//             }
+//         }
+//     });
+
+//     handles.push(handle);
+
+//     for handle in handles {
+//         handle.join().unwrap();
+//     }
+// }
+
+fn main() {
+    init_logging("playground");
+
+    let mut players: Vec<Box<dyn Player>> = vec![
+        Box::<MonteCarloTreeSearch>::default(),
+        Box::<MonteCarloTreeSearch>::default(),
+        Box::<MonteCarloTreeSearch>::default(),
+        Box::<MonteCarloTreeSearch>::default(),
+    ];
+
+    for player in players.iter_mut() {
+        player.set_time(TimeControl::ConstantTimePerMove {
+            milliseconds_per_move: 100,
+        });
+    }
+
+    std::thread::sleep(Duration::from_secs(1));
+
+    let mut rng = SmallRng::from_entropy();
+    let game_state = GameState::new(&mut rng);
+    match_::run_match(game_state, &mut players, true).unwrap();
+}
 
 // let mut entries = Vec::new();
 // for _ in 0..1000 {

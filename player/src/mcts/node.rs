@@ -90,25 +90,6 @@ impl Node {
         &self.children
     }
 
-    // pub fn edge(&self) -> &Edge {
-    //     &self.edge
-    // }
-
-    // pub fn take_child_with_move(self, move_: Move) -> Option<Node> {
-    //     let mut children = self.children;
-    //     let mut index = None;
-    //     for (i, child) in children.iter().enumerate() {
-    //         if let Some(child_move) = child.previous_move() {
-    //             if child_move == move_ {
-    //                 index = Some(i);
-    //                 break;
-    //             }
-    //         }
-    //     }
-
-    //     index.map(|index| children.remove(index))
-    // }
-
     pub fn take_child_with_edge(self, edge: &Edge) -> Option<Node> {
         let mut children = self.children;
         let mut index = None;
@@ -181,11 +162,6 @@ impl Node {
             // If the game is over, we don't need to expand any children
             return;
         }
-
-        // If there are multiple identical factories, the moves originating from them are identical.
-        // Remove them to avoid evaluating what is essentially the same move multiple times.
-        // In case we need values for every move, we can add the removed moves back later with the values of their identical counterparts.
-        // filter_identical_moves(game_state, move_list);
 
         // Create children for each possible move
         let mut children = Vec::with_capacity(move_list.len());
@@ -384,40 +360,3 @@ impl std::ops::AddAssign for ChildCount {
         self.probabilistic += other.probabilistic;
     }
 }
-
-// pub fn filter_identical_moves(game_state: &GameState, move_list: &mut MoveList) {
-//     let mut unique = [false; NUM_POSSIBLE_FACTORY_PERMUTATIONS];
-//     let mut duplicates = [0; NUM_NON_CENTER_FACTORIES];
-//     let mut num_duplicates = 0;
-//     for (i, factory) in game_state
-//         .factories
-//         .iter()
-//         .take(NUM_NON_CENTER_FACTORIES)
-//         .enumerate()
-//     {
-//         let hash = hash_factory(factory);
-//         if unique[hash] {
-//             duplicates[num_duplicates] = i;
-//             num_duplicates += 1;
-//         } else {
-//             unique[hash] = true;
-//         }
-//     }
-
-//     if num_duplicates == 0 {
-//         return;
-//     }
-
-//     for factory_index in duplicates.iter().take(num_duplicates) {
-//         let factory_index = *factory_index as u8;
-//         let mut index = 0;
-//         while index < move_list.len() {
-//             let move_ = move_list[index];
-//             if move_.factory_index == factory_index {
-//                 move_list.remove(index);
-//             } else {
-//                 index += 1;
-//             }
-//         }
-//     }
-// }
