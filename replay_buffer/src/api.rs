@@ -52,8 +52,11 @@ async fn handle_add_entries(body: AddEntriesRequest) -> Result<impl warp::Reply,
 async fn handle_sample_entries(
     body: SampleEntriesRequest,
 ) -> Result<impl warp::Reply, warp::Rejection> {
+    let start_time = std::time::Instant::now();
     let buffer = BUFFER.lock().await;
     let entries = buffer.sample_n_entries(body.count, &mut rand::thread_rng());
+    let elapsed = start_time.elapsed();
+    println!("Sampled entries in {:?}", elapsed);
     Ok(warp::reply::json(&entries))
 }
 

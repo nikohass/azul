@@ -21,7 +21,7 @@ impl Value {
             let normalized_score = (score - min_score) as f64 / score_range;
             // Add very small bonus for higher scores.
             // Otherwise the program will do random moves as soon as its victory is inevitable which is perceived as arrogant by other players.
-            value[i] = normalized_score + score as f64 * 0.001;
+            value[i] = normalized_score + score as f64 * 0.00001;
         }
 
         // Divide by the sum of all values to normalize them

@@ -109,7 +109,6 @@ async fn handle_shutdown() {
 
     let buffer = BUFFER.lock().await;
     buffer.store(&DATABASE_DIRECTORY);
-    // TODO: Backup
 
     log::info!("Backup complete, exiting.");
     std::process::exit(0);

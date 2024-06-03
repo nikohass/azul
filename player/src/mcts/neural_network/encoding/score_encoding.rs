@@ -18,6 +18,7 @@ pub fn add_player_score_encoding(
     layer: &mut dyn InputLayer,
     is_next_round_starting_player: bool,
 ) {
+    let pattern_line_progress = pattern_line_progress.min(FLOOR_LINE_PENALTY.len() - 1);
     let offset = OFFSET_PLAYER_SCORE + player_index * PLAYER_SCORE_ENCODING_SIZE;
     // Encode next round starting player
     if is_next_round_starting_player {
@@ -25,8 +26,7 @@ pub fn add_player_score_encoding(
     }
 
     // Encode score
-    let score = (score
-        - FLOOR_LINE_PENALTY[pattern_line_progress.min(FLOOR_LINE_PENALTY.len() - 1)] as i16)
+    let score = (score - FLOOR_LINE_PENALTY[pattern_line_progress] as i16)
         .max(0)
         .min(ASSUMED_MAX_SCORE) as usize;
     let index = offset + 1 + score;

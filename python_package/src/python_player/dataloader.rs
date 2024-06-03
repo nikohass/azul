@@ -9,6 +9,7 @@ use player::mcts::neural_network::encoding::{
 };
 use player::mcts::neural_network::layers::InputLayer;
 use player::mcts::neural_network::model::INPUT_SIZE;
+use pyo3::exceptions::PyKeyboardInterrupt;
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
 use rand::rngs::SmallRng;
@@ -59,78 +60,88 @@ impl DataLoader {
         let local_buffer = Arc::new(Mutex::new(Vec::new()));
         let target_buffer_size = Arc::new(AtomicUsize::new(0));
 
-        let local_buffer_clone = local_buffer.clone();
-        let target_buffer_size_clone = target_buffer_size.clone();
-        let url = url.to_string();
-        thread::spawn(move || {
-            let client: ReplayBufferClient = ReplayBufferClient::new(&url);
-            loop {
-                let current_length;
-                let target_length;
-                {
-                    let lock = local_buffer_clone.lock().unwrap();
-                    current_length = lock.len();
-                    target_length = target_buffer_size_clone.load(Ordering::Relaxed);
-                }
-                if current_length < target_length {
-                    let entries = if let Ok(result) = client.sample_entries(batch_size) {
-                        result
-                    } else {
-                        println!("Failed to sample entries");
-                        std::thread::sleep(std::time::Duration::from_secs(1));
-                        continue;
-                    };
-
-                    let mut batch_x = Array2::zeros((batch_size, INPUT_SIZE));
-                    let mut batch_y = Array2::zeros((batch_size, 1));
-                    // let mut mask_y = Array2::zeros((batch_size, 1080));
-                    for (i, entry) in entries.iter().enumerate() {
-                        let mut dummy_layer = DummyLayer {
-                            input: [0.0; INPUT_SIZE],
+        for _ in 0..2 {
+            let local_buffer_clone = local_buffer.clone();
+            let target_buffer_size_clone = target_buffer_size.clone();
+            let url = url.to_string();
+            thread::spawn(move || {
+                let client: ReplayBufferClient = ReplayBufferClient::new(&url);
+                loop {
+                    let current_length;
+                    let target_length;
+                    {
+                        let lock = local_buffer_clone.lock().unwrap();
+                        current_length = lock.len();
+                        target_length = target_buffer_size_clone.load(Ordering::Relaxed);
+                    }
+                    if current_length < target_length {
+                        // let start_time = std::time::Instant::now();
+                        let entries = if let Ok(result) = client.sample_entries(batch_size) {
+                            result
+                        } else {
+                            println!("Failed to sample entries");
+                            std::thread::sleep(std::time::Duration::from_secs(1));
+                            continue;
                         };
-                        encode_game_state_original(
-                            &entry.game_state,
-                            &mut dummy_layer,
-                            &mut [0; NUM_POSSIBLE_FACTORY_PERMUTATIONS],
-                        );
-                        batch_x.slice_mut(s![i, ..]).assign(
-                            &Array2::from_shape_vec((1, INPUT_SIZE), dummy_layer.output().to_vec())
+                        // println!("Sampled entries in {:?}", start_time.elapsed());
+                        // let start_time = std::time::Instant::now();
+
+                        let mut batch_x = Array2::zeros((batch_size, INPUT_SIZE));
+                        let mut batch_y = Array2::zeros((batch_size, 1));
+                        // let mut mask_y = Array2::zeros((batch_size, 1080));
+                        for (i, entry) in entries.iter().enumerate() {
+                            let mut dummy_layer = DummyLayer {
+                                input: [0.0; INPUT_SIZE],
+                            };
+                            println!("{}", entry.game_state.to_fen());
+                            encode_game_state_original(
+                                &entry.game_state,
+                                &mut dummy_layer,
+                                &mut [0; NUM_POSSIBLE_FACTORY_PERMUTATIONS],
+                            );
+                            batch_x.slice_mut(s![i, ..]).assign(
+                                &Array2::from_shape_vec(
+                                    (1, INPUT_SIZE),
+                                    dummy_layer.output().to_vec(),
+                                )
                                 .unwrap()
                                 .into_shape((INPUT_SIZE,))
                                 .unwrap(),
-                        );
+                            );
 
-                        // let mut y = [0.0_f32; NUM_PLAYERS];
-                        // for (action, value) in &entry.action_value_pairs {
-                        //     let factory_index =
-                        //         if action.factory_index as usize != CENTER_FACTORY_INDEX {
-                        //             hash_factory(
-                        //                 &entry.game_state.factories[action.factory_index as usize],
-                        //             )
-                        //         } else {
-                        //             INDEX_TO_FACTORY.len()
-                        //         };
-                        //     let value = value[current_player];
-                        //     let index = move_lookup
-                        //         [&(factory_index, action.color as u8, action.pattern_line_index)];
-                        //     // y[index] = value;
-                        //     y[[index, current_player]] = value;
-                        //     mask_y[[i, index]] = 1.0;
-                        // }
-                        // y[current_player] = entry.value[current_player];
-                        batch_y[[i, 0]] = entry.value[0];
-                    }
+                            // let mut y = [0.0_f32; NUM_PLAYERS];
+                            // for (action, value) in &entry.action_value_pairs {
+                            //     let factory_index =
+                            //         if action.factory_index as usize != CENTER_FACTORY_INDEX {
+                            //             hash_factory(
+                            //                 &entry.game_state.factories[action.factory_index as usize],
+                            //             )
+                            //         } else {
+                            //             INDEX_TO_FACTORY.len()
+                            //         };
+                            //     let value = value[current_player];
+                            //     let index = move_lookup
+                            //         [&(factory_index, action.color as u8, action.pattern_line_index)];
+                            //     // y[index] = value;
+                            //     y[[index, current_player]] = value;
+                            //     mask_y[[i, index]] = 1.0;
+                            // }
+                            // y[current_player] = entry.value[current_player];
+                            batch_y[[i, 0]] = entry.value[0];
+                        }
+                        // println!("Encoded entries after {:?}", start_time.elapsed());
 
-                    {
-                        let mut lock = local_buffer_clone.lock().unwrap();
-                        lock.push((batch_x, batch_y));
-                        println!("Added batch to local buffer");
+                        {
+                            let mut lock = local_buffer_clone.lock().unwrap();
+                            lock.push((batch_x, batch_y));
+                            println!("Added batch to local buffer");
+                        }
+                    } else {
+                        std::thread::sleep(std::time::Duration::from_millis(300));
                     }
-                } else {
-                    std::thread::sleep(std::time::Duration::from_millis(300));
                 }
-            }
-        });
+            });
+        }
 
         DataLoader {
             local_buffer,
@@ -142,12 +153,18 @@ impl DataLoader {
     pub fn __next__(&mut self) -> PyResult<Py<PyTuple>> {
         let batch;
         loop {
-            let mut lock = self.local_buffer.lock().unwrap();
-            if let Some(b) = lock.pop() {
-                batch = b;
-                break;
+            {
+                let mut lock = self.local_buffer.lock().unwrap();
+                if let Some(b) = lock.pop() {
+                    batch = b;
+                    break;
+                }
             }
-            std::thread::sleep(std::time::Duration::from_millis(20));
+
+            Python::with_gil(|py| {
+                py.check_signals()
+                    .map_err(|_| PyKeyboardInterrupt::new_err("Keyboard interrupt received"))
+            })?;
         }
         Python::with_gil(|py| {
             let batch_tuple = PyTuple::new_bound(
