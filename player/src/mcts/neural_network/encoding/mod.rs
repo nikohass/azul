@@ -11,7 +11,7 @@ use game::{
 };
 use pattern_line_encoding::PLAYER_PATTERN_LINE_ENCODING_SIZE;
 use score_encoding::{add_player_score_encoding, PLAYER_SCORE_ENCODING_SIZE};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use wall_encoding::PLAYER_WALL_ENCODING_SIZE;
 
 pub mod factory_encoding;
@@ -77,7 +77,7 @@ pub fn encode_game_state(
 }
 
 pub fn build_move_lookup() -> HashMap<(usize, u8, u8), usize> {
-    let mut move_index_set = HashSet::new();
+    let mut move_index_set = BTreeSet::new();
     for (factory_index, factory) in INDEX_TO_FACTORY.iter().enumerate() {
         for (tile_color, &tile_count) in factory.iter().enumerate() {
             if tile_count > 0 {
@@ -102,4 +102,30 @@ pub fn build_move_lookup() -> HashMap<(usize, u8, u8), usize> {
     }
 
     move_to_index
+}
+
+pub fn build_reverse_lookup(
+    move_to_index: &HashMap<(usize, u8, u8), usize>,
+) -> Vec<(usize, u8, u8)> {
+    let mut reverse_lookup = vec![(0, 0, 0); move_to_index.len()]; // Initialize with default values
+    for (key, &index) in move_to_index.iter() {
+        reverse_lookup[index] = *key;
+    }
+    reverse_lookup
+}
+
+lazy_static::lazy_static! {
+    pub static ref MOVE_LOOKUP: HashMap<(usize, u8, u8), usize> = build_move_lookup();
+    pub static ref REVERSE_MOVE_LOOKUP: Vec<(usize, u8, u8)> = build_reverse_lookup(&MOVE_LOOKUP);
+}
+
+pub fn encode_move(game_state: &game::GameState, mov: game::Move) -> Option<usize> {
+    let factory_index = if mov.factory_index as usize != CENTER_FACTORY_INDEX {
+        game::hash_factory(&game_state.factories[mov.factory_index as usize])
+    } else {
+        INDEX_TO_FACTORY.len()
+    };
+    MOVE_LOOKUP
+        .get(&(factory_index, mov.color as u8, mov.pattern_line_index))
+        .copied()
 }

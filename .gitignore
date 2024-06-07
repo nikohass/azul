@@ -12,3 +12,4 @@ build_wheel.bat
 */selenium
 */__pycache__
 /db
+*.log

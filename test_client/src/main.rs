@@ -1,9 +1,11 @@
 use game::{GameState, Move, Player as _, TimeControl};
 use player::mcts::MonteCarloTreeSearch as Player;
+use shared::logging::init_logging;
 // use player::random_player::RandomPlayer as Player;
 // use player::mcts::HeuristicMoveGenerationPlayer as Player;
 
 fn main() {
+    init_logging("test_client.log");
     let mut player = Player::default();
 
     loop {

@@ -55,6 +55,15 @@ impl std::ops::AddAssign for Value {
     }
 }
 
+impl std::ops::Add for Value {
+    type Output = Self;
+
+    fn add(mut self, rhs: Self) -> Self::Output {
+        self += rhs;
+        self
+    }
+}
+
 impl std::ops::DivAssign<f64> for Value {
     fn div_assign(&mut self, rhs: f64) {
         for value in self.0.iter_mut() {

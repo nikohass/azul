@@ -32,6 +32,7 @@ fn azul4(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
         m
     )?)?;
     m.add_function(wrap_pyfunction!(python_player::dataloader::decode_move, m)?)?;
+    m.add_function(wrap_pyfunction!(python_player::dataloader::encode_move, m)?)?;
     Ok(())
 }
 

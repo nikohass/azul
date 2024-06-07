@@ -1393,6 +1393,7 @@ name = "player"
 version = "0.1.0"
 dependencies = [
  "game",
+ "lazy_static",
  "log",
  "ndarray",
  "rand",
@@ -1501,6 +1502,7 @@ name = "python_package"
 version = "0.1.0"
 dependencies = [
  "game",
+ "lazy_static",
  "log",
  "ndarray",
  "numpy",
@@ -1989,6 +1991,7 @@ dependencies = [
  "game",
  "player",
  "serde_json",
+ "shared",
 ]
 
 [[package]]

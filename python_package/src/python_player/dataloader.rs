@@ -5,16 +5,17 @@ use game::{
 use ndarray::{s, Array2};
 use numpy::{PyArray2, ToPyArray};
 use player::mcts::neural_network::encoding::{
-    build_move_lookup, encode_game_state as encode_game_state_original,
+    build_move_lookup, build_reverse_lookup, encode_game_state as encode_game_state_original,
 };
+use player::mcts::neural_network::encoding_v2::{Accumulator, INPUT_SIZE};
 use player::mcts::neural_network::layers::InputLayer;
-use player::mcts::neural_network::model::INPUT_SIZE;
 use pyo3::exceptions::PyKeyboardInterrupt;
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
 use rand::rngs::SmallRng;
 use rand::SeedableRng as _;
 use replay_buffer::ReplayBufferClient;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -48,10 +49,12 @@ impl InputLayer for DummyLayer {
 #[derive(Clone)]
 pub struct DataLoader {
     #[allow(clippy::type_complexity)]
-    local_buffer: Arc<Mutex<Vec<(Array2<f32>, Array2<f32>)>>>,
+    local_buffer: Arc<Mutex<Vec<(Array2<f32>, Array2<f32>, Array2<f32>)>>>,
     batch_size: usize,
     target_buffer_size: Arc<AtomicUsize>,
 }
+
+const OUTPUT_SIZE: usize = 1080;
 
 #[pymethods]
 impl DataLoader {
@@ -65,6 +68,9 @@ impl DataLoader {
             let target_buffer_size_clone = target_buffer_size.clone();
             let url = url.to_string();
             thread::spawn(move || {
+                let mut accumulator = Accumulator::new(DummyLayer {
+                    input: [0.0; INPUT_SIZE],
+                });
                 let client: ReplayBufferClient = ReplayBufferClient::new(&url);
                 loop {
                     let current_length;
@@ -87,22 +93,25 @@ impl DataLoader {
                         // let start_time = std::time::Instant::now();
 
                         let mut batch_x = Array2::zeros((batch_size, INPUT_SIZE));
-                        let mut batch_y = Array2::zeros((batch_size, 1));
+                        let mut batch_y = Array2::zeros((batch_size, OUTPUT_SIZE));
+                        let mut batch_y_mask = Array2::zeros((batch_size, OUTPUT_SIZE));
                         // let mut mask_y = Array2::zeros((batch_size, 1080));
                         for (i, entry) in entries.iter().enumerate() {
-                            let mut dummy_layer = DummyLayer {
-                                input: [0.0; INPUT_SIZE],
-                            };
+                            // let mut dummy_layer = DummyLayer {
+                            //     input: [0.0; INPUT_SIZE],
+                            // };
                             println!("{}", entry.game_state.to_fen());
-                            encode_game_state_original(
-                                &entry.game_state,
-                                &mut dummy_layer,
-                                &mut [0; NUM_POSSIBLE_FACTORY_PERMUTATIONS],
-                            );
+                            // encode_game_state_original(
+                            //     &entry.game_state,
+                            //     &mut dummy_layer,
+                            //     &mut [0; NUM_POSSIBLE_FACTORY_PERMUTATIONS],
+                            // );
+                            let current_player = usize::from(entry.game_state.current_player);
+                            accumulator.set_game_state(&entry.game_state, current_player);
                             batch_x.slice_mut(s![i, ..]).assign(
                                 &Array2::from_shape_vec(
                                     (1, INPUT_SIZE),
-                                    dummy_layer.output().to_vec(),
+                                    accumulator.layer().output().to_vec(),
                                 )
                                 .unwrap()
                                 .into_shape((INPUT_SIZE,))
@@ -127,13 +136,23 @@ impl DataLoader {
                             //     mask_y[[i, index]] = 1.0;
                             // }
                             // y[current_player] = entry.value[current_player];
-                            batch_y[[i, 0]] = entry.value[0];
+                            // batch_y[[i, 0]] = entry.value[0];
+                            for (action, value) in entry.action_value_pairs.iter() {
+                                let index = player::mcts::neural_network::encoding::encode_move(
+                                    &entry.game_state,
+                                    *action,
+                                );
+                                if let Some(index) = index {
+                                    batch_y[[i, index]] = value[current_player];
+                                    batch_y_mask[[i, index]] = 1.0;
+                                }
+                            }
                         }
                         // println!("Encoded entries after {:?}", start_time.elapsed());
 
                         {
                             let mut lock = local_buffer_clone.lock().unwrap();
-                            lock.push((batch_x, batch_y));
+                            lock.push((batch_x, batch_y, batch_y_mask));
                             println!("Added batch to local buffer");
                         }
                     } else {
@@ -172,6 +191,7 @@ impl DataLoader {
                 &[
                     batch.0.to_pyarray_bound(py).unbind(),
                     batch.1.to_pyarray_bound(py).unbind(),
+                    batch.2.to_pyarray_bound(py).unbind(),
                 ],
             );
             Ok(batch_tuple.into())
@@ -197,19 +217,23 @@ impl DataLoader {
 }
 
 #[pyfunction]
-pub fn encode_game_state(game_state: &GameState) -> Py<PyArray2<f32>> {
-    let mut dummy_layer = DummyLayer {
+pub fn encode_game_state(game_state: &GameState, player: usize) -> Py<PyArray2<f32>> {
+    // let mut dummy_layer = DummyLayer {
+    //     input: [0.0; INPUT_SIZE],
+    // };
+    // encode_game_state_original(
+    //     &game_state.0,
+    //     &mut dummy_layer,
+    //     &mut [0; NUM_POSSIBLE_FACTORY_PERMUTATIONS],
+    // );
+    let mut accumulator = Accumulator::new(DummyLayer {
         input: [0.0; INPUT_SIZE],
-    };
-    encode_game_state_original(
-        &game_state.0,
-        &mut dummy_layer,
-        &mut [0; NUM_POSSIBLE_FACTORY_PERMUTATIONS],
-    );
+    });
+    accumulator.set_game_state(&game_state.0, player);
 
     let mut x = Array2::zeros((1, INPUT_SIZE));
     x.slice_mut(s![0, ..]).assign(
-        &Array2::from_shape_vec((1, INPUT_SIZE), dummy_layer.output().to_vec())
+        &Array2::from_shape_vec((1, INPUT_SIZE), accumulator.layer().output().to_vec())
             .unwrap()
             .into_shape((INPUT_SIZE,))
             .unwrap(),
@@ -220,7 +244,6 @@ pub fn encode_game_state(game_state: &GameState) -> Py<PyArray2<f32>> {
 
 #[pyfunction]
 pub fn decode_move(game_state: &GameState, output: Vec<f32>) -> PyResult<Move> {
-    let move_lookup = build_move_lookup();
     // let (factory_index, color, pattern_line_index) = move_lookup[&move_index];
 
     // let mut move_list = MoveList::default();
@@ -263,7 +286,11 @@ pub fn decode_move(game_state: &GameState, output: Vec<f32>) -> PyResult<Move> {
             INDEX_TO_FACTORY.len()
         };
 
-        let index = move_lookup.get(&(factory_index, mov.color as u8, mov.pattern_line_index));
+        let index = player::mcts::neural_network::encoding::MOVE_LOOKUP.get(&(
+            factory_index,
+            mov.color as u8,
+            mov.pattern_line_index,
+        ));
 
         if index.is_none() {
             println!("Invalid move index");
@@ -285,4 +312,20 @@ pub fn decode_move(game_state: &GameState, output: Vec<f32>) -> PyResult<Move> {
             "Invalid move index",
         ))
     }
+}
+
+#[pyfunction]
+pub fn encode_move(game_state: &GameState, mov: Move) -> Option<usize> {
+    // let factory_index = if mov.0.factory_index as usize != CENTER_FACTORY_INDEX {
+    //     hash_factory(&game_state.0.factories[mov.0.factory_index as usize])
+    // } else {
+    //     INDEX_TO_FACTORY.len()
+    // };
+    // MOVE_LOOKUP
+    //     .get(&(factory_index, mov.0.color as u8, mov.0.pattern_line_index))
+    //     .copied()
+    let game_state = &game_state.0;
+    let mov = mov.0;
+
+    player::mcts::neural_network::encoding::encode_move(game_state, mov)
 }

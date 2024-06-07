@@ -6,7 +6,8 @@ use player::{
     mcts::{
         edge::Edge,
         neural_network::{
-            encoding::TOTAL_ENCODING_SIZE,
+            encoding::{build_move_lookup, TOTAL_ENCODING_SIZE},
+            encoding_v2::{pattern_lines, Accumulator, ENCODING_SIZE},
             layers::{
                 apply_relu, DenseLayer, EfficentlyUpdatableDenseLayer, InputLayer as _, Layer,
             },
@@ -269,24 +270,116 @@ use std::arch::x86_64::*;
 fn main() {
     init_logging("playground");
 
-    let mut players: Vec<Box<dyn Player>> = vec![
-        Box::<MonteCarloTreeSearch>::default(),
-        Box::<MonteCarloTreeSearch>::default(),
-        Box::<MonteCarloTreeSearch>::default(),
-        Box::<MonteCarloTreeSearch>::default(),
-    ];
+    // let mut players: Vec<Box<dyn Player>> = vec![
+    //     Box::<MonteCarloTreeSearch>::default(),
+    //     Box::<MonteCarloTreeSearch>::default(),
+    //     // Box::<MonteCarloTreeSearch>::default(),
+    //     // Box::<MonteCarloTreeSearch>::default(),
+    // ];
 
-    for player in players.iter_mut() {
-        player.set_time(TimeControl::ConstantTimePerMove {
-            milliseconds_per_move: 100,
-        });
+    // for player in players.iter_mut() {
+    //     player.set_time(TimeControl::ConstantTimePerMove {
+    //         milliseconds_per_move: 9000,
+    //     });
+    // }
+
+    // std::thread::sleep(Duration::from_secs(1));
+
+    // let mut rng = SmallRng::from_entropy();
+    // let mut all_unique_center_factories: HashSet<[u8; NUM_TILE_COLORS]> = HashSet::new();
+    // let mut played_games = 0;
+    // loop {
+    //     let mut game_state = GameState::new(&mut rng);
+    //     let mut move_list = MoveList::default();
+    //     loop {
+    //         let result = game_state.get_possible_moves(&mut move_list, &mut rng);
+    //         if result == MoveGenerationResult::GameOver {
+    //             break;
+    //         }
+    //         let center_factory = game_state.factories[CENTER_FACTORY_INDEX];
+    //         all_unique_center_factories.insert(center_factory);
+    //         let mov = move_list[rng.gen_range(0..move_list.len())];
+    //         game_state.do_move(mov);
+    //     }
+    //     played_games += 1;
+
+    //     if played_games % 1000 == 0 {
+    //         println!(
+    //             "After {} games: {}",
+    //             played_games,
+    //             all_unique_center_factories.len()
+    //         );
+    //     }
+    // }
+    // match_::run_match(game_state, &mut players, true).unwrap();
+
+    // let index = pattern_lines::calculate_upper_index(
+    //     game_state.pattern_lines_occupancy[0],
+    //     game_state.pattern_lines_colors[0],
+    // );
+    // println!("{}", ENCODING_SIZE);
+    let mut rng = SmallRng::from_entropy();
+
+    println!("{}", ENCODING_SIZE);
+
+    // let mut accumulator = Accumulator::new(layer);
+
+    // accumulator.set_game_state(&game_state, 0);
+
+    // let move_lookup = build_move_lookup();
+    // println!("{:#?}", move_lookup);
+
+    // let max_value = move_lookup.values().max().unwrap();
+    // println!("Max value: {}", max_value);
+
+    let mut model = Model::default();
+    model.load_from_file("./logs/model_weights.json");
+    // println!("{:?}", out);
+
+    // println!("{}", game_state);
+
+    let mut executed_moves = 0;
+    let mut move_list = MoveList::default();
+    let mut game_state = GameState::new(&mut rng);
+    let start_time = std::time::Instant::now();
+    loop {
+        let result = game_state.get_possible_moves(&mut move_list, &mut rng);
+        if result == MoveGenerationResult::GameOver {
+            break;
+        }
+
+        model.set_game_state(&game_state);
+        let out = model.forward();
+
+        let mut max_score = f32::NEG_INFINITY;
+        let mut best_move = move_list[0];
+
+        for mov in move_list.into_iter() {
+            let index =
+                player::mcts::neural_network::encoding::encode_move(&game_state, *mov).unwrap();
+            let score = out[index];
+            if score > max_score {
+                max_score = score;
+                best_move = *mov;
+            }
+        }
+
+        game_state.do_move(best_move);
+        // println!("{}", game_state);
+        executed_moves += 1;
     }
 
-    std::thread::sleep(Duration::from_secs(1));
+    let elapsed = start_time.elapsed().as_micros();
 
-    let mut rng = SmallRng::from_entropy();
-    let game_state = GameState::new(&mut rng);
-    match_::run_match(game_state, &mut players, true).unwrap();
+    println!("Executed {} moves in {}µs", executed_moves, elapsed);
+    println!(
+        "Average time per move: {}µs",
+        elapsed as f64 / executed_moves as f64
+    );
+
+    println!("{}", game_state);
+    // let out = accumulator.output();
+    // println!("{:?}", out);
 }
 
 // let mut entries = Vec::new();
