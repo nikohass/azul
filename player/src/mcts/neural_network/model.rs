@@ -1,7 +1,6 @@
 use super::{
-    encoding::TOTAL_ENCODING_SIZE,
     encoding_v2::{Accumulator, ENCODING_SIZE},
-    layers::{apply_relu, DenseLayer, EfficentlyUpdatableDenseLayer, InputLayer as _, Layer},
+    layers::{EfficentlyUpdatableDenseLayer, Layer},
 };
 use game::GameState;
 use ndarray::{Array1, Array2};
@@ -65,32 +64,35 @@ impl Model {
     // }
 
     pub fn load_from_file(&mut self, file_path: &str) {
-        let weights_biases =
-            load_weights_biases(file_path).expect("Failed to load weights and biases");
+        // let weights_biases =
+        //     load_weights_biases(file_path).expect("Failed to load weights and biases");
+        let layers = load_model(file_path).expect("Failed to load weights and biases");
 
-        let input_layer_weights: Vec<Vec<f32>> = serde_json::from_value(
-            weights_biases
-                .get("layers.0.weight")
-                .expect("Failed to load input layer weights")
-                .clone(),
-        )
-        .expect("Failed to parse input layer weights");
-        let weights_array = Array2::from_shape_vec(
-            (input_layer_weights.len(), input_layer_weights[0].len()),
-            input_layer_weights.into_iter().flatten().collect(),
-        )
-        .expect("Failed to convert input layer weights to Array2");
+        // let input_layer_weights: Vec<Vec<f32>> = serde_json::from_value(
+        //     weights
+        //         .get(0)
+        //         .expect("Failed to load input layer weights")
+        //         .clone(),
+        // )
+        // .expect("Failed to parse input layer weights");
+        let weights_array = layers[0].weights.clone();
+        // let weights_array = Array2::from_shape_vec(
+        //     (input_layer_weights.len(), input_layer_weights[0].len()),
+        //     input_layer_weights.into_iter().flatten().collect(),
+        // )
+        // .expect("Failed to convert input layer weights to Array2");
         self.input_layer.mut_layer().set_weights(weights_array);
 
         // Set input layer biases
-        let input_layer_biases: Vec<f32> = serde_json::from_value(
-            weights_biases
-                .get("layers.0.bias")
-                .expect("Failed to load input layer biases")
-                .clone(),
-        )
-        .expect("Failed to parse input layer biases");
-        let biases_array = Array1::from(input_layer_biases);
+        // let input_layer_biases: Vec<f32> = serde_json::from_value(
+        //     weights
+        //         .get(0)
+        //         .expect("Failed to load input layer biases")
+        //         .clone(),
+        // )
+        // .expect("Failed to parse input layer biases");
+        // let biases_array = Array1::from(input_layer_biases);
+        let biases_array = layers[0].biases.clone();
         self.input_layer.mut_layer().set_biases(&biases_array);
 
         // // Set hidden layer weights
@@ -152,19 +154,28 @@ impl Model {
 }
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+// use serde_json::Value;
 use std::fs::File;
 use std::io::BufReader;
 
 #[derive(Serialize, Deserialize)]
 pub struct WeightsBiases {
-    weights: Vec<f32>,
-    biases: Vec<f32>,
+    pub weights: Array2<f32>,
+    pub biases: Array1<f32>,
 }
 
-pub fn load_weights_biases(file_path: &str) -> Result<Value, serde_json::Error> {
-    let file = File::open(file_path).expect("Failed to open file");
+pub fn load_model(file_path: &str) -> Result<Vec<WeightsBiases>, Box<dyn std::error::Error>> {
+    let file = File::open(file_path)?;
     let reader = BufReader::new(file);
-    let v: Value = serde_json::from_reader(reader)?;
-    Ok(v)
+    let weights_biases: Vec<WeightsBiases> = bincode::deserialize_from(reader)?;
+    Ok(weights_biases)
+}
+
+pub fn store_model(
+    file_path: &str,
+    layers: Vec<WeightsBiases>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let file = File::create(file_path)?;
+    bincode::serialize_into(file, &layers)?;
+    Ok(())
 }

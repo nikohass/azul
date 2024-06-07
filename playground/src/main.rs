@@ -11,7 +11,7 @@ use player::{
             layers::{
                 apply_relu, DenseLayer, EfficentlyUpdatableDenseLayer, InputLayer as _, Layer,
             },
-            model::{load_weights_biases, Model, INPUT_SIZE},
+            model::{Model, INPUT_SIZE},
         },
         MonteCarloTreeSearch,
     },
@@ -333,7 +333,7 @@ fn main() {
     // println!("Max value: {}", max_value);
 
     let mut model = Model::default();
-    model.load_from_file("./logs/model_weights.json");
+    model.load_from_file("./logs/model_weights.bin");
     // println!("{:?}", out);
 
     // println!("{}", game_state);

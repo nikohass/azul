@@ -11,7 +11,7 @@ use game::{
 };
 use pattern_line_encoding::PLAYER_PATTERN_LINE_ENCODING_SIZE;
 use score_encoding::{add_player_score_encoding, PLAYER_SCORE_ENCODING_SIZE};
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 use wall_encoding::PLAYER_WALL_ENCODING_SIZE;
 
 pub mod factory_encoding;

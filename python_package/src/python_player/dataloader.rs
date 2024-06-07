@@ -1,21 +1,15 @@
-use game::{
-    hash_factory, MoveList, CENTER_FACTORY_INDEX, INDEX_TO_FACTORY,
-    NUM_POSSIBLE_FACTORY_PERMUTATIONS,
-};
+use game::{hash_factory, MoveList, CENTER_FACTORY_INDEX, INDEX_TO_FACTORY};
 use ndarray::{s, Array2};
-use numpy::{PyArray2, ToPyArray};
-use player::mcts::neural_network::encoding::{
-    build_move_lookup, build_reverse_lookup, encode_game_state as encode_game_state_original,
-};
+use numpy::{PyArray2, PyArrayMethods, PyReadonlyArray, ToPyArray};
 use player::mcts::neural_network::encoding_v2::{Accumulator, INPUT_SIZE};
 use player::mcts::neural_network::layers::InputLayer;
-use pyo3::exceptions::PyKeyboardInterrupt;
+use player::mcts::neural_network::model;
+use pyo3::exceptions::{PyKeyboardInterrupt, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
 use rand::rngs::SmallRng;
 use rand::SeedableRng as _;
 use replay_buffer::ReplayBufferClient;
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -328,4 +322,59 @@ pub fn encode_move(game_state: &GameState, mov: Move) -> Option<usize> {
     let mov = mov.0;
 
     player::mcts::neural_network::encoding::encode_move(game_state, mov)
+}
+
+#[pyclass]
+pub struct WeightsBiases(pub player::mcts::neural_network::model::WeightsBiases);
+
+#[pymethods]
+impl WeightsBiases {
+    #[new]
+    pub fn new(
+        weights: PyReadonlyArray<f32, ndarray::Ix2>,
+        biases: PyReadonlyArray<f32, ndarray::Ix1>,
+    ) -> Self {
+        let weights = weights.to_owned_array();
+        let biases = biases.to_owned_array();
+        WeightsBiases(player::mcts::neural_network::model::WeightsBiases { weights, biases })
+    }
+
+    #[getter]
+    pub fn weights(
+        &self,
+        py: Python,
+    ) -> Py<numpy::PyArray<f32, ndarray::prelude::Dim<[usize; 2]>>> {
+        self.0.weights.to_pyarray_bound(py).unbind()
+    }
+
+    #[getter]
+    pub fn biases(&self, py: Python) -> Py<numpy::PyArray<f32, ndarray::prelude::Dim<[usize; 1]>>> {
+        self.0.biases.to_pyarray_bound(py).unbind()
+    }
+}
+
+impl<'source> FromPyObject<'source> for WeightsBiases {
+    fn extract(ob: &'source PyAny) -> PyResult<Self> {
+        let weights = ob
+            .getattr("weights")?
+            .extract::<PyReadonlyArray<f32, ndarray::Ix2>>()?;
+        let biases = ob
+            .getattr("biases")?
+            .extract::<PyReadonlyArray<f32, ndarray::Ix1>>()?;
+        Ok(WeightsBiases::new(weights, biases))
+    }
+}
+
+#[pyfunction]
+pub fn store_model(file_path: &str, layers: Vec<WeightsBiases>) -> PyResult<()> {
+    let layers = layers.into_iter().map(|layer| layer.0).collect::<Vec<_>>();
+    model::store_model(file_path, layers)
+        .map_err(|e| PyValueError::new_err(format!("Failed to store model: {}", e)))
+}
+
+#[pyfunction]
+pub fn load_model(file_path: &str) -> PyResult<Vec<WeightsBiases>> {
+    model::load_model(file_path)
+        .map(|layers| layers.into_iter().map(WeightsBiases).collect())
+        .map_err(|e| PyValueError::new_err(format!("Failed to load model: {}", e)))
 }

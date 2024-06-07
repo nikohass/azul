@@ -1128,6 +1128,7 @@ dependencies = [
  "num-integer",
  "num-traits",
  "rawpointer",
+ "serde",
 ]
 
 [[package]]
@@ -1392,6 +1393,7 @@ checksum = "d231b230927b5e4ad203db57bbcbee2802f6bce620b1e4a9024a07d94e2907ec"
 name = "player"
 version = "0.1.0"
 dependencies = [
+ "bincode",
  "game",
  "lazy_static",
  "log",
