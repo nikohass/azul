@@ -269,19 +269,23 @@ use std::arch::x86_64::*;
 
 fn main() {
     init_logging("playground");
+    let mut rng = SmallRng::from_entropy();
 
-    // let mut players: Vec<Box<dyn Player>> = vec![
-    //     Box::<MonteCarloTreeSearch>::default(),
-    //     Box::<MonteCarloTreeSearch>::default(),
-    //     // Box::<MonteCarloTreeSearch>::default(),
-    //     // Box::<MonteCarloTreeSearch>::default(),
-    // ];
+    let mut players: Vec<Box<dyn Player>> = vec![
+        Box::<MonteCarloTreeSearch>::default(),
+        Box::<MonteCarloTreeSearch>::default(),
+        // Box::<MonteCarloTreeSearch>::default(),
+        // Box::<MonteCarloTreeSearch>::default(),
+    ];
 
-    // for player in players.iter_mut() {
-    //     player.set_time(TimeControl::ConstantTimePerMove {
-    //         milliseconds_per_move: 9000,
-    //     });
-    // }
+    let game_state = GameState::new(&mut rng);
+
+    for player in players.iter_mut() {
+        player.set_time(TimeControl::ConstantTimePerMove {
+            milliseconds_per_move: 4000,
+        });
+    }
+    match_::run_match(game_state, &mut players, true).unwrap();
 
     // std::thread::sleep(Duration::from_secs(1));
 
@@ -318,9 +322,9 @@ fn main() {
     //     game_state.pattern_lines_colors[0],
     // );
     // println!("{}", ENCODING_SIZE);
-    let mut rng = SmallRng::from_entropy();
+    // let mut rng = SmallRng::from_entropy();
 
-    println!("{}", ENCODING_SIZE);
+    // println!("{}", ENCODING_SIZE);
 
     // let mut accumulator = Accumulator::new(layer);
 
@@ -332,54 +336,52 @@ fn main() {
     // let max_value = move_lookup.values().max().unwrap();
     // println!("Max value: {}", max_value);
 
-    let mut model = Model::default();
-    model.load_from_file("./logs/model_weights.bin");
+    // let mut model = Model::default();
+    // model.load_from_file("./logs/model_weights.bin");
     // println!("{:?}", out);
 
     // println!("{}", game_state);
 
-    let mut executed_moves = 0;
-    let mut move_list = MoveList::default();
-    let mut game_state = GameState::new(&mut rng);
-    let start_time = std::time::Instant::now();
-    loop {
-        let result = game_state.get_possible_moves(&mut move_list, &mut rng);
-        if result == MoveGenerationResult::GameOver {
-            break;
-        }
+    // let mut executed_moves = 0;
+    // let mut move_list = MoveList::default();
+    // let mut game_state = GameState::new(&mut rng);
+    // let start_time = std::time::Instant::now();
+    // loop {
+    //     let result = game_state.get_possible_moves(&mut move_list, &mut rng);
+    //     if result == MoveGenerationResult::GameOver {
+    //         break;
+    //     }
 
-        model.set_game_state(&game_state);
-        let out = model.forward();
+    //     model.set_game_state(&game_state);
+    //     let out = model.forward();
 
-        let mut max_score = f32::NEG_INFINITY;
-        let mut best_move = move_list[0];
+    //     let mut max_score = f32::NEG_INFINITY;
+    //     let mut best_move = move_list[0];
 
-        for mov in move_list.into_iter() {
-            let index =
-                player::mcts::neural_network::encoding::encode_move(&game_state, *mov).unwrap();
-            let score = out[index];
-            if score > max_score {
-                max_score = score;
-                best_move = *mov;
-            }
-        }
+    //     for mov in move_list.into_iter() {
+    //         let index =
+    //             player::mcts::neural_network::encoding::encode_move(&game_state, *mov).unwrap();
+    //         let score = out[index];
+    //         if score > max_score {
+    //             max_score = score;
+    //             best_move = *mov;
+    //         }
+    //     }
 
-        game_state.do_move(best_move);
-        // println!("{}", game_state);
-        executed_moves += 1;
-    }
+    //     game_state.do_move(best_move);
+    //     println!("{}", game_state);
+    //     executed_moves += 1;
+    // }
 
-    let elapsed = start_time.elapsed().as_micros();
+    // let elapsed = start_time.elapsed().as_micros();
 
-    println!("Executed {} moves in {}µs", executed_moves, elapsed);
-    println!(
-        "Average time per move: {}µs",
-        elapsed as f64 / executed_moves as f64
-    );
+    // println!("Executed {} moves in {}µs", executed_moves, elapsed);
+    // println!(
+    //     "Average time per move: {}µs",
+    //     elapsed as f64 / executed_moves as f64
+    // );
 
-    println!("{}", game_state);
-    // let out = accumulator.output();
-    // println!("{:?}", out);
+    // println!("{}", game_state);
 }
 
 // let mut entries = Vec::new();

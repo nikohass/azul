@@ -81,6 +81,23 @@ impl std::ops::Div<f64> for Value {
     }
 }
 
+impl std::ops::MulAssign<f64> for Value {
+    fn mul_assign(&mut self, rhs: f64) {
+        for value in self.0.iter_mut() {
+            *value *= rhs;
+        }
+    }
+}
+
+impl std::ops::Mul<f64> for Value {
+    type Output = Self;
+
+    fn mul(mut self, rhs: f64) -> Self::Output {
+        self *= rhs;
+        self
+    }
+}
+
 impl std::ops::Index<usize> for Value {
     type Output = f64;
 
