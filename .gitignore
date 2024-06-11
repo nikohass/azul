@@ -13,3 +13,5 @@ build_wheel.bat
 */__pycache__
 /db
 *.log
+*.pth
+*.bin

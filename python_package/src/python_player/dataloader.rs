@@ -325,10 +325,10 @@ pub fn encode_move(game_state: &GameState, mov: Move) -> Option<usize> {
 }
 
 #[pyclass]
-pub struct WeightsBiases(pub player::mcts::neural_network::model::WeightsBiases);
+pub struct LayerParameters(pub player::mcts::neural_network::model::LayerParameters);
 
 #[pymethods]
-impl WeightsBiases {
+impl LayerParameters {
     #[new]
     pub fn new(
         weights: PyReadonlyArray<f32, ndarray::Ix2>,
@@ -336,7 +336,7 @@ impl WeightsBiases {
     ) -> Self {
         let weights = weights.to_owned_array();
         let biases = biases.to_owned_array();
-        WeightsBiases(player::mcts::neural_network::model::WeightsBiases { weights, biases })
+        LayerParameters(player::mcts::neural_network::model::LayerParameters { weights, biases })
     }
 
     #[getter]
@@ -353,7 +353,7 @@ impl WeightsBiases {
     }
 }
 
-impl<'source> FromPyObject<'source> for WeightsBiases {
+impl<'source> FromPyObject<'source> for LayerParameters {
     fn extract(ob: &'source PyAny) -> PyResult<Self> {
         let weights = ob
             .getattr("weights")?
@@ -361,20 +361,72 @@ impl<'source> FromPyObject<'source> for WeightsBiases {
         let biases = ob
             .getattr("biases")?
             .extract::<PyReadonlyArray<f32, ndarray::Ix1>>()?;
-        Ok(WeightsBiases::new(weights, biases))
+        Ok(LayerParameters::new(weights, biases))
     }
 }
 
 #[pyfunction]
-pub fn store_model(file_path: &str, layers: Vec<WeightsBiases>) -> PyResult<()> {
+pub fn store_model(file_path: &str, layers: Vec<LayerParameters>) -> PyResult<()> {
     let layers = layers.into_iter().map(|layer| layer.0).collect::<Vec<_>>();
     model::store_model(file_path, layers)
         .map_err(|e| PyValueError::new_err(format!("Failed to store model: {}", e)))
 }
 
 #[pyfunction]
-pub fn load_model(file_path: &str) -> PyResult<Vec<WeightsBiases>> {
+pub fn load_model(file_path: &str) -> PyResult<Vec<LayerParameters>> {
     model::load_model(file_path)
-        .map(|layers| layers.into_iter().map(WeightsBiases).collect())
+        .map(|layers| layers.into_iter().map(LayerParameters).collect())
         .map_err(|e| PyValueError::new_err(format!("Failed to load model: {}", e)))
+}
+
+#[pyclass]
+pub struct QuantizedLayerParameters(
+    pub player::mcts::neural_network::model::QuantizedLayerParameters,
+);
+
+#[pymethods]
+impl QuantizedLayerParameters {
+    #[new]
+    pub fn new(weights: Vec<i32>, biases: Vec<i32>) -> Self {
+        let weights: Vec<i8> = weights.iter().map(|&x| x as i8).collect();
+        let biases: Vec<i8> = biases.iter().map(|&x| x as i8).collect();
+        QuantizedLayerParameters(
+            player::mcts::neural_network::model::QuantizedLayerParameters { weights, biases },
+        )
+    }
+
+    #[getter]
+    pub fn weights(&self) -> Vec<i32> {
+        self.0.weights.iter().map(|&x| x as i32).collect()
+    }
+
+    #[getter]
+    pub fn biases(&self) -> Vec<i32> {
+        self.0.biases.iter().map(|&x| x as i32).collect()
+    }
+}
+
+impl<'source> FromPyObject<'source> for QuantizedLayerParameters {
+    fn extract(ob: &'source PyAny) -> PyResult<Self> {
+        let weights = ob.getattr("weights")?.extract::<Vec<i32>>()?;
+        let biases = ob.getattr("biases")?.extract::<Vec<i32>>()?;
+        Ok(QuantizedLayerParameters::new(weights, biases))
+    }
+}
+
+#[pyfunction]
+pub fn store_quantized_model(
+    file_path: &str,
+    layers: Vec<QuantizedLayerParameters>,
+) -> PyResult<()> {
+    let layers = layers.into_iter().map(|layer| layer.0).collect::<Vec<_>>();
+    model::store_quantized_model(file_path, layers)
+        .map_err(|e| PyValueError::new_err(format!("Failed to store quantized model: {}", e)))
+}
+
+#[pyfunction]
+pub fn load_quantized_model(file_path: &str) -> PyResult<Vec<QuantizedLayerParameters>> {
+    model::load_quantized_model(file_path)
+        .map(|layers| layers.into_iter().map(QuantizedLayerParameters).collect())
+        .map_err(|e| PyValueError::new_err(format!("Failed to load quantized model: {}", e)))
 }

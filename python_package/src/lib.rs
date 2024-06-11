@@ -31,11 +31,19 @@ fn azul4(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
         python_player::dataloader::encode_game_state,
         m
     )?)?;
-    m.add_class::<python_player::dataloader::WeightsBiases>()?;
+    m.add_class::<python_player::dataloader::LayerParameters>()?;
     m.add_function(wrap_pyfunction!(python_player::dataloader::decode_move, m)?)?;
     m.add_function(wrap_pyfunction!(python_player::dataloader::encode_move, m)?)?;
     m.add_function(wrap_pyfunction!(python_player::dataloader::store_model, m)?)?;
     m.add_function(wrap_pyfunction!(python_player::dataloader::load_model, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        python_player::dataloader::store_quantized_model,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        python_player::dataloader::load_quantized_model,
+        m
+    )?)?;
     Ok(())
 }
 

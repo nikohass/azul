@@ -32,6 +32,21 @@ impl Value {
 
         Self(value)
     }
+
+    pub fn adjust(&self, new: f64, player: usize) -> Value {
+        let mut adjusted = self.0;
+        adjusted[player] = new;
+        let others_sum: f64 = adjusted.iter().sum::<f64>() - new;
+        let factor = 1.0 / others_sum;
+
+        for (i, value) in adjusted.iter_mut().enumerate() {
+            if i != player {
+                *value *= factor;
+            }
+        }
+
+        Self(adjusted)
+    }
 }
 
 impl std::fmt::Display for Value {
@@ -115,5 +130,11 @@ impl std::convert::From<Value> for [f64; NUM_PLAYERS] {
 impl std::convert::From<[f64; NUM_PLAYERS]> for Value {
     fn from(value: [f64; NUM_PLAYERS]) -> Self {
         Self(value)
+    }
+}
+
+impl std::iter::Sum for Value {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(Value::default(), std::ops::Add::add)
     }
 }

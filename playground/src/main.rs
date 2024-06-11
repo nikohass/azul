@@ -10,6 +10,7 @@ use player::{
             encoding_v2::{pattern_lines, Accumulator, ENCODING_SIZE},
             layers::{
                 apply_relu, DenseLayer, EfficentlyUpdatableDenseLayer, InputLayer as _, Layer,
+                // QuantizedDenseLayer,
             },
             model::{Model, INPUT_SIZE},
         },
@@ -269,6 +270,12 @@ use std::arch::x86_64::*;
 
 fn main() {
     init_logging("playground");
+
+    // let q = QuantizedDenseLayer::new(32, 1);
+    // let input = [0_i32; 32];
+    // let mut output = [0_i32; 1];
+    // q.forward(&input, &mut output);
+    // println!("{:?}", output);
     let mut rng = SmallRng::from_entropy();
 
     let mut players: Vec<Box<dyn Player>> = vec![
@@ -282,10 +289,14 @@ fn main() {
 
     for player in players.iter_mut() {
         player.set_time(TimeControl::ConstantTimePerMove {
-            milliseconds_per_move: 4000,
+            milliseconds_per_move: 8000,
         });
     }
     match_::run_match(game_state, &mut players, true).unwrap();
+    // let mut mcts = MonteCarloTreeSearch::default();
+    // mcts.set_time(TimeControl::ConstantTimePerMove { milliseconds_per_move: 10_000 });
+
+    // mcts.get_move(&game_state);
 
     // std::thread::sleep(Duration::from_secs(1));
 

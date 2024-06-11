@@ -1,5 +1,5 @@
 use super::{
-    edge::Edge, neural_network::model::Model, node::Node, time_control::RemainingTimeInfo,
+    edge::Edge, node::Node, time_control::RemainingTimeInfo,
     value::Value,
 };
 use game::*;
@@ -135,13 +135,13 @@ impl Root {
         move_list: &mut MoveList,
         num_iterations: u64,
         rng: &mut SmallRng,
-        model: &mut Model,
+        // model: &mut Model,
     ) {
         let mut sum_played_plies: u64 = 0;
         for _ in 0..num_iterations {
             let (_, played_plies) =
                 self.node
-                    .iteration(&mut self.game_state.clone(), move_list, rng, model);
+                    .iteration(&mut self.game_state.clone(), move_list, rng);
             sum_played_plies += played_plies as u64;
         }
 
@@ -275,8 +275,8 @@ impl Default for Tree {
             let mut rng = SmallRng::from_entropy();
             let mut verbose = false;
             let mut last_print_time = Instant::now();
-            let mut model = Model::default();
-            model.load_from_file("./logs/model_weights.bin"); // TODO:
+            // let mut model = Model::default();
+            // model.load_from_file("./logs/model_weights.bin"); // TODO:
 
             loop {
                 if let Ok(command) = receiver.try_recv() {
@@ -330,7 +330,7 @@ impl Default for Tree {
                                 &mut move_list,
                                 iterations_per_step,
                                 &mut rng,
-                                &mut model,
+                                // &mut model,
                             );
                             completed_iterations += iterations_per_step;
                             // Adjust the number of iterations per step based on the time it took to complete the last step

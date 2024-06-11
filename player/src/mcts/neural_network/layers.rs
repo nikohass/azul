@@ -254,3 +254,66 @@ impl<const N: usize> Layer for EfficentlyUpdatableDenseLayer<N> {
         self.biases.copy_from_slice(biases.as_slice().unwrap());
     }
 }
+/*
+pub struct QuantizedDenseLayer {
+    weights: Vec<i8>,
+    biases: Vec<i32>,
+    input_size: usize,
+    output_size: usize,
+}
+
+impl QuantizedDenseLayer {
+    pub fn new(input_size: usize, output_size: usize) -> Self {
+        assert!(input_size % 32 == 0, "Input size must be a multiple of 32.");
+
+        let weights = vec![0; input_size * output_size];
+        let biases = vec![0; output_size];
+
+        QuantizedDenseLayer {
+            weights,
+            biases,
+            input_size,
+            output_size,
+        }
+    }
+
+    pub fn forward(&self, input: &[i32], output: &mut [i32]) {
+        debug_assert!(
+            input.len() == self.input_size,
+            "Input size: {}, Should be: {}",
+            input.len(),
+            self.input_size
+        );
+
+        #[cfg(target_arch = "x86_64")]
+        unsafe {
+            for (i, output_val) in output.iter_mut().enumerate().take(self.output_size) {
+                let mut sum = _mm256_setzero_si256();
+
+                for j in (0..self.input_size).step_by(32) {
+                    let input_vec = _mm256_loadu_si256(input[j..].as_ptr() as *const _);
+                    let weight_vec = _mm256_loadu_si256(
+                        self.weights[i * self.input_size + j..].as_ptr() as *const _,
+                    );
+                    let product = _mm256_maddubs_epi16(input_vec, weight_vec);
+                    sum = _mm256_add_epi32(sum, _mm256_madd_epi16(product, _mm256_set1_epi16(1)));
+                }
+
+                let mut sum_arr = [0i32; 8];
+                _mm256_storeu_si256(sum_arr.as_mut_ptr() as *mut _, sum);
+                *output_val = sum_arr.iter().sum::<i32>() + self.biases[i];
+            }
+        }
+
+        #[cfg(not(target_arch = "x86_64"))]
+        {
+            for (i, output_val) in output.iter_mut().enumerate().take(self.output_size) {
+                *output_val = self.biases[i]
+                    + (0..self.input_size)
+                        .map(|j| input[j] * self.weights[i * self.input_size + j] as f32)
+                        .sum::<f32>();
+            }
+        }
+    }
+}
+*/

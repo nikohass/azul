@@ -1,12 +1,12 @@
 use super::edge::{Edge, ProbabilisticOutcome};
-use super::neural_network::encoding::encode_move;
-use super::neural_network::model::Model;
+// use super::neural_network::encoding::encode_move;
+// use super::neural_network::model::Model;
 use super::value::Value;
 use game::*;
 use rand::rngs::SmallRng;
 use rand::Rng as _;
 
-const MIN_VISITS_BEFORE_EXPANSION: f64 = 20.;
+const MIN_VISITS_BEFORE_EXPANSION: f64 = -1.;
 
 mod constants {
     pub const C: f64 = 0.2;
@@ -159,7 +159,7 @@ impl Node {
         game_state: &mut GameState,
         move_list: &mut MoveList,
         rng: &mut SmallRng,
-        model: &mut Model,
+        // model: &mut Model,
     ) {
         let result = game_state.get_possible_moves(move_list, rng);
         let is_game_over = matches!(result, MoveGenerationResult::GameOver);
@@ -173,14 +173,18 @@ impl Node {
 
         // Create children for each possible move
         let mut children = Vec::with_capacity(move_list.len());
-        model.set_game_state(game_state);
-        let out: &[f32] = model.forward();
+        // model.set_game_state(game_state);
+        // let out: &[f32] = model.forward();
+        // let parent_value = self.value() / self.n;
+        // let child_current_player = usize::from(game_state.current_player.next());
         for i in 0..move_list.len() {
-            let mut new_node = Node::new_deterministic(move_list[i]);
-            let index = encode_move(game_state, move_list[i]).unwrap();
-            let value = out[index] as f64;
-            new_node.q = Value::from([value, 1.0 - value]) * 10.0;
-            new_node.n = 10.;
+            let new_node = Node::new_deterministic(move_list[i]);
+            // let index = encode_move(game_state, move_list[i]).unwrap();
+            // let value = out[index] as f64;
+            // new_node.q = Value::from([value, 1.0 - value]) * 10.0;
+            // let adjusted_value = parent_value.adjust(value, child_current_player);
+            // new_node.n = 10.;
+            // new_node.q = adjusted_value * new_node.n;
 
             children.push(new_node)
         }
@@ -213,7 +217,7 @@ impl Node {
         game_state: &mut GameState,
         move_list: &mut MoveList,
         rng: &mut SmallRng,
-        model: &mut Model,
+        // model: &mut Model,
     ) -> (Value, u16) {
         #[cfg(debug_assertions)]
         game_state.check_integrity().unwrap();
@@ -247,7 +251,7 @@ impl Node {
 
         let (delta, depth) = if self.children.is_empty() {
             if self.n > MIN_VISITS_BEFORE_EXPANSION {
-                self.expand(game_state, move_list, rng, model);
+                self.expand(game_state, move_list, rng);
                 if !self.is_game_over {
                     super::playout::playout(game_state.clone(), rng)
                     // model.set_game_state(game_state);
@@ -271,7 +275,7 @@ impl Node {
         } else {
             let next_child = self.select_child(current_player as usize, rng);
             next_child.edge.apply_to_game_state(game_state);
-            next_child.iteration(game_state, move_list, rng, model)
+            next_child.iteration(game_state, move_list, rng)
         };
 
         self.backpropagate(delta);

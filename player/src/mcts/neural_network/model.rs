@@ -88,21 +88,45 @@ use std::fs::File;
 use std::io::BufReader;
 
 #[derive(Serialize, Deserialize)]
-pub struct WeightsBiases {
+pub struct LayerParameters {
     pub weights: Array2<f32>,
     pub biases: Array1<f32>,
 }
 
-pub fn load_model(file_path: &str) -> Result<Vec<WeightsBiases>, Box<dyn std::error::Error>> {
+pub fn load_model(file_path: &str) -> Result<Vec<LayerParameters>, Box<dyn std::error::Error>> {
     let file = File::open(file_path)?;
     let reader = BufReader::new(file);
-    let weights_biases: Vec<WeightsBiases> = bincode::deserialize_from(reader)?;
+    let weights_biases: Vec<LayerParameters> = bincode::deserialize_from(reader)?;
     Ok(weights_biases)
 }
 
 pub fn store_model(
     file_path: &str,
-    layers: Vec<WeightsBiases>,
+    layers: Vec<LayerParameters>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let file = File::create(file_path)?;
+    bincode::serialize_into(file, &layers)?;
+    Ok(())
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct QuantizedLayerParameters {
+    pub weights: Vec<i8>,
+    pub biases: Vec<i8>,
+}
+
+pub fn load_quantized_model(
+    file_path: &str,
+) -> Result<Vec<QuantizedLayerParameters>, Box<dyn std::error::Error>> {
+    let file = File::open(file_path)?;
+    let reader = BufReader::new(file);
+    let weights_biases: Vec<QuantizedLayerParameters> = bincode::deserialize_from(reader)?;
+    Ok(weights_biases)
+}
+
+pub fn store_quantized_model(
+    file_path: &str,
+    layers: Vec<QuantizedLayerParameters>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let file = File::create(file_path)?;
     bincode::serialize_into(file, &layers)?;
