@@ -1,4 +1,5 @@
 use super::edge::{Edge, ProbabilisticOutcome};
+use super::playout::PlayoutPolicy;
 // use super::neural_network::encoding::encode_move;
 // use super::neural_network::model::Model;
 use super::value::Value;
@@ -6,7 +7,7 @@ use game::*;
 use rand::rngs::SmallRng;
 use rand::Rng as _;
 
-const MIN_VISITS_BEFORE_EXPANSION: f64 = -1.;
+const MIN_VISITS_BEFORE_EXPANSION: f64 = 30.;
 
 mod constants {
     pub const C: f64 = 0.2;
@@ -212,11 +213,12 @@ impl Node {
         self.has_probabilistic_children = true;
     }
 
-    pub fn iteration(
+    pub fn iteration<P: PlayoutPolicy>(
         &mut self,
         game_state: &mut GameState,
         move_list: &mut MoveList,
         rng: &mut SmallRng,
+        playout_policy: &mut P,
         // model: &mut Model,
     ) -> (Value, u16) {
         #[cfg(debug_assertions)]
@@ -232,7 +234,7 @@ impl Node {
             // If we expand a new child every time we iterate this node, we would never visit the same child twice. This would cause our estimations of the value of the child to be very inaccurate.
 
             // Let's just try this:
-            let desired_number_of_children = self.n.sqrt().ceil() as usize / 8;
+            let desired_number_of_children: usize = self.n.sqrt().ceil() as usize / 8;
             if desired_number_of_children > self.children.len() {
                 // We will expand a new child
                 let mut game_state_clone = game_state.clone(); // Clone here because we don't want to modify the game state
@@ -253,7 +255,7 @@ impl Node {
             if self.n > MIN_VISITS_BEFORE_EXPANSION {
                 self.expand(game_state, move_list, rng);
                 if !self.is_game_over {
-                    super::playout::playout(game_state.clone(), rng)
+                    playout_policy.playout(game_state, rng)
                     // model.set_game_state(game_state);
                     // let value = model.forward();
                     // let value = Value::from([value, 1.0 - value]);
@@ -266,7 +268,7 @@ impl Node {
                     (self.q / self.n, 0)
                 }
             } else {
-                super::playout::playout(game_state.clone(), rng)
+                playout_policy.playout(game_state, rng)
                 // model.set_game_state(game_state);
                 // let value = model.forward();
                 // let value = Value::from([value, 1.0 - value]);
@@ -275,7 +277,7 @@ impl Node {
         } else {
             let next_child = self.select_child(current_player as usize, rng);
             next_child.edge.apply_to_game_state(game_state);
-            next_child.iteration(game_state, move_list, rng)
+            next_child.iteration(game_state, move_list, rng, playout_policy)
         };
 
         self.backpropagate(delta);

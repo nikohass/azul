@@ -1,49 +1,40 @@
 use super::value::Value;
 use game::*;
-use rand::{rngs::SmallRng, Rng, SeedableRng as _};
-use rayon::prelude::*;
+use rand::{rngs::SmallRng, Rng};
+
+pub trait PlayoutPolicy: Default + Send + Sync {
+    fn playout(&self, game_state: &mut GameState, rng: &mut SmallRng) -> (Value, u16);
+}
+
+#[derive(Default)]
+pub struct RandomPlayoutPolicy;
+
+impl PlayoutPolicy for RandomPlayoutPolicy {
+    fn playout(&self, game_state: &mut GameState, rng: &mut SmallRng) -> (Value, u16) {
+        #[cfg(debug_assertions)]
+        game_state
+            .check_integrity()
+            .expect("Game state integrity check failed before playout");
+
+        // There are situations where every single player is only able to discard tiles
+        // In this case, the game is in a infinite loop and we should break out of it
+        let mut playout_depth = 0;
+        for _ in 0..90 {
+            match get_random_move(game_state, rng) {
+                Some(move_) => {
+                    game_state.do_move(move_);
+                }
+                None => break,
+            }
+            playout_depth += 1;
+        }
+
+        (Value::from_game_scores(game_state.scores), playout_depth)
+    }
+}
 
 #[rustfmt::skip]
 const PERMUTATIONS: [[u8; 5]; 120] = [[0, 1, 2, 3, 4],[0, 1, 2, 4, 3],[0, 1, 3, 2, 4],[0, 1, 3, 4, 2],[0, 1, 4, 2, 3],[0, 1, 4, 3, 2],[0, 2, 1, 3, 4],[0, 2, 1, 4, 3],[0, 2, 3, 1, 4],[0, 2, 3, 4, 1],[0, 2, 4, 1, 3],[0, 2, 4, 3, 1],[0, 3, 1, 2, 4],[0, 3, 1, 4, 2],[0, 3, 2, 1, 4],[0, 3, 2, 4, 1],[0, 3, 4, 1, 2],[0, 3, 4, 2, 1],[0, 4, 1, 2, 3],[0, 4, 1, 3, 2],[0, 4, 2, 1, 3],[0, 4, 2, 3, 1],[0, 4, 3, 1, 2],[0, 4, 3, 2, 1],[1, 0, 2, 3, 4],[1, 0, 2, 4, 3],[1, 0, 3, 2, 4],[1, 0, 3, 4, 2],[1, 0, 4, 2, 3],[1, 0, 4, 3, 2],[1, 2, 0, 3, 4],[1, 2, 0, 4, 3],[1, 2, 3, 0, 4],[1, 2, 3, 4, 0],[1, 2, 4, 0, 3],[1, 2, 4, 3, 0],[1, 3, 0, 2, 4],[1, 3, 0, 4, 2],[1, 3, 2, 0, 4],[1, 3, 2, 4, 0],[1, 3, 4, 0, 2],[1, 3, 4, 2, 0],[1, 4, 0, 2, 3],[1, 4, 0, 3, 2],[1, 4, 2, 0, 3],[1, 4, 2, 3, 0],[1, 4, 3, 0, 2],[1, 4, 3, 2, 0],[2, 0, 1, 3, 4],[2, 0, 1, 4, 3],[2, 0, 3, 1, 4],[2, 0, 3, 4, 1],[2, 0, 4, 1, 3],[2, 0, 4, 3, 1],[2, 1, 0, 3, 4],[2, 1, 0, 4, 3],[2, 1, 3, 0, 4],[2, 1, 3, 4, 0],[2, 1, 4, 0, 3],[2, 1, 4, 3, 0],[2, 3, 0, 1, 4],[2, 3, 0, 4, 1],[2, 3, 1, 0, 4],[2, 3, 1, 4, 0],[2, 3, 4, 0, 1],[2, 3, 4, 1, 0],[2, 4, 0, 1, 3],[2, 4, 0, 3, 1],[2, 4, 1, 0, 3],[2, 4, 1, 3, 0],[2, 4, 3, 0, 1],[2, 4, 3, 1, 0],[3, 0, 1, 2, 4],[3, 0, 1, 4, 2],[3, 0, 2, 1, 4],[3, 0, 2, 4, 1],[3, 0, 4, 1, 2],[3, 0, 4, 2, 1],[3, 1, 0, 2, 4],[3, 1, 0, 4, 2],[3, 1, 2, 0, 4],[3, 1, 2, 4, 0],[3, 1, 4, 0, 2],[3, 1, 4, 2, 0],[3, 2, 0, 1, 4],[3, 2, 0, 4, 1],[3, 2, 1, 0, 4],[3, 2, 1, 4, 0],[3, 2, 4, 0, 1],[3, 2, 4, 1, 0],[3, 4, 0, 1, 2],[3, 4, 0, 2, 1],[3, 4, 1, 0, 2],[3, 4, 1, 2, 0],[3, 4, 2, 0, 1],[3, 4, 2, 1, 0],[4, 0, 1, 2, 3],[4, 0, 1, 3, 2],[4, 0, 2, 1, 3],[4, 0, 2, 3, 1],[4, 0, 3, 1, 2],[4, 0, 3, 2, 1],[4, 1, 0, 2, 3],[4, 1, 0, 3, 2],[4, 1, 2, 0, 3],[4, 1, 2, 3, 0],[4, 1, 3, 0, 2],[4, 1, 3, 2, 0],[4, 2, 0, 1, 3],[4, 2, 0, 3, 1],[4, 2, 1, 0, 3],[4, 2, 1, 3, 0],[4, 2, 3, 0, 1],[4, 2, 3, 1, 0],[4, 3, 0, 1, 2],[4, 3, 0, 2, 1],[4, 3, 1, 0, 2],[4, 3, 1, 2, 0],[4, 3, 2, 0, 1],[4, 3, 2, 1, 0],];
-const NUM_PLAYOUTS: usize = 8;
-
-pub fn single_playout(mut game_state: GameState, rng: &mut SmallRng) -> (Value, u16) {
-    #[cfg(debug_assertions)]
-    game_state
-        .check_integrity()
-        .expect("Game state integrity check failed before playout");
-
-    // There are situations where every single player is only able to discard tiles
-    // In this case, the game is in a infinite loop and we should break out of it
-    let mut playout_depth = 0;
-    for _ in 0..90 {
-        match get_random_move(&mut game_state, rng) {
-            Some(move_) => {
-                game_state.do_move(move_);
-            }
-            None => break,
-        }
-        playout_depth += 1;
-    }
-
-    (Value::from_game_scores(game_state.scores), playout_depth)
-}
-
-pub fn playout(game_state: GameState, rng: &mut SmallRng) -> (Value, u16) {
-    let results: Vec<(Value, u16)> = (0..NUM_PLAYOUTS).into_par_iter()
-        .map(|_| {
-            let mut rng = SmallRng::from_entropy();
-            single_playout(game_state.clone(), &mut rng)
-        })
-        .collect();
-
-    let total_value: Value = results.iter().map(|(value, _)| *value).sum();
-    let average_value = total_value / (results.len() as f64);
-    let total_playout_depth: u16 = results.iter().map(|(_, depth)| *depth).sum();
-    let average_playout_depth = total_playout_depth / (results.len() as u16);
-
-    (average_value, average_playout_depth)
-}
 
 pub fn get_random_move(game_state: &mut GameState, rng: &mut SmallRng) -> Option<Move> {
     let is_round_over = game_state.factories.is_empty();

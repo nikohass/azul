@@ -1,6 +1,5 @@
 use super::{
-    edge::Edge, node::Node, time_control::RemainingTimeInfo,
-    value::Value,
+    edge::Edge, node::Node, playout::PlayoutPolicy, time_control::RemainingTimeInfo, value::Value,
 };
 use game::*;
 use rand::{rngs::SmallRng, SeedableRng};
@@ -23,6 +22,7 @@ pub struct RootStatistics {
     pub value: Value,
     pub speed: f64,
     pub top_two_ratio: f64,
+    pub best_move: Option<Move>,
 }
 
 impl RootStatistics {
@@ -103,6 +103,8 @@ impl Root {
             return self;
         }
 
+        self.statistics = RootStatistics::default();
+
         let edge = match edge {
             Some(edge) => edge,
             None => {
@@ -130,18 +132,18 @@ impl Root {
         self.node.value()
     }
 
-    pub fn do_iterations(
+    pub fn do_iterations<P: PlayoutPolicy>(
         &mut self,
         move_list: &mut MoveList,
         num_iterations: u64,
         rng: &mut SmallRng,
-        // model: &mut Model,
+        playout_policy: &mut P,
     ) {
         let mut sum_played_plies: u64 = 0;
         for _ in 0..num_iterations {
             let (_, played_plies) =
                 self.node
-                    .iteration(&mut self.game_state.clone(), move_list, rng);
+                    .iteration(&mut self.game_state.clone(), move_list, rng, playout_policy);
             sum_played_plies += played_plies as u64;
         }
 
@@ -157,9 +159,9 @@ impl Root {
             &mut self.statistics.principal_variation,
         );
         self.statistics.speed = f64::NAN;
-        self.statistics.top_two_ratio = self
-            .node
-            .top_two_ratio(usize::from(self.game_state.current_player));
+        let current_player = usize::from(self.game_state.current_player);
+        self.statistics.top_two_ratio = self.node.top_two_ratio(current_player);
+        self.statistics.best_move = self.node.best_move(current_player);
     }
 }
 
@@ -172,14 +174,16 @@ enum Command {
     Verbose(bool),
 }
 
-pub struct Tree {
+pub struct Tree<P: PlayoutPolicy> {
     root: Arc<Mutex<Option<Root>>>,
     thread_handle: Option<JoinHandle<()>>,
     sender: Sender<Command>,
     root_statistics: Arc<RwLock<Option<RootStatistics>>>,
+
+    _playout_policy: std::marker::PhantomData<P>,
 }
 
-impl Tree {
+impl<P: PlayoutPolicy> Tree<P> {
     pub fn start_working(&self) {
         self.sender.send(Command::StartWorking).unwrap();
     }
@@ -189,15 +193,13 @@ impl Tree {
     }
 
     pub fn policy(&mut self) -> Option<Move> {
-        let mut root = self.root.lock().unwrap();
-        let root = root.as_mut()?;
-        let current_player = root.game_state().current_player;
-        root.node.best_move(usize::from(current_player))
+        let stats = self.root_statistics.read().unwrap();
+        stats.as_ref().and_then(|stats| stats.best_move)
     }
 
     pub fn value(&mut self) -> Option<Value> {
-        let root = self.root.lock().unwrap();
-        root.as_ref().map(|root| root.node.value())
+        let stats = self.root_statistics.read().unwrap();
+        stats.as_ref().map(|stats| stats.value)
     }
 
     pub fn advance_root(&self, game_state: &GameState, edge: Option<Edge>) {
@@ -211,6 +213,7 @@ impl Tree {
     }
 
     pub fn rated_moves(&mut self) -> Vec<(Move, f64)> {
+        self.sender.send(Command::StopWorking).unwrap();
         let root = self.root.lock().unwrap();
         let root = root.as_ref().unwrap();
         let current_player = root.game_state().current_player;
@@ -227,6 +230,7 @@ impl Tree {
     }
 
     pub fn action_value_pairs(&mut self) -> Vec<(Move, Value)> {
+        self.sender.send(Command::StopWorking).unwrap();
         let root = self.root.lock().unwrap();
         let root = root.as_ref().unwrap();
         let mut action_value_pairs = Vec::new();
@@ -242,14 +246,11 @@ impl Tree {
     }
 
     pub fn principal_variation(&mut self) -> Vec<Edge> {
-        let mut principal_variation = Vec::new();
-        let mut root = self.root.lock().unwrap();
-        if let Some(root) = root.as_mut() {
-            root.node
-                .build_principal_variation(&mut root.game_state.clone(), &mut principal_variation);
+        if let Some(stats) = self.root_statistics.read().unwrap().as_ref() {
+            stats.principal_variation.clone()
+        } else {
+            Vec::new()
         }
-
-        principal_variation
     }
 
     pub fn root_statistics(&self) -> Option<RootStatistics> {
@@ -257,7 +258,7 @@ impl Tree {
     }
 }
 
-impl Default for Tree {
+impl<P: PlayoutPolicy> Default for Tree<P> {
     fn default() -> Self {
         let (sender, receiver) = mpsc::channel::<Command>();
         let root = Arc::new(Mutex::new(None));
@@ -266,6 +267,7 @@ impl Default for Tree {
         let root_statistics_clone = root_statistics.clone();
 
         let thread_handle = std::thread::spawn(move || {
+            let mut playout_policy = P::default();
             let mut running = false;
             let mut iterations_per_step: u64 = 100;
             let mut completed_iterations: u64 = 0;
@@ -275,11 +277,10 @@ impl Default for Tree {
             let mut rng = SmallRng::from_entropy();
             let mut verbose = false;
             let mut last_print_time = Instant::now();
-            // let mut model = Model::default();
-            // model.load_from_file("./logs/model_weights.bin"); // TODO:
 
             loop {
                 if let Ok(command) = receiver.try_recv() {
+                    log::debug!("Worker received command: {:?}", command);
                     match command {
                         Command::StartWorking => {
                             running = true;
@@ -287,7 +288,19 @@ impl Default for Tree {
                             iterations_per_step = 100;
                             completed_iterations = 0;
                             start_time = Instant::now();
-                            root_lock = Some(root_clone.lock().unwrap());
+                            // root_lock = Some(root_clone.lock().unwrap());
+                            let mut start_time = Instant::now();
+                            while root_lock.is_none() {
+                                if let Ok(lock) = root_clone.try_lock() {
+                                    root_lock = Some(lock);
+                                } else {
+                                    let elapsed = start_time.elapsed().as_millis();
+                                    if elapsed > 1000 {
+                                        log::warn!("Tree worker is waiting for root lock for more than 1 second");
+                                        start_time = Instant::now();
+                                    }
+                                }
+                            }
                         }
                         Command::StopWorking => {
                             running = false;
@@ -300,6 +313,7 @@ impl Default for Tree {
                                     **root_lock = Some(new_root);
                                 }
                             } else {
+                                log::debug!("Trying to advance root without working");
                                 let mut root_lock = root_clone.lock().unwrap();
                                 if let Some(root) = root_lock.take() {
                                     let new_root = root.advance(&game_state, edge);
@@ -307,6 +321,7 @@ impl Default for Tree {
                                 } else {
                                     *root_lock = Some(Root::for_game_state(&game_state));
                                 }
+                                log::debug!("Successfully advanced root");
                             }
                         }
                         Command::TerminateThread => {
@@ -330,7 +345,7 @@ impl Default for Tree {
                                 &mut move_list,
                                 iterations_per_step,
                                 &mut rng,
-                                // &mut model,
+                                &mut playout_policy,
                             );
                             completed_iterations += iterations_per_step;
                             // Adjust the number of iterations per step based on the time it took to complete the last step
@@ -373,11 +388,13 @@ impl Default for Tree {
             thread_handle: Some(thread_handle),
             sender,
             root_statistics,
+
+            _playout_policy: std::marker::PhantomData,
         }
     }
 }
 
-impl Drop for Tree {
+impl<P: PlayoutPolicy> Drop for Tree<P> {
     fn drop(&mut self) {
         let _ = self.sender.send(Command::TerminateThread);
         if let Some(thread_handle) = self.thread_handle.take() {

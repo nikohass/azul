@@ -16,7 +16,8 @@ pub enum TimeControl {
         // The player will spend a constant amount of time per move without any time control
         milliseconds_per_move: u64,
     },
-    RealTimeIncremental {
+    FischerTimingWithMaxTime {
+        // The player gets a base time and an increment for each move, but there is a maximum time
         base_time_milliseconds: u64,
         increment_milliseconds: u64,
         max_time_milliseconds: u64,
@@ -42,13 +43,13 @@ impl Display for TimeControl {
             } => {
                 write!(f, "Constant Time Per Move: {}ms", milliseconds_per_move)
             }
-            TimeControl::RealTimeIncremental {
+            TimeControl::FischerTimingWithMaxTime {
                 base_time_milliseconds,
                 increment_milliseconds,
                 max_time_milliseconds,
             } => write!(
                 f,
-                "Real Time Incremental: {}ms base, {}ms increment, {}ms max",
+                "Fischer Timing with Max Time: {}ms base, {}ms increment, {}ms max",
                 base_time_milliseconds, increment_milliseconds, max_time_milliseconds
             ),
         }
@@ -63,7 +64,7 @@ impl TimeControl {
                 total_milliseconds, ..
             } => *total_milliseconds,
             TimeControl::ConstantTimePerMove { .. } => 0,
-            TimeControl::RealTimeIncremental {
+            TimeControl::FischerTimingWithMaxTime {
                 base_time_milliseconds,
                 ..
             } => *base_time_milliseconds,

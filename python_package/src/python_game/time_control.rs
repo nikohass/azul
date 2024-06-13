@@ -26,6 +26,19 @@ impl TimeControl {
         })
     }
 
+    #[staticmethod]
+    fn fischer_timing_with_max_time(
+        base_time_milliseconds: u64,
+        increment_milliseconds: u64,
+        max_time_milliseconds: u64,
+    ) -> Self {
+        Self(game::TimeControl::FischerTimingWithMaxTime {
+            base_time_milliseconds,
+            increment_milliseconds,
+            max_time_milliseconds,
+        })
+    }
+
     fn __str__(&self) -> String {
         format!("{}", self.0)
     }

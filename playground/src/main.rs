@@ -9,7 +9,11 @@ use player::{
             encoding::{build_move_lookup, TOTAL_ENCODING_SIZE},
             encoding_v2::{pattern_lines, Accumulator, ENCODING_SIZE},
             layers::{
-                apply_relu, DenseLayer, EfficentlyUpdatableDenseLayer, InputLayer as _, Layer,
+                apply_relu,
+                DenseLayer,
+                EfficentlyUpdatableDenseLayer,
+                InputLayer as _,
+                Layer,
                 // QuantizedDenseLayer,
             },
             model::{Model, INPUT_SIZE},
@@ -288,11 +292,25 @@ fn main() {
     let game_state = GameState::new(&mut rng);
 
     for player in players.iter_mut() {
-        player.set_time(TimeControl::ConstantTimePerMove {
-            milliseconds_per_move: 8000,
+        // player.set_time(TimeControl::ConstantTimePerMove {
+        //     milliseconds_per_move: 8000,
+        // });
+        player.set_time(TimeControl::FischerTimingWithMaxTime {
+            base_time_milliseconds: 132_000,
+            increment_milliseconds: 24_000,
+            max_time_milliseconds: 132_000,
         });
     }
-    match_::run_match(game_state, &mut players, true).unwrap();
+    let start_time = std::time::Instant::now();
+    let stats = match_::run_match(game_state, &mut players, true).unwrap();
+    let end_time = std::time::Instant::now();
+    let turns = stats.num_turns as f64;
+
+    let predicted_time = 132_000.0 * 2. + 24_000.0 * turns;
+    let elapsed = end_time.duration_since(start_time).as_millis() as f64;
+
+    println!("Elapsed time: {}ms", elapsed);
+    println!("Predicted time: {}ms", predicted_time);
     // let mut mcts = MonteCarloTreeSearch::default();
     // mcts.set_time(TimeControl::ConstantTimePerMove { milliseconds_per_move: 10_000 });
 

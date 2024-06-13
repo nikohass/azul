@@ -70,6 +70,42 @@ impl MctsTimeControl {
                     },
                 )
             }
+            TimeControl::FischerTimingWithMaxTime {
+                base_time_milliseconds,
+                increment_milliseconds,
+                max_time_milliseconds,
+            } => {
+                let average_plies = if let Some(average_plies) =
+                    stats.as_ref().and_then(|stats| stats.average_plies())
+                {
+                    average_plies
+                } else {
+                    30.0 // Just assume 30 plies for now if we don't have any statistics
+                };
+                // Make sure max time is not smaller than base time
+                let max_time_milliseconds = max_time_milliseconds.max(base_time_milliseconds);
+                let remaining_searches = f64::floor(average_plies / NUM_PLAYERS as f64);
+
+                let expected_remaining_time = self.remaining_time
+                    + (increment_milliseconds as i64 * remaining_searches as i64);
+                println!("Remaining searches: {}", remaining_searches);
+                println!(
+                    "Expected remaining time: {}",
+                    expected_remaining_time - elapsed_time
+                );
+
+                let allocated_time_per_search = expected_remaining_time as f64 / remaining_searches;
+                let allocated_time_per_search =
+                    allocated_time_per_search.min(max_time_milliseconds as f64);
+                println!("Allocated time per search: {}", allocated_time_per_search);
+                (
+                    allocated_time_per_search as i64,
+                    RemainingTimeInfo {
+                        current_search_allocated_time: Some(allocated_time_per_search as i64),
+                        game_remaining_time: Some(expected_remaining_time),
+                    },
+                )
+            }
             _ => panic!("Time control not implemented"),
         };
 
@@ -78,6 +114,19 @@ impl MctsTimeControl {
 
         if effective_remaining_time < 10 {
             self.remaining_time -= elapsed_time;
+
+            match self.time_control {
+                TimeControl::FischerTimingWithMaxTime {
+                    base_time_milliseconds: _,
+                    increment_milliseconds,
+                    max_time_milliseconds,
+                } => {
+                    self.remaining_time += increment_milliseconds as i64;
+                    self.remaining_time = self.remaining_time.min(max_time_milliseconds as i64);
+                }
+                _ => {}
+            }
+
             TimeControlResult::Stop
         } else {
             let time_until_next_check = (effective_remaining_time as f64 * FACTOR) as u64;
@@ -244,6 +293,10 @@ impl MctsTimeControl {
 
     pub fn reset(&mut self) {
         self.remaining_time = self.time_control.get_total_time() as i64;
+    }
+
+    pub fn set_remaining_time(&mut self, remaining_time: i64) {
+        self.remaining_time = remaining_time;
     }
 }
 

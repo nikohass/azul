@@ -1,7 +1,7 @@
 use crate::python_game::{game_state::GameState, move_::Move, time_control::TimeControl};
 use game::{Player, NUM_PLAYERS};
 use player::mcts::edge::Edge;
-use pyo3::{pyclass, pymethods};
+use pyo3::{pyclass, pymethods, IntoPy, Py, PyAny, Python};
 
 #[pyclass]
 pub struct MonteCarloTreeSearch(pub player::mcts::MonteCarloTreeSearch);
@@ -26,12 +26,22 @@ impl MonteCarloTreeSearch {
     }
 
     #[getter]
-    fn principal_variation(&mut self) -> Vec<String> {
-        self.0
-            .principal_variation()
-            .iter()
-            .map(|e| format!("{}", e))
-            .collect()
+    fn principal_variation(&mut self) -> Vec<Py<PyAny>> {
+        let pv = self.0.principal_variation();
+        let mut python_pv = Vec::new();
+        Python::with_gil(|py| {
+            for edge in pv {
+                match edge {
+                    Edge::Deterministic(m) => python_pv.push(Move(m).into_py(py)),
+                    Edge::Probabilistic(outcome) => {
+                        let factories = *outcome.factories;
+                        python_pv.push(factories.into_py(py));
+                    }
+                }
+            }
+        });
+
+        python_pv
     }
 
     #[getter]
@@ -49,6 +59,10 @@ impl MonteCarloTreeSearch {
 
     fn set_time(&mut self, time: TimeControl) {
         self.0.set_time(time.0);
+    }
+
+    fn notify_remaining_time(&mut self, remaining_time: i64) {
+        self.0.notify_remaining_time(remaining_time);
     }
 
     fn set_pondering(&mut self, pondering: bool) {

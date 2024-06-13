@@ -1,3 +1,4 @@
+use super::playout::RandomPlayoutPolicy;
 use super::time_control::{MctsTimeControl, TimeControlResult};
 use super::tree::{RootStatistics, Tree};
 use super::value::Value;
@@ -8,7 +9,7 @@ use std::time::Instant;
 
 pub struct MonteCarloTreeSearch {
     name: String,
-    tree: Tree,
+    tree: Tree<RandomPlayoutPolicy>,
     time_control: MctsTimeControl,
 }
 
@@ -73,6 +74,10 @@ impl Player for MonteCarloTreeSearch {
 
     fn set_time(&mut self, time: TimeControl) {
         self.time_control = MctsTimeControl::new(time);
+    }
+
+    fn notify_remaining_time(&mut self, remaining_time: i64) {
+        self.time_control.set_remaining_time(remaining_time);
     }
 
     fn get_move(&mut self, game_state: &GameState) -> Move {
