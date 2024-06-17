@@ -155,7 +155,7 @@ impl Node {
         self.q += value;
     }
 
-    fn expand(
+    pub fn expand(
         &mut self,
         game_state: &mut GameState,
         move_list: &mut MoveList,

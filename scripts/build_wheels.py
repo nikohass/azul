@@ -38,4 +38,4 @@ for wheel_name, feature in [("azul2", None), ("azul3", "three_players"), ("azul4
     if feature:
         build_command += f" --features {feature}"
     os.system(build_command)
-    os.system(f"pip install ./target/wheels/{wheel_name}-0.1.0-cp310-none-win_amd64.whl --force-reinstall")
+    os.system(f"pip install ./target/wheels/{wheel_name}-0.1.0-cp311-none-win_amd64.whl --force-reinstall")

@@ -132,7 +132,7 @@ fn main() {
                 let mut ordered_clients: Vec<Box<dyn Player>> = Vec::new();
                 for &i in &next_order {
                     let mut client = Client::from_path(&players_clone[i - 1].executable, verbose);
-                    client.set_time(players_clone[i - 1].time_control.clone());
+                    client.set_time(players_clone[i - 1].time_control);
                     client.set_pondering(players_clone[i - 1].allow_pondering);
                     ordered_clients.push(Box::new(client));
                 }
@@ -153,10 +153,11 @@ fn main() {
                     reordered_stats[original_index - 1] = stats.player_statistics[index].clone();
                 }
                 stats.player_statistics = reordered_stats.try_into().expect("Incorrect length");
-                let mut game_results_lock = game_results_clone.lock().unwrap();
-                game_results_lock.push(stats);
-
-                print_stats(game_results_lock);
+                {
+                    let mut game_results_lock = game_results_clone.lock().unwrap();
+                    game_results_lock.push(stats);
+                    print_stats(game_results_lock);
+                }
             }
         });
         handles.push(handle);

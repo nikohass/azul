@@ -19,6 +19,10 @@ numpy = "0.21.0"
 lazy_static = "1.4.0"
 
 [features]
-three_players = ["game/three_players"]
-four_players = ["game/four_players"]
+# three_players = ["game/three_players"]
+# four_players = ["game/four_players"]
 mute = ["player/mute"]
+
+two_players = []
+three_players = []
+four_players = []

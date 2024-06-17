@@ -1,24 +1,31 @@
 #![allow(unused_imports)]
 
 use game::*;
+use match_::run_match;
 use player::{
     command_line_player::HumanCommandLinePlayer,
     mcts::{
+        apply_parameters,
         edge::Edge,
+        evaluate_single_move, get_heuristic_move,
         neural_network::{
             encoding::{build_move_lookup, TOTAL_ENCODING_SIZE},
             encoding_v2::{pattern_lines, Accumulator, ENCODING_SIZE},
             layers::{
                 apply_relu,
+                dequantize_i8,
+                quantize_i32,
+                quantize_i8,
                 DenseLayer,
                 EfficentlyUpdatableDenseLayer,
                 InputLayer as _,
-                Layer,
-                // QuantizedDenseLayer,
+                Layer, // QuantizedDenseLayer,
             },
             model::{Model, INPUT_SIZE},
         },
-        MonteCarloTreeSearch,
+        to_input_vec, Flatten as _, HeuristicGameState, HeuristicPlayoutParams,
+        HeuristicPlayoutPolicy, MonteCarloTreeSearch, PlayoutPolicy as _, RandomPlayoutPolicy,
+        Value, DEFAULT_PARAMS,
     },
     random_player::RandomPlayer,
 };
@@ -272,45 +279,284 @@ use std::arch::x86_64::*;
 //     }
 // }
 
+pub fn meta_playout(game_state: GameState, players: &mut [Box<dyn Player>]) -> Value {
+    let match_statistics = run_match(game_state, players, false).unwrap();
+    let final_state = match_statistics
+        .state_action_pairs
+        .last()
+        .unwrap()
+        .0
+        .clone();
+    Value::from_game_scores(final_state.scores)
+}
+
 fn main() {
     init_logging("playground");
+    let mut rng = SmallRng::from_entropy();
+
+    // for f in [0.0, 1.0, 0.1, 0.5, -1.0, 10.] {
+    //     let q = quantize_i8(f);
+    //     let r = dequantize_i8(q);
+
+    //     println!("Float: {}, Quantized: {}, Dequantized: {}", f, q, r);
+    // }
+
+    // let mut layer = DenseLayer::new(32, 2);
+    // layer.initialize_random(&mut rng);
+    // let mut input = [0.0; 32];
+    // for i in 0..32 {
+    //     input[i] = rng.gen_range(-1.0..1.0);
+    // }
+
+    // let mut output = [0.0; 2];
+    // layer.forward(&input, &mut output);
+    // println!("Float layer output {:?}", output);
+
+    // let quantized_layer = layer.quantize();
+    // let mut quantized_output = [0; 2];
+    // let mut quantized_input = [0; 32];
+    // for i in 0..32 {
+    //     quantized_input[i] = quantize_i8(input[i]) as i32;
+    // }
+    // let mut quantized_output_should_be = [0; 2];
+    // for i in 0..2 {
+    //     quantized_output_should_be[i] = quantize_i32(output[i]);
+    // }
+    // println!("quantized_input: {:?}", quantized_input);
+    // quantized_layer.forward(&quantized_input, &mut quantized_output);
+    // println!("quantized_output: {:?}", quantized_output);
+    // println!(
+    //     "quantized_output_should_be: {:?}",
+    //     quantized_output_should_be
+    // );
+    // let dequantized_output = quantized_output
+    //     .iter()
+    //     .map(|&x| dequantize_i8(x as i8))
+    //     .collect::<Vec<_>>();
+    // println!("dequantized_output: {:?}", dequantized_output);
+
+    // let result = quantize_i8(0.5) + quantize_i8(0.5);
+    // let result = dequantize_i8(result);
+    // println!("0.5 + 0.5 = {}", result);
+
+    // let result = quantize_i8(0.2) * quantize_i8(0.1);
+    // let result = dequantize_i8(result);
+    // println!("0.2 * 0.1 = {}", result);
+    // let url = "http://127.0.0.1:3044";
+    // let client: ReplayBufferClient = ReplayBufferClient::new(url);
+
+    // let entries = client.sample_entries(100).unwrap();
+    // let mut action_value_pairs = Vec::new();
+    // for entry in entries {
+    //     let current_player = usize::from(entry.game_state.current_player);
+    //     let pairs = entry
+    //         .action_value_pairs
+    //         .iter()
+    //         .map(|(action, value)| {
+    //             let value = value[current_player];
+    //             (*action, value)
+    //         })
+    //         .collect::<Vec<_>>();
+    //     action_value_pairs.extend(pairs);
+    // }
+
+    // println!("Received {} action-value pairs", action_value_pairs.len());
+    // let (action, value) = action_value_pairs[0];
+    // println!("Action: {}, Value: {:?}", action, value);
+
+    // let mut game_state = GameState::new(&mut rng);
+    // let mut p = HeuristicPlayoutPolicy::default();
+    // p.playout(&mut game_state, &mut rng);
+    /*let p =1 DEFAULT_PARAMS.flatten();
+    println!("{}", p.len());
+    let state = HeuristicGameState::from_game_state(&game_state, 0);
+
+    let mut move_list = MoveList::default();
+    game_state.get_possible_moves(&mut move_list, &mut rng);
+    let mov = move_list[20];
+    println!("{}", mov);
+    let x = to_input_vec(&state, usize::from(mov.color), mov.discards, mov.places, mov.pattern_line_index as usize);
+    println!("{:?}", x);
+
+    let result = apply_parameters(&DEFAULT_PARAMS, &x);
+    println!("{}", result);
+    // let result = evaluate_single_move(params, state, color, discards, places, pattern_line_index)
+    let result = evaluate_single_move(&DEFAULT_PARAMS, &state, usize::from(mov.color), mov.discards, mov.places, mov.pattern_line_index as usize);
+    println!("{}", result);*/
+    // let x = to_input_vec(state, color, discards, places, pattern_line_index)
+    // let mut opponents = vec![DEFAULT_PARAMS];
+    // let mut current_best_score = 0.5;
+    // loop {
+    //     let mutation = mutate(&mut rng, opponents.last().unwrap());
+    //     let result = evaluate_parameters(&mut rng, mutation.clone(), &opponents, 1_000);
+    //     if result > current_best_score {
+    //         current_best_score = result;
+    //         let weights = mutation.flatten();
+    //         println!("Added opponent with score: {}, {:?}", result, weights);
+    //         // opponents.push(mutation.clone());
+
+    //         let eval_score = evaluate_parameters(&mut rng, mutation, &vec![DEFAULT_PARAMS], 10_000);
+    //         println!("Evaluated score: {}", eval_score);
+    //     }
+    // }
+
+    // let params = PARAMS.flatten();
+    // println!("{:?}", params);
+    // let mut players: Vec<Box<dyn Player>> = vec![
+    //     Box::<MonteCarloTreeSearch>::default(),
+    //     Box::<MonteCarloTreeSearch>::default(),
+    //     Box::<MonteCarloTreeSearch>::default(),
+    //     Box::<MonteCarloTreeSearch>::default(),
+    // ];
+
+    // for player in players.iter_mut() {
+    //     player.set_time(TimeControl::ConstantTimePerMove {
+    //         milliseconds_per_move: 8_000,
+    //     });
+    // }
+
+    // let game_state = GameState::new(&mut rng);
+    // let _ = run_match(game_state, &mut players, true);
+
+    const SAMPLES: usize = 200;
+    const THREADS: usize = 6;
+    const MAX_TIME_MS: u64 = 60_000 * 20;
+
+    const TIME_PER_GAME: u64 = MAX_TIME_MS / SAMPLES as u64 * THREADS as u64;
+    const TIME_PER_PLAYER_PER_GAME: u64 = TIME_PER_GAME / NUM_PLAYERS as u64;
+
+    // let game_state = GameState::from_fen("2_0_0_60281326095_4294967809_0-0-0-0-0-33752576_65602538_257_264-130_17213555201-17213620225_12952011522-8640593664_1").unwrap();
+    // let game_state = GameState::from_fen("2_1_0_60432519185_256_0-0-0-4384-0-16777217_65537000_2_0-0_197121-67305472_1099495112705-1095250542591_1").unwrap();
+    let mut game_state = GameState::from_fen("2_0_1_60298234380_67175424_0-4369-0-0-73744-4311810048_65733610_256_67109128-33281_16908800-12952011264_1095283770111-17196581375_1").unwrap();
+
+    // let game_state = GameState::from_fen("2_0_1_34461059590_100794885_0-0-0-0-0-67371779_66978811_256_67158923-19214531_67108865-21474836737_1095300546308-21474771459_0").unwrap();
+    println!(
+        "Will analyze with a time of {}ms per game",
+        TIME_PER_GAME
+    );
+    println!("Total duration will be {}ms", MAX_TIME_MS);
+    println!("Threads: {}", THREADS);
+    println!("Samples: {}", SAMPLES);
+    println!("{}", game_state);
+
+    // Do initial MCTS analysis
+    let mut mcts = MonteCarloTreeSearch::default();
+    mcts.set_time(TimeControl::ConstantTimePerMove {
+        milliseconds_per_move: 10_000,
+    });
+    let initial_estimate = mcts.get_move(&game_state);
+    let estimated_value = mcts.value().unwrap();
+    println!(
+        "MCTS would play the move {} with an estimated value of {}",
+        initial_estimate, estimated_value
+    );
+
+
+    // Just run 10_000 playouts to get a rough estimate
+    let mut sum_value = Value::default();
+    let mut policy = RandomPlayoutPolicy;
+    for _ in 0..10_000 {
+        sum_value += policy.playout(&mut game_state.clone(), &mut rng).0;
+    }
+    let playout_value = sum_value / 10_000.0;
+    println!("Random playout value: {}", playout_value);
+
+    let mut handes = vec![];
+    let results = Arc::new(Mutex::new([None; THREADS]));
+    const SAMPLES_PER_THREAD: usize = SAMPLES / THREADS;
+    for i in 0..THREADS {
+        let results = results.clone();
+        let game_state = game_state.clone();
+        let handle = std::thread::spawn(move || {
+            let mut players: Vec<Box<dyn Player>> = vec![
+                Box::<MonteCarloTreeSearch>::default(),
+                Box::<MonteCarloTreeSearch>::default(),
+            ];
+            let tc = TimeControl::SuddenDeath {
+                total_milliseconds: TIME_PER_PLAYER_PER_GAME,
+            };
+            players[0].set_time(tc);
+            players[1].set_time(tc);
+
+            let mut sum_value = Value::default();
+            for game in 0..SAMPLES_PER_THREAD {
+                let value = meta_playout(game_state.clone(), &mut players);
+                println!("Thread {} game {}/{} finished with value: {}", i, game, SAMPLES_PER_THREAD, value);
+                sum_value += value;
+            }
+
+            let value = sum_value / SAMPLES_PER_THREAD as f64;
+            println!("Thread {} finished with value: {}", i, value);
+            let mut results = results.lock().unwrap();
+            results[i] = Some(value);
+        });
+        handes.push(handle);
+    }
+
+    // Wait for all threads to finish
+    for handle in handes {
+        let _ = handle.join();
+    }
+
+    // Sum up all results
+    let results = results.lock().unwrap();
+    let mut value = Value::default();
+    let mut valid_results_count = 0;
+    for result in results.iter().flatten() {
+        value += *result;
+        valid_results_count += 1;
+    }
+    value /= valid_results_count as f64;
+
+    println!("Random playout value: {}", playout_value);
+    println!(
+        "MCTS would play the move {} with an estimated value of {}",
+        initial_estimate, estimated_value
+    );
+    println!("Meta playout value: {}", value);
+
+    println!("{}", game_state);
 
     // let q = QuantizedDenseLayer::new(32, 1);
     // let input = [0_i32; 32];
     // let mut output = [0_i32; 1];
     // q.forward(&input, &mut output);
     // println!("{:?}", output);
-    let mut rng = SmallRng::from_entropy();
+    // let mut rng = SmallRng::from_entropy();
 
-    let mut players: Vec<Box<dyn Player>> = vec![
-        Box::<MonteCarloTreeSearch>::default(),
-        Box::<MonteCarloTreeSearch>::default(),
-        // Box::<MonteCarloTreeSearch>::default(),
-        // Box::<MonteCarloTreeSearch>::default(),
-    ];
+    // let mut players: Vec<Box<dyn Player>> = vec![
+    //     Box::<MonteCarloTreeSearch>::default(),
+    //     Box::<MonteCarloTreeSearch>::default(),
+    //     // Box::<MonteCarloTreeSearch>::default(),
+    //     // Box::<MonteCarloTreeSearch>::default(),
+    // ];
 
-    let game_state = GameState::new(&mut rng);
+    // let game_state = GameState::new(&mut rng);
 
-    for player in players.iter_mut() {
-        // player.set_time(TimeControl::ConstantTimePerMove {
-        //     milliseconds_per_move: 8000,
-        // });
-        player.set_time(TimeControl::FischerTimingWithMaxTime {
-            base_time_milliseconds: 132_000,
-            increment_milliseconds: 24_000,
-            max_time_milliseconds: 132_000,
-        });
-    }
-    let start_time = std::time::Instant::now();
-    let stats = match_::run_match(game_state, &mut players, true).unwrap();
-    let end_time = std::time::Instant::now();
-    let turns = stats.num_turns as f64;
+    // for player in players.iter_mut() {
+    //     // player.set_time(TimeControl::ConstantTimePerMove {
+    //     //     milliseconds_per_move: 8000,
+    //     // });
+    //     player.set_time(TimeControl::FischerTimingWithMaxTime {
+    //         base_time_milliseconds: 132000,
+    //         increment_milliseconds: 24000,
+    //         max_time_milliseconds: 132000,
+    //     });
+    // }
+    // let start_time = std::time::Instant::now();
+    // let stats = match_::run_match(game_state, &mut players, true).unwrap();
+    // let end_time = std::time::Instant::now();
+    // let turns = stats.num_turns as f64;
 
-    let predicted_time = 132_000.0 * 2. + 24_000.0 * turns;
-    let elapsed = end_time.duration_since(start_time).as_millis() as f64;
+    // let predicted_time = 132000.0 * 2. + 24000.0 * turns;
+    // let elapsed = end_time.duration_since(start_time).as_millis() as f64;
 
-    println!("Elapsed time: {}ms", elapsed);
-    println!("Predicted time: {}ms", predicted_time);
+    // println!("Elapsed time: {}ms", elapsed);
+    // println!("Predicted time: {}ms", predicted_time);
+    // println!("Saved time: {}ms", predicted_time - elapsed);
+    // println!("Turns: {}", turns);
+    // println!("Saved time per turn: {}ms", (predicted_time - elapsed) / turns);
+    // println!("Saved time percentage: {}%", (predicted_time - elapsed) / predicted_time * 100.0);
     // let mut mcts = MonteCarloTreeSearch::default();
     // mcts.set_time(TimeControl::ConstantTimePerMove { milliseconds_per_move: 10_000 });
 
@@ -1757,3 +2003,4 @@ fn main() {
 // // // let value = Value::from_game_scores([71_i16, 54_i16, 71_i16, 81_i16]);
 // // // println!("{}", value);
 // // }
+

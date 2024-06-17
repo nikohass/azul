@@ -42,7 +42,7 @@ impl MctsTimeControl {
     ) -> TimeControlResult {
         let elapsed_time = search_start_time.elapsed().as_millis() as i64;
         // Calculate how much time we want to allocate for this search
-        let (allocated_time, remaining_time_info) = match self.time_control {
+        let (mut allocated_time, remaining_time_info) = match self.time_control {
             TimeControl::ConstantTimePerMove {
                 milliseconds_per_move,
             } => (
@@ -88,16 +88,16 @@ impl MctsTimeControl {
 
                 let expected_remaining_time = self.remaining_time
                     + (increment_milliseconds as i64 * remaining_searches as i64);
-                println!("Remaining searches: {}", remaining_searches);
-                println!(
-                    "Expected remaining time: {}",
-                    expected_remaining_time - elapsed_time
-                );
+                // println!("Remaining searches: {}", remaining_searches);
+                // println!(
+                //     "Expected remaining time: {}",
+                //     expected_remaining_time - elapsed_time
+                // );
 
                 let allocated_time_per_search = expected_remaining_time as f64 / remaining_searches;
                 let allocated_time_per_search =
                     allocated_time_per_search.min(max_time_milliseconds as f64);
-                println!("Allocated time per search: {}", allocated_time_per_search);
+                // println!("Allocated time per search: {}", allocated_time_per_search);
                 (
                     allocated_time_per_search as i64,
                     RemainingTimeInfo {
@@ -109,12 +109,20 @@ impl MctsTimeControl {
             _ => panic!("Time control not implemented"),
         };
 
+        if let Some(stats) = stats {
+            if elapsed_time > 1500 && early_stopping_heuristic(stats) {
+                allocated_time = 0;
+                // println!("Early stopping");
+            }
+        }
+
         let effective_remaining_time = allocated_time - elapsed_time;
         let effective_remaining_time = effective_remaining_time.max(0);
 
         if effective_remaining_time < 10 {
             self.remaining_time -= elapsed_time;
 
+            #[allow(clippy::single_match)]
             match self.time_control {
                 TimeControl::FischerTimingWithMaxTime {
                     base_time_milliseconds: _,
@@ -130,166 +138,13 @@ impl MctsTimeControl {
             TimeControlResult::Stop
         } else {
             let time_until_next_check = (effective_remaining_time as f64 * FACTOR) as u64;
-            let time_until_next_check = time_until_next_check.min(5000); // Never wait more than 5 seconds
+            let time_until_next_check = time_until_next_check.min(1000); // Never wait more than 1 second
             TimeControlResult::ContinueFor(
                 std::time::Duration::from_millis(time_until_next_check),
                 remaining_time_info,
             )
         }
     }
-
-    // Calculates the number of iterations the Monte Carlo Tree Search (MCTS) should execute next.
-    // Takes into account the start time of the search, number of completed iterations,
-    // search speed (iterations per millisecond), and the estimated remaining moves (plies) in the game.
-    // pub fn get_num_next_iterations(
-    //     &mut self,
-    //     search_start_time: Instant,
-    //     completed_iterations: u64,
-    //     search_speed: f64,
-    //     estimated_remaining_plies: f32,
-    // ) -> (u64, RemainingTimeInfo) {
-    //     match self.time_control {
-    //         TimeControl::ConstantIterationsPerMove {
-    //             iterations_per_move,
-    //         } => {
-    //             // Do this in at least 10 steps, but never complete more than 200k iterations without logging the stats
-    //             let iterations_left = iterations_per_move - completed_iterations;
-    //             let iterations_to_run = iterations_left.min(200_000.min(iterations_per_move / 10));
-    //             (
-    //                 iterations_to_run,
-    //                 RemainingTimeInfo {
-    //                     time_left_for_search: None,
-    //                     time_left_for_game: None,
-    //                     iterations_left_for_search: Some(iterations_left),
-    //                 },
-    //             )
-    //         }
-    //         TimeControl::ConstantTimePerMove {
-    //             milliseconds_per_move,
-    //         } => {
-    //             let elapsed_time = search_start_time.elapsed().as_millis() as i64;
-    //             let remaining_time = milliseconds_per_move as i64 - elapsed_time;
-    //             let time_info = RemainingTimeInfo {
-    //                 time_left_for_search: Some(remaining_time),
-    //                 time_left_for_game: None,
-    //                 iterations_left_for_search: None,
-    //             };
-    //             if remaining_time < 10 {
-    //                 (0, time_info)
-    //             } else {
-    //                 // At least every 5000 ms we log the stats
-    //                 // We always return at least 1 iteration
-    //                 let iterations = ((remaining_time as f64 * FACTOR).min(5000.) * search_speed)
-    //                     .max(100.0) as u64;
-    //                 (iterations, time_info)
-    //             }
-    //         }
-    //         TimeControl::SuddenDeath { total_milliseconds } => {
-    //             let search_elapsed_time = search_start_time.elapsed().as_millis() as i64;
-    //             let remaining_time = total_milliseconds as i64 - self.my_used_time as i64;
-    //             let remaining_searches =
-    //                 f64::round(estimated_remaining_plies as f64 / NUM_PLAYERS as f64);
-    //             let allocated_time_per_search = remaining_time as f64 / remaining_searches;
-
-    //             let effective_remaining_time =
-    //                 allocated_time_per_search - search_elapsed_time as f64;
-
-    //             let time_info = RemainingTimeInfo {
-    //                 time_left_for_search: Some(effective_remaining_time as i64),
-    //                 time_left_for_game: Some(remaining_time - search_elapsed_time),
-    //                 iterations_left_for_search: None,
-    //             };
-    //             if effective_remaining_time < 10. || effective_remaining_time.is_infinite() {
-    //                 self.my_used_time += search_elapsed_time as u64;
-    //                 (0, time_info)
-    //             } else {
-    //                 let iterations = ((effective_remaining_time * FACTOR).min(5000.) * search_speed)
-    //                     .max(100.0) as u64;
-    //                 (iterations, time_info)
-    //             }
-    //         }
-    //         TimeControl::Incremental {
-    //             total_milliseconds,
-    //             increment_milliseconds,
-    //         } => {
-    //             let elapsed_search_time = search_start_time.elapsed().as_millis() as i64;
-    //             let remaining_searches =
-    //                 f64::round(estimated_remaining_plies as f64 / NUM_PLAYERS as f64);
-    //             let remaining_time = total_milliseconds as i64 - self.my_used_time as i64
-    //                 + self.my_bonus_time as i64
-    //                 + (remaining_searches as i64 * increment_milliseconds as i64);
-    //             let allocated_time_per_search = remaining_time as f64 / remaining_searches;
-    //             let effective_remaining_time =
-    //                 allocated_time_per_search - elapsed_search_time as f64;
-
-    //             let time_info = RemainingTimeInfo {
-    //                 time_left_for_search: Some(if effective_remaining_time.is_finite() {
-    //                     effective_remaining_time as i64
-    //                 } else {
-    //                     0
-    //                 }),
-    //                 time_left_for_game: Some(
-    //                     total_milliseconds as i64 - self.my_used_time as i64
-    //                         + self.my_bonus_time as i64,
-    //                 ),
-    //                 iterations_left_for_search: None,
-    //             };
-    //             if effective_remaining_time < 10. || effective_remaining_time.is_infinite() {
-    //                 self.my_used_time += elapsed_search_time as u64;
-    //                 self.my_bonus_time += increment_milliseconds;
-    //                 (0, time_info)
-    //             } else {
-    //                 let iterations =
-    //                     (effective_remaining_time * FACTOR * search_speed).max(100.0) as u64;
-    //                 (iterations, time_info)
-    //             }
-    //         }
-    //         // TimeControl::RealTimeIncremental {
-    //         //     base_time_milliseconds,
-    //         //     increment_milliseconds,
-    //         //     max_time_milliseconds,
-    //         // } => {
-    //         //     if completed_iterations == 0 {
-    //         //         self.my_bonus_time += increment_milliseconds;
-    //         //         self.my_bonus_time = self.my_bonus_time.min(max_time_milliseconds);
-    //         //     }
-
-    //         //     let elapsed_search_time = search_start_time.elapsed().as_millis() as i64;
-    //         //     let remaining_searches =
-    //         //         f64::round(estimated_remaining_plies as f64 / NUM_PLAYERS as f64);
-    //         //     let remaining_time = base_time_milliseconds as i64 - self.my_used_time as i64
-    //         //         + self.my_bonus_time as i64
-    //         //         + (remaining_searches as i64 * increment_milliseconds as i64);
-    //         //     let allocated_time_per_search = remaining_time as f64 / remaining_searches;
-
-    //         //     let effective_remaining_time =
-    //         //         allocated_time_per_search - elapsed_search_time as f64;
-    //         //     let time_left_for_game = base_time_milliseconds as i64 - self.my_used_time as i64
-    //         //         + self.my_bonus_time as i64
-    //         //         - elapsed_search_time;
-    //         //     let effective_remaining_time =
-    //         //         effective_remaining_time.min(time_left_for_game as f64);
-    //         //     let time_info = RemainingTimeInfo {
-    //         //         time_left_for_search: Some(if effective_remaining_time.is_finite() {
-    //         //             effective_remaining_time as i64
-    //         //         } else {
-    //         //             0
-    //         //         }),
-    //         //         time_left_for_game: Some(time_left_for_game),
-    //         //         iterations_left_for_search: None,
-    //         //     };
-    //         //     if effective_remaining_time < 10. || effective_remaining_time.is_infinite() {
-    //         //         self.my_used_time += elapsed_search_time as u64;
-    //         //         (0, time_info)
-    //         //     } else {
-    //         //         let iterations =
-    //         //             (effective_remaining_time * FACTOR * search_speed).max(100.0) as u64;
-    //         //         (iterations, time_info)
-    //         //     }
-    //         // }
-    //         _ => panic!("Time control not implemented"),
-    //     }
-    // }
 
     pub fn reset(&mut self) {
         self.remaining_time = self.time_control.get_total_time() as i64;
@@ -304,4 +159,48 @@ impl std::fmt::Display for MctsTimeControl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.time_control)
     }
+}
+
+fn early_stopping_heuristic(statistics: &RootStatistics) -> bool {
+    // Certainty based on the number of visits
+    let certainty_visits = ((statistics.visits as f64 + 1.0).log10() / 6.0).min(1.0);
+
+    // Certainty based on the win probability
+    let value: [f64; NUM_PLAYERS] = statistics.value.into();
+    let max_value = value.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    let certainty_value = 4.0 * (max_value - 0.5).powi(2);
+
+    // Certainty adjustment based on the top two ratio
+    let certainty_ratio = if statistics.top_two_ratio > 1.05 && statistics.visits > 100_000 {
+        1.0
+    } else {
+        0.0
+    };
+
+    let branching_factor = statistics.branching_factor;
+    // println!("Branching factor: {:.2}", branching_factor);
+    let branching_factor_bonus = if branching_factor > 0 && branching_factor < 20 {
+        0.5 * certainty_visits
+    } else {
+        0.0
+    };
+
+    // Combine the certainties
+    let combined_certainty =
+        certainty_visits * certainty_value * (1.0 + certainty_ratio) + branching_factor_bonus;
+
+    // println!(
+    //     "Certainty: visits: {:.2}, value: {:.2}, ratio: {:.2}, branching factor bonus: {:.2}, combined: {:.2}",
+    //     certainty_visits, certainty_value, certainty_ratio, branching_factor_bonus, combined_certainty
+    // );
+    // println!(
+    //     "Visits: {}, Value: {:?}, Top two ratio: {:.2}, branches: {}",
+    //     statistics.visits, value, statistics.top_two_ratio, statistics.branching_factor
+    // );
+
+    // if combined_certainty >= 0.45 {
+    //     println!("Early stopping!");
+    // }
+    // Determine if we should stop early
+    combined_certainty >= 0.45
 }

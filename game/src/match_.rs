@@ -12,6 +12,7 @@ pub struct MatchStatistcs {
     pub state_action_pairs: Vec<(GameState, Move)>,
     pub player_statistics: [PlayerStatistics; NUM_PLAYERS],
     pub branching_factor: Vec<u32>,
+    pub final_scores: [i16; NUM_PLAYERS],
 }
 
 #[derive(Debug, Clone, Default)]
@@ -126,6 +127,8 @@ pub fn run_match(
         player.notify_game_over(&game_state);
         player.reset();
     }
+
+    stats.final_scores = scores;
 
     Ok(stats)
 }

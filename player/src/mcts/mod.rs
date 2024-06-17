@@ -8,3 +8,5 @@ mod tree;
 mod value;
 
 pub use player::MonteCarloTreeSearch;
+pub use playout::*;
+pub use value::Value;

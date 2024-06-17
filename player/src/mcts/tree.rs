@@ -23,6 +23,7 @@ pub struct RootStatistics {
     pub speed: f64,
     pub top_two_ratio: f64,
     pub best_move: Option<Move>,
+    pub branching_factor: usize,
 }
 
 impl RootStatistics {
@@ -162,6 +163,7 @@ impl Root {
         let current_player = usize::from(self.game_state.current_player);
         self.statistics.top_two_ratio = self.node.top_two_ratio(current_player);
         self.statistics.best_move = self.node.best_move(current_player);
+        self.statistics.branching_factor = self.node.children().len();
     }
 }
 
@@ -280,7 +282,6 @@ impl<P: PlayoutPolicy> Default for Tree<P> {
 
             loop {
                 if let Ok(command) = receiver.try_recv() {
-                    log::debug!("Worker received command: {:?}", command);
                     match command {
                         Command::StartWorking => {
                             running = true;
@@ -313,7 +314,6 @@ impl<P: PlayoutPolicy> Default for Tree<P> {
                                     **root_lock = Some(new_root);
                                 }
                             } else {
-                                log::debug!("Trying to advance root without working");
                                 let mut root_lock = root_clone.lock().unwrap();
                                 if let Some(root) = root_lock.take() {
                                     let new_root = root.advance(&game_state, edge);
@@ -321,7 +321,6 @@ impl<P: PlayoutPolicy> Default for Tree<P> {
                                 } else {
                                     *root_lock = Some(Root::for_game_state(&game_state));
                                 }
-                                log::debug!("Successfully advanced root");
                             }
                         }
                         Command::TerminateThread => {

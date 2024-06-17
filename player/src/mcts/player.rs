@@ -1,15 +1,17 @@
-use super::playout::RandomPlayoutPolicy;
 use super::time_control::{MctsTimeControl, TimeControlResult};
 use super::tree::{RootStatistics, Tree};
 use super::value::Value;
+use super::HeuristicPlayoutPolicy;
 use crate::mcts::edge::Edge;
 use crate::mcts::time_control::RemainingTimeInfo;
 use game::*;
+use rand::rngs::SmallRng;
+use rand::{Rng as _, SeedableRng as _};
 use std::time::Instant;
 
 pub struct MonteCarloTreeSearch {
     name: String,
-    tree: Tree<RandomPlayoutPolicy>,
+    tree: Tree<HeuristicPlayoutPolicy>,
     time_control: MctsTimeControl,
 }
 
@@ -84,6 +86,22 @@ impl Player for MonteCarloTreeSearch {
         #[cfg(not(feature = "mute"))]
         log::debug!("Searching move for game state: {}", game_state.to_fen());
 
+        let mut move_list = MoveList::default();
+        let mut rng = SmallRng::from_entropy();
+        let mut clone = game_state.clone();
+        let result = clone.get_possible_moves(&mut move_list, &mut rng);
+        match result {
+            MoveGenerationResult::Continue => {}
+            MoveGenerationResult::GameOver => {
+                log::error!("Game is over, but get_move() was called");
+            }
+            MoveGenerationResult::RoundOver => {
+                log::error!(
+                    "MCTS player should not be called when factories are about to be refilled"
+                );
+            }
+        }
+
         self.advance_root(game_state, None);
 
         let search_start_time = Instant::now();
@@ -120,7 +138,18 @@ impl Player for MonteCarloTreeSearch {
 
         self.stop_working();
 
-        self.policy().unwrap()
+        if let Some(best_move) = self.policy() {
+            if move_list.contains(best_move) {
+                return best_move;
+            } else {
+                log::error!("MCTS player selected an illegal move: {:?}", best_move);
+            }
+        }
+
+        log::error!("MCTS player did not select a move");
+        // Return a random move if the MCTS player did not select a move
+        let random_index = rng.gen_range(0..move_list.len());
+        move_list[random_index]
     }
 
     fn reset(&mut self) {

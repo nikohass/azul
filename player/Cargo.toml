@@ -20,3 +20,6 @@ bincode = "1.3.3"
 
 [features]
 mute = []
+two_players = []
+three_players = []
+four_players = []
