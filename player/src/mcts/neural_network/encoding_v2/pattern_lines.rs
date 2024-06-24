@@ -48,7 +48,6 @@ pub fn calculate_lower_index(pattern_lines: [u8; 5], colors: [Option<TileColor>;
     calculate_index(pattern_lines, colors, 3, 2, &LOWER_PATTERN_LINE_STATES)
 }
 
-#[derive(Clone)]
 pub struct UpperPatternLinesEncoding {
     pub index: [usize; NUM_PLAYERS],
 }
@@ -61,13 +60,11 @@ impl OneHotFeature for UpperPatternLinesEncoding {
 
     fn initialize(layer: &mut impl InputLayer) -> Self {
         let mut index = [0; NUM_PLAYERS];
-        for player_index in 0..NUM_PLAYERS {
+        for (player_index, index) in index.iter_mut().enumerate() {
             layer.set_input(Self::START + player_index);
-            index[player_index] = Self::START + player_index;
+            *index = Self::START + player_index;
         }
-        Self {
-            index
-        }
+        Self { index }
     }
 }
 
@@ -79,7 +76,8 @@ impl UpperPatternLinesEncoding {
         player_index: usize,
         layer: &mut impl InputLayer,
     ) {
-        let index = calculate_upper_index(pattern_lines, colors) * NUM_PLAYERS + player_index + Self::START;
+        let index =
+            calculate_upper_index(pattern_lines, colors) * NUM_PLAYERS + player_index + Self::START;
         if self.index[player_index] != index {
             layer.unset_input(self.index[player_index]);
             self.index[player_index] = index;
@@ -88,7 +86,6 @@ impl UpperPatternLinesEncoding {
     }
 }
 
-#[derive(Clone)]
 pub struct LowerPatternLinesEncoding {
     pub index: [usize; NUM_PLAYERS],
 }
@@ -101,13 +98,11 @@ impl OneHotFeature for LowerPatternLinesEncoding {
 
     fn initialize(layer: &mut impl InputLayer) -> Self {
         let mut index = [0; NUM_PLAYERS];
-        for player_index in 0..NUM_PLAYERS {
+        for (player_index, index) in index.iter_mut().enumerate() {
             layer.set_input(Self::START + player_index);
-            index[player_index] = Self::START + player_index;
+            *index = Self::START + player_index;
         }
-        Self {
-            index
-        }
+        Self { index }
     }
 }
 
@@ -119,7 +114,8 @@ impl LowerPatternLinesEncoding {
         player_index: usize,
         layer: &mut impl InputLayer,
     ) {
-        let index = calculate_lower_index(pattern_lines, colors) * NUM_PLAYERS + player_index + Self::START;
+        let index =
+            calculate_lower_index(pattern_lines, colors) * NUM_PLAYERS + player_index + Self::START;
         if self.index[player_index] != index {
             layer.unset_input(self.index[player_index]);
             self.index[player_index] = index;

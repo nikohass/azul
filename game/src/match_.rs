@@ -22,6 +22,12 @@ pub struct PlayerStatistics {
     pub final_score: i16,
 }
 
+impl PlayerStatistics {
+    pub fn total_time_used(&self) -> u64 {
+        self.executed_moves.iter().map(|(_, _, time)| *time).sum()
+    }
+}
+
 pub fn run_match(
     mut game_state: GameState,
     players: &mut [Box<dyn Player>],

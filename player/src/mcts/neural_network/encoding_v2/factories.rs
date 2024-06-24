@@ -34,7 +34,6 @@ pub fn set_center_factory_index(
     }
 }
 
-#[derive(Clone)]
 pub struct CenterFactoryEncoding {
     center_factory_counts: [usize; NUM_TILE_COLORS],
 }
@@ -123,24 +122,24 @@ impl OneHotFeature for NonCenterFactoryEncoding {
 
 impl NonCenterFactoryEncoding {
     pub fn set_factories(&mut self, factories: &Factories, layer: &mut impl InputLayer) {
-        if self.factory_counts[NUM_POSSIBLE_FACTORY_PERMUTATIONS - 1] != NUM_NON_CENTER_FACTORIES {
-            // Not all are empty, we need to reset
-            for factory_index in 0..NUM_POSSIBLE_FACTORY_PERMUTATIONS - 1 {
-                let count = self.factory_counts[factory_index];
-                for _ in 0..count {
-                    let count = self.factory_counts[factory_index] - 1;
-                    self.factory_counts[factory_index] = count;
-                    let index = count * NUM_POSSIBLE_FACTORY_PERMUTATIONS + factory_index;
-                    layer.unset_input(index + Self::START);
-                    self.factory_counts[NUM_POSSIBLE_FACTORY_PERMUTATIONS - 1] += 1;
-                }
-                self.factory_counts[factory_index] = 0;
+        // if self.factory_counts[NUM_POSSIBLE_FACTORY_PERMUTATIONS - 1] != NUM_NON_CENTER_FACTORIES {
+        // Not all are empty, we need to reset
+        for factory_index in 0..NUM_POSSIBLE_FACTORY_PERMUTATIONS - 1 {
+            let count = self.factory_counts[factory_index];
+            for _ in 0..count {
+                let count = self.factory_counts[factory_index] - 1;
+                self.factory_counts[factory_index] = count;
+                let index = count * NUM_POSSIBLE_FACTORY_PERMUTATIONS + factory_index;
+                layer.unset_input(index + Self::START);
+                self.factory_counts[NUM_POSSIBLE_FACTORY_PERMUTATIONS - 1] += 1;
             }
+            self.factory_counts[factory_index] = 0;
         }
+        // }
 
         self.factory_counts[NUM_POSSIBLE_FACTORY_PERMUTATIONS - 1] = 0;
 
-        for factory in factories.iter() {
+        for factory in factories.iter().take(NUM_NON_CENTER_FACTORIES) {
             let index = add_non_center_factory_index(factory, &mut self.factory_counts);
             layer.set_input(index + Self::START);
         }
@@ -196,8 +195,8 @@ mod tests {
         println!("{:?}", input_after);
         assert_eq!(input_before, input_after);
 
-        for i in 0..NUM_FACTORIES {
-            encoding.remove_factory(&factories[i], &mut layer);
+        for factory in factories.iter() {
+            encoding.remove_factory(factory, &mut layer);
         }
 
         let input = layer.input();

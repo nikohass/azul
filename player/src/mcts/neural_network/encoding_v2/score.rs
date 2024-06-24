@@ -26,7 +26,6 @@ pub fn calculate_score_index(score: i16, floor_line_progress: u8) -> (usize, usi
     )
 }
 
-#[derive(Clone, Default)]
 pub struct ScoreEncoding {
     pub score_index: [usize; NUM_PLAYERS],
     pub floor_line_index: [usize; NUM_PLAYERS],
@@ -67,9 +66,19 @@ impl ScoreEncoding {
     ) {
         let (score_index, floor_line_index) = calculate_score_index(score, floor_line_progress);
         let score_index = score_index * NUM_PLAYERS + player_index + Self::START;
-        debug_assert!(score_index < Self::END, "Score index out of bounds: {}, end: {}", score_index, Self::END);
+        debug_assert!(
+            score_index < Self::END,
+            "Score index out of bounds: {}, end: {}",
+            score_index,
+            Self::END
+        );
         let floor_line_index = floor_line_index * NUM_PLAYERS + player_index + Self::START;
-        debug_assert!(floor_line_index < Self::END, "Floor line index out of bounds: {}, end: {}", floor_line_index, Self::END);       
+        debug_assert!(
+            floor_line_index < Self::END,
+            "Floor line index out of bounds: {}, end: {}",
+            floor_line_index,
+            Self::END
+        );
         if self.score_index[player_index] != score_index {
             layer.unset_input(self.score_index[player_index]);
             self.score_index[player_index] = score_index;

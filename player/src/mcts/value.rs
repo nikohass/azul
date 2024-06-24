@@ -158,7 +158,7 @@ mod value_inner {
 
     impl std::fmt::Display for Value {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "{:.2} {:.2}", self.0, 1.0 - self.0)
+            write!(f, "{:.2} {:.2}", self.0.max(0.0), 1.0 - self.0.min(1.0))
         }
     }
 

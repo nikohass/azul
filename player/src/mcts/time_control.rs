@@ -95,6 +95,7 @@ impl MctsTimeControl {
                 // );
 
                 let allocated_time_per_search = expected_remaining_time as f64 / remaining_searches;
+                // let allocated_time_per_search = allocated_time_per_search * 3.0; // Assumption is that we wont need much time at the end of the game
                 let allocated_time_per_search =
                     allocated_time_per_search.min(max_time_milliseconds as f64);
                 // println!("Allocated time per search: {}", allocated_time_per_search);
@@ -110,9 +111,12 @@ impl MctsTimeControl {
         };
 
         if let Some(stats) = stats {
-            if elapsed_time > 1500 && early_stopping_heuristic(stats) {
+            if early_stopping_heuristic(stats) {
+                #[cfg(debug_assertions)]
+                {
+                    log::debug!("Early stopping.");
+                }
                 allocated_time = 0;
-                // println!("Early stopping");
             }
         }
 
@@ -162,15 +166,18 @@ impl std::fmt::Display for MctsTimeControl {
 }
 
 fn early_stopping_heuristic(statistics: &RootStatistics) -> bool {
+    // If we can't make any decisions, we should stop early to avoid wasting time
+    if statistics.branching_factor == 1 {
+        return true;
+    }
+
     // Certainty based on the number of visits
     let certainty_visits = ((statistics.visits as f64 + 1.0).log10() / 6.0).min(1.0);
-
     // Certainty based on the win probability
     let value: [f64; NUM_PLAYERS] = statistics.value.into();
     let max_value = value.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
     let certainty_value = 4.0 * (max_value - 0.5).powi(2);
 
-    // Certainty adjustment based on the top two ratio
     let certainty_ratio = if statistics.top_two_ratio > 1.05 && statistics.visits > 100_000 {
         1.0
     } else {
@@ -178,7 +185,6 @@ fn early_stopping_heuristic(statistics: &RootStatistics) -> bool {
     };
 
     let branching_factor = statistics.branching_factor;
-    // println!("Branching factor: {:.2}", branching_factor);
     let branching_factor_bonus = if branching_factor > 0 && branching_factor < 20 {
         0.5 * certainty_visits
     } else {
@@ -189,18 +195,5 @@ fn early_stopping_heuristic(statistics: &RootStatistics) -> bool {
     let combined_certainty =
         certainty_visits * certainty_value * (1.0 + certainty_ratio) + branching_factor_bonus;
 
-    // println!(
-    //     "Certainty: visits: {:.2}, value: {:.2}, ratio: {:.2}, branching factor bonus: {:.2}, combined: {:.2}",
-    //     certainty_visits, certainty_value, certainty_ratio, branching_factor_bonus, combined_certainty
-    // );
-    // println!(
-    //     "Visits: {}, Value: {:?}, Top two ratio: {:.2}, branches: {}",
-    //     statistics.visits, value, statistics.top_two_ratio, statistics.branching_factor
-    // );
-
-    // if combined_certainty >= 0.45 {
-    //     println!("Early stopping!");
-    // }
-    // Determine if we should stop early
     combined_certainty >= 0.45
 }

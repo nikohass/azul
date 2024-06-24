@@ -63,13 +63,13 @@ impl RootStatistics {
             self.value,
             remaining_time_info
                 .current_search_allocated_time
-                .map(|t| t - search_start_time.elapsed().as_millis() as i64)
-                .map_or("N/A".to_string(), |v| format!("{}ms", v)),
+                .map(|t| (t as f32) / 1000. - search_start_time.elapsed().as_secs_f32())
+                .map_or("N/A".to_string(), |v| format!("{:.1}s", v)),
             remaining_time_info
                 .game_remaining_time
-                .map(|t| t - search_start_time.elapsed().as_millis() as i64)
-                .map_or("N/A".to_string(), |v| format!("{}ms", v)),
-            format!("{:.0}/ms", self.speed),
+                .map(|t| (t as f32) / 1000. - search_start_time.elapsed().as_secs_f32())
+                .map_or("N/A".to_string(), |v| format!("{:.1}s", v)),
+            format!("{:.0}/s", self.speed * 1000.),
             format!("{:.2}", self.top_two_ratio),
             self.principal_variation
                 .iter()
@@ -208,6 +208,9 @@ impl<P: PlayoutPolicy> Tree<P> {
         self.sender
             .send(Command::AdvanceRoot(game_state.clone(), edge))
             .unwrap();
+        if let Ok(mut root_statistics) = self.root_statistics.write() {
+            *root_statistics = None;
+        }
     }
 
     pub fn verbose(&self, verbose: bool) {
@@ -289,7 +292,6 @@ impl<P: PlayoutPolicy> Default for Tree<P> {
                             iterations_per_step = 100;
                             completed_iterations = 0;
                             start_time = Instant::now();
-                            // root_lock = Some(root_clone.lock().unwrap());
                             let mut start_time = Instant::now();
                             while root_lock.is_none() {
                                 if let Ok(lock) = root_clone.try_lock() {
@@ -302,10 +304,12 @@ impl<P: PlayoutPolicy> Default for Tree<P> {
                                     }
                                 }
                             }
+                            root_statistics_clone.write().unwrap().replace(RootStatistics::default());
                         }
                         Command::StopWorking => {
                             running = false;
                             root_lock = None;
+                            root_statistics_clone.write().unwrap().replace(RootStatistics::default());
                         }
                         Command::AdvanceRoot(game_state, edge) => {
                             if let Some(root_lock) = &mut root_lock {
@@ -360,7 +364,9 @@ impl<P: PlayoutPolicy> Default for Tree<P> {
                             root.update_statistics();
                             root.statistics.speed = iterations_per_ms;
                             if let Ok(mut root_statistics) = root_statistics_clone.try_write() {
-                                *root_statistics = Some(root.statistics.clone());
+                                if root_statistics.is_some() {
+                                    *root_statistics = Some(root.statistics.clone());
+                                }
                             }
 
                             if verbose && last_print_time.elapsed().as_millis() >= 500 {

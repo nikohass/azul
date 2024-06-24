@@ -2,7 +2,7 @@ use game::{wall, NUM_PLAYERS};
 
 use crate::mcts::neural_network::layers::InputLayer;
 
-use super::{pattern_lines::UPPER_PATTERN_LINES_ENCODING_SIZE, score::ScoreEncoding, OneHotFeature};
+use super::{score::ScoreEncoding, OneHotFeature};
 
 pub const WALL_ENCODING_SIZE: usize = 2 * 1024 + 32;
 
@@ -38,22 +38,29 @@ impl OneHotFeature for WallEncoding {
     const SIZE: usize = WALL_ENCODING_SIZE;
     const PLAYER_FEATURE: bool = true;
     const MAX_ONES: usize = 3;
-    const START: usize = ScoreEncoding::END + 1;
+    const START: usize = ScoreEncoding::END;
 
     fn initialize(layer: &mut impl InputLayer) -> Self {
         let mut upper_index = [0; NUM_PLAYERS];
         let mut middle_index = [0; NUM_PLAYERS];
         let mut lower_index = [0; NUM_PLAYERS];
         for player_index in 0..NUM_PLAYERS {
-            let empty_upper_index = calculate_upper_index(0) * NUM_PLAYERS + player_index + Self::START;
+            let empty_upper_index =
+                calculate_upper_index(0) * NUM_PLAYERS + player_index + Self::START;
             layer.set_input(empty_upper_index);
             upper_index[player_index] = empty_upper_index;
 
-            let empty_middle_index = calculate_middle_index(0) * NUM_PLAYERS + player_index + Self::START + 1024;
+            let empty_middle_index = calculate_middle_index(0) * NUM_PLAYERS
+                + player_index
+                + Self::START
+                + 1024 * NUM_PLAYERS;
             layer.set_input(empty_middle_index);
             middle_index[player_index] = empty_middle_index;
 
-            let empty_lower_index = calculate_lower_index(0) * NUM_PLAYERS + player_index + Self::START + 2048;
+            let empty_lower_index = calculate_lower_index(0) * NUM_PLAYERS
+                + player_index
+                + Self::START
+                + 2048 * NUM_PLAYERS;
             layer.set_input(empty_lower_index);
             lower_index[player_index] = empty_lower_index;
         }
@@ -69,26 +76,41 @@ impl OneHotFeature for WallEncoding {
 impl WallEncoding {
     pub fn set(&mut self, wall: u32, player_index: usize, layer: &mut impl InputLayer) {
         let upper_index = calculate_upper_index(wall) * NUM_PLAYERS + player_index + Self::START;
-        debug_assert!(upper_index < Self::END, "Upper index out of bounds: {}", upper_index);
-        println!("Current upper index: {}, new upper index: {}", self.upper_index[player_index], upper_index);
+        debug_assert!(
+            upper_index < Self::END,
+            "Upper index out of bounds: {}",
+            upper_index
+        );
         if self.upper_index[player_index] != upper_index {
             layer.unset_input(self.upper_index[player_index]);
             self.upper_index[player_index] = upper_index;
             layer.set_input(upper_index);
         }
 
-        let middle_index = calculate_middle_index(wall) * NUM_PLAYERS + player_index + Self::START + 1024 * NUM_PLAYERS;
-        debug_assert!(middle_index < Self::END, "Middle index out of bounds: {}", middle_index);
-        println!("Current middle index: {}, new middle index: {}", self.middle_index[player_index], middle_index);
+        let middle_index = calculate_middle_index(wall) * NUM_PLAYERS
+            + player_index
+            + Self::START
+            + 1024 * NUM_PLAYERS;
+        debug_assert!(
+            middle_index < Self::END,
+            "Middle index out of bounds: {}",
+            middle_index
+        );
         if self.middle_index[player_index] != middle_index {
             layer.unset_input(self.middle_index[player_index]);
             self.middle_index[player_index] = middle_index;
             layer.set_input(middle_index);
         }
 
-        let lower_index = calculate_lower_index(wall) * NUM_PLAYERS + player_index + Self::START + 2048 * NUM_PLAYERS;
-        debug_assert!(lower_index < Self::END, "Lower index out of bounds: {}", lower_index);
-        println!("Current lower index: {}, new lower index: {}", self.lower_index[player_index], lower_index);
+        let lower_index = calculate_lower_index(wall) * NUM_PLAYERS
+            + player_index
+            + Self::START
+            + 2048 * NUM_PLAYERS;
+        debug_assert!(
+            lower_index < Self::END,
+            "Lower index out of bounds: {}",
+            lower_index
+        );
         if self.lower_index[player_index] != lower_index {
             layer.unset_input(self.lower_index[player_index]);
             self.lower_index[player_index] = lower_index;

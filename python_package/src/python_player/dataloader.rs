@@ -1,7 +1,7 @@
 use game::{hash_factory, MoveList, CENTER_FACTORY_INDEX, INDEX_TO_FACTORY};
 use ndarray::{s, Array2};
 use numpy::{PyArray2, PyArrayMethods, PyReadonlyArray, ToPyArray};
-use player::mcts::neural_network::encoding_v2::{Accumulator, INPUT_SIZE};
+use player::mcts::neural_network::encoding_v2::Accumulator;
 use player::mcts::neural_network::layers::InputLayer;
 use player::mcts::neural_network::model;
 use pyo3::exceptions::{PyKeyboardInterrupt, PyValueError};
@@ -16,6 +16,8 @@ use std::thread;
 
 use crate::python_game::game_state::GameState;
 use crate::python_game::move_::Move;
+
+const INPUT_SIZE: usize = 10; // TODO:
 
 pub struct DummyLayer {
     input: [f32; INPUT_SIZE],
@@ -101,16 +103,16 @@ impl DataLoader {
                             //     &mut [0; NUM_POSSIBLE_FACTORY_PERMUTATIONS],
                             // );
                             let current_player = usize::from(entry.game_state.current_player);
-                            accumulator.set_game_state(&entry.game_state, current_player);
-                            batch_x.slice_mut(s![i, ..]).assign(
-                                &Array2::from_shape_vec(
-                                    (1, INPUT_SIZE),
-                                    accumulator.layer().output().to_vec(),
-                                )
-                                .unwrap()
-                                .into_shape((INPUT_SIZE,))
-                                .unwrap(),
-                            );
+                            // accumulator.set_game_state(&entry.game_state, current_player);
+                            // batch_x.slice_mut(s![i, ..]).assign(
+                            //     &Array2::from_shape_vec(
+                            //         (1, INPUT_SIZE),
+                            //         accumulator.layer().output().to_vec(),
+                            //     )
+                            //     .unwrap()
+                            //     .into_shape((INPUT_SIZE,))
+                            //     .unwrap(),
+                            // );
 
                             // let mut y = [0.0_f32; NUM_PLAYERS];
                             // for (action, value) in &entry.action_value_pairs {
@@ -223,15 +225,15 @@ pub fn encode_game_state(game_state: &GameState, player: usize) -> Py<PyArray2<f
     let mut accumulator = Accumulator::new(DummyLayer {
         input: [0.0; INPUT_SIZE],
     });
-    accumulator.set_game_state(&game_state.0, player);
+    // accumulator.set_game_state(&game_state.0, player);
 
     let mut x = Array2::zeros((1, INPUT_SIZE));
-    x.slice_mut(s![0, ..]).assign(
-        &Array2::from_shape_vec((1, INPUT_SIZE), accumulator.layer().output().to_vec())
-            .unwrap()
-            .into_shape((INPUT_SIZE,))
-            .unwrap(),
-    );
+    // x.slice_mut(s![0, ..]).assign(
+    //     &Array2::from_shape_vec((1, INPUT_SIZE), accumulator.layer().output().to_vec())
+    //         .unwrap()
+    //         .into_shape((INPUT_SIZE,))
+    //         .unwrap(),
+    // );
 
     Python::with_gil(|py| x.to_pyarray_bound(py).unbind())
 }
