@@ -10,7 +10,7 @@ use player::{
         evaluate_single_move, get_heuristic_move,
         neural_network::{
             encoding::{build_move_lookup, TOTAL_ENCODING_SIZE},
-            encoding_v2::{pattern_lines, Accumulator, ENCODING_SIZE},
+            encoding_v2::{pattern_lines, Accumulator},
             layers::{
                 apply_relu,
                 dequantize_i8,
@@ -294,6 +294,55 @@ fn main() {
     init_logging("playground");
     let mut rng = SmallRng::from_entropy();
 
+    // let mut layer = EfficentlyUpdatableDenseLayer::<32>::new(10000);
+    // let accumulator = Accumulator::new(layer);
+
+    // let output = accumulator.output();
+    // println!("{:?}", output);
+
+    /*
+    let mut policy = HeuristicPlayoutPolicy::default();
+    // let mut game_state = GameState::new(&mut rng);
+    let mut game_state = GameState::from_fen("2_1_0_43084416009_12884969476_8464-0-0-0-0-4328587520_66323450_1_1614286-17061461_21474836481-17246978560_12884901636-67043839_1").unwrap();
+    println!("{}", game_state);
+    let mut sum_value = Value::default();
+    for i in 0..10_000_000 {
+        let (value, _) = policy.playout(&mut game_state.clone(), &mut rng);
+        sum_value += value;
+        // if i % 100_000 == 0 {
+        //     println!("{}: {}", i, sum_value / (i as f64 + 1.0));
+        // }
+    }
+
+    let mut move_list = MoveList::default();
+    game_state.get_possible_moves(&mut move_list, &mut rng);
+
+    let mut move_value_pairs = Vec::new();
+    for i in 0..move_list.len() {
+        let mov = move_list[i];
+        let hash = hash_move(mov, &game_state);
+        let (n, q) = policy.hash_table.get(hash);
+        let value = if n > 0. { q / n } else { 0.0 };
+        // println!("{}: n: {}, q: {}, value: {}", mov, n, q, value);
+        move_value_pairs.push((mov, value));
+    }
+
+    move_value_pairs.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+    for (mov, value) in move_value_pairs.iter().rev().take(10) {
+        println!("{}: {}", mov, value);
+        let mut clone = game_state.clone();
+        clone.do_move(*mov);
+        println!("{}", clone);
+    }
+
+    // println!("{:?}", result);*/
+
+    // for entry in policy.hash_table.table.iter() {
+    //     if entry.0 > 0.0 {
+    //         println!("{:?}", entry);
+    //     }
+    // }
+
     // for f in [0.0, 1.0, 0.1, 0.5, -1.0, 10.] {
     //     let q = quantize_i8(f);
     //     let r = dequantize_i8(q);
@@ -405,8 +454,6 @@ fn main() {
     // let mut players: Vec<Box<dyn Player>> = vec![
     //     Box::<MonteCarloTreeSearch>::default(),
     //     Box::<MonteCarloTreeSearch>::default(),
-    //     Box::<MonteCarloTreeSearch>::default(),
-    //     Box::<MonteCarloTreeSearch>::default(),
     // ];
 
     // for player in players.iter_mut() {
@@ -418,6 +465,7 @@ fn main() {
     // let game_state = GameState::new(&mut rng);
     // let _ = run_match(game_state, &mut players, true);
 
+    /*
     const SAMPLES: usize = 200;
     const THREADS: usize = 6;
     const MAX_TIME_MS: u64 = 60_000 * 20;
@@ -516,6 +564,8 @@ fn main() {
     println!("Meta playout value: {}", value);
 
     println!("{}", game_state);
+
+    */
 
     // let q = QuantizedDenseLayer::new(32, 1);
     // let input = [0_i32; 32];
@@ -2003,4 +2053,3 @@ fn main() {
 // // // let value = Value::from_game_scores([71_i16, 54_i16, 71_i16, 81_i16]);
 // // // println!("{}", value);
 // // }
-

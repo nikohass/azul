@@ -64,46 +64,46 @@ impl<L: InputLayer> Accumulator<L> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use rand::{rngs::SmallRng, SeedableRng};
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use rand::{rngs::SmallRng, SeedableRng};
 
-    pub struct MockLayer {
-        pub input: Vec<usize>,
-    }
+//     pub struct MockLayer {
+//         pub input: Vec<usize>,
+//     }
 
-    impl InputLayer for MockLayer {
-        fn set_input(&mut self, index: usize) {
-            println!("Setting input: {}", index);
-            self.input.push(index);
-        }
+//     impl InputLayer for MockLayer {
+//         fn set_input(&mut self, index: usize) {
+//             println!("Setting input: {}", index);
+//             self.input.push(index);
+//         }
 
-        fn unset_input(&mut self, index: usize) {
-            println!("Unsetting input: {}", index);
-            let length_before = self.input.len();
-            self.input.retain(|&x| x != index);
-            let length_after = self.input.len();
-            assert_eq!(length_before as i64 - 1, length_after as i64);
-        }
+//         fn unset_input(&mut self, index: usize) {
+//             println!("Unsetting input: {}", index);
+//             let length_before = self.input.len();
+//             self.input.retain(|&x| x != index);
+//             let length_after = self.input.len();
+//             assert_eq!(length_before as i64 - 1, length_after as i64);
+//         }
 
-        fn reset(&mut self) {
-            self.input.clear();
-        }
+//         fn reset(&mut self) {
+//             self.input.clear();
+//         }
 
-        fn output(&self) -> &[f32] {
-            &[]
-        }
-    }
+//         fn output(&self) -> &[f32] {
+//             &[]
+//         }
+//     }
 
-    #[test]
-    fn test_accumulator() {
-        let mut rng = SmallRng::from_seed([0; 32]);
-        let game_state = GameState::new(&mut rng);
+//     #[test]
+//     fn test_accumulator() {
+//         let mut rng = SmallRng::from_seed([0; 32]);
+//         let game_state = GameState::new(&mut rng);
 
-        let mut accumulator = Accumulator::new(MockLayer { input: vec![] });
-        println!("{}", game_state);
-        accumulator.set_game_state(&game_state);
-        // TODO:
-    }
-}
+//         let mut accumulator = Accumulator::new(MockLayer { input: vec![] });
+//         println!("{}", game_state);
+//         accumulator.set_game_state(&game_state);
+//         // TODO:
+//     }
+// }

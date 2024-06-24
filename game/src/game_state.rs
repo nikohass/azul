@@ -722,6 +722,22 @@ impl GameState {
         ret.fill_factories(rng);
         ret
     }
+
+    pub fn empty() -> Self {
+        Self {
+            bag: [20; NUM_TILE_COLORS],
+            out_of_bag: [0; NUM_TILE_COLORS],
+            factories: Factories::empty(),
+            scores: [0; NUM_PLAYERS],
+            floor_line_progress: [0; NUM_PLAYERS],
+            walls: [0; NUM_PLAYERS],
+            current_player: PlayerMarker::new(0),
+            pattern_lines_occupancy: [[0; 5]; NUM_PLAYERS],
+            pattern_lines_colors: [[None; 5]; NUM_PLAYERS],
+            next_round_starting_player: PlayerMarker::new(0),
+            tile_taken_from_center: false,
+        }
+    }
 }
 
 impl std::fmt::Display for GameState {

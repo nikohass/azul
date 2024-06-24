@@ -141,17 +141,17 @@ mod value_inner {
     impl Value {
         pub fn from_game_scores(game_scores: [i16; NUM_PLAYERS]) -> Self {
             let score_diff = (game_scores[0] - game_scores[1]).abs() as f64;
-            let max_diff = 100.0; 
-            let bonus = score_diff / max_diff * 0.01; 
+            let max_diff = 100.0;
+            let bonus = score_diff / max_diff * 0.01;
 
             if game_scores[0] == game_scores[1] {
                 return Self(0.5);
             }
 
             if game_scores[0] > game_scores[1] {
-                Self(1.0 + bonus.min(0.01)) 
+                Self(1.0 + bonus.min(0.01))
             } else {
-                Self(-bonus.min(0.01)) 
+                Self(-bonus.min(0.01))
             }
         }
     }

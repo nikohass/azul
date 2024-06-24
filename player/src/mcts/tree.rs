@@ -322,6 +322,10 @@ impl<P: PlayoutPolicy> Default for Tree<P> {
                                     *root_lock = Some(Root::for_game_state(&game_state));
                                 }
                             }
+                            #[cfg(not(feature = "mute"))]
+                            if verbose {
+                                RootStatistics::print_header();
+                            }
                         }
                         Command::TerminateThread => {
                             #[cfg(not(feature = "mute"))]

@@ -234,7 +234,7 @@ impl Node {
             // If we expand a new child every time we iterate this node, we would never visit the same child twice. This would cause our estimations of the value of the child to be very inaccurate.
 
             // Let's just try this:
-            let desired_number_of_children: usize = self.n.sqrt().ceil() as usize / 8;
+            let desired_number_of_children: usize = self.n.sqrt().ceil() as usize;
             if desired_number_of_children > self.children.len() {
                 // We will expand a new child
                 let mut game_state_clone = game_state.clone(); // Clone here because we don't want to modify the game state
@@ -256,23 +256,15 @@ impl Node {
                 self.expand(game_state, move_list, rng);
                 if !self.is_game_over {
                     playout_policy.playout(game_state, rng)
-                    // model.set_game_state(game_state);
-                    // let value = model.forward();
-                    // let value = Value::from([value, 1.0 - value]);
-                    // (value, 0)
                 } else if self.n == 0. {
-                    self.q = Value::from_game_scores(game_state.scores);
                     self.n = 1.;
+                    self.q = Value::from_game_scores(game_state.scores);
                     (self.q, 0)
                 } else {
                     (self.q / self.n, 0)
                 }
             } else {
                 playout_policy.playout(game_state, rng)
-                // model.set_game_state(game_state);
-                // let value = model.forward();
-                // let value = Value::from([value, 1.0 - value]);
-                // (value, 0)
             }
         } else {
             let next_child = self.select_child(current_player as usize, rng);

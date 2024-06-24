@@ -1,10 +1,14 @@
-use game::{TileColor, NUM_TILE_COLORS};
+use game::{TileColor, NUM_PLAYERS, NUM_TILE_COLORS};
+
+use crate::mcts::neural_network::layers::InputLayer;
+
+use super::{factories::NonCenterFactoryEncoding, OneHotFeature};
 
 const UPPER_PATTERN_LINE_STATES: [usize; 3] = [6, 11, 16];
 const LOWER_PATTERN_LINE_STATES: [usize; 2] = [21, 26];
 
-pub const UPPER_PATTERN_LINES_SIZE: usize = 1056;
-pub const LOWER_PATTERN_LINES_SIZE: usize = 546;
+pub const UPPER_PATTERN_LINES_ENCODING_SIZE: usize = 1056;
+pub const LOWER_PATTERN_LINES_ENCODING_SIZE: usize = 546;
 
 fn base_index(num_tiles: u8, color: Option<TileColor>) -> usize {
     if num_tiles == 0 {
@@ -42,6 +46,86 @@ pub fn calculate_upper_index(pattern_lines: [u8; 5], colors: [Option<TileColor>;
 
 pub fn calculate_lower_index(pattern_lines: [u8; 5], colors: [Option<TileColor>; 5]) -> usize {
     calculate_index(pattern_lines, colors, 3, 2, &LOWER_PATTERN_LINE_STATES)
+}
+
+#[derive(Clone)]
+pub struct UpperPatternLinesEncoding {
+    pub index: [usize; NUM_PLAYERS],
+}
+
+impl OneHotFeature for UpperPatternLinesEncoding {
+    const SIZE: usize = UPPER_PATTERN_LINES_ENCODING_SIZE;
+    const PLAYER_FEATURE: bool = true;
+    const MAX_ONES: usize = 1;
+    const START: usize = NonCenterFactoryEncoding::END;
+
+    fn initialize(layer: &mut impl InputLayer) -> Self {
+        let mut index = [0; NUM_PLAYERS];
+        for player_index in 0..NUM_PLAYERS {
+            layer.set_input(Self::START + player_index);
+            index[player_index] = Self::START + player_index;
+        }
+        Self {
+            index
+        }
+    }
+}
+
+impl UpperPatternLinesEncoding {
+    pub fn set(
+        &mut self,
+        pattern_lines: [u8; 5],
+        colors: [Option<TileColor>; 5],
+        player_index: usize,
+        layer: &mut impl InputLayer,
+    ) {
+        let index = calculate_upper_index(pattern_lines, colors) * NUM_PLAYERS + player_index + Self::START;
+        if self.index[player_index] != index {
+            layer.unset_input(self.index[player_index]);
+            self.index[player_index] = index;
+            layer.set_input(index);
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct LowerPatternLinesEncoding {
+    pub index: [usize; NUM_PLAYERS],
+}
+
+impl OneHotFeature for LowerPatternLinesEncoding {
+    const SIZE: usize = LOWER_PATTERN_LINES_ENCODING_SIZE;
+    const PLAYER_FEATURE: bool = true;
+    const MAX_ONES: usize = 1;
+    const START: usize = UpperPatternLinesEncoding::END;
+
+    fn initialize(layer: &mut impl InputLayer) -> Self {
+        let mut index = [0; NUM_PLAYERS];
+        for player_index in 0..NUM_PLAYERS {
+            layer.set_input(Self::START + player_index);
+            index[player_index] = Self::START + player_index;
+        }
+        Self {
+            index
+        }
+    }
+}
+
+impl LowerPatternLinesEncoding {
+    pub fn set(
+        &mut self,
+        pattern_lines: [u8; 5],
+        colors: [Option<TileColor>; 5],
+        player_index: usize,
+        layer: &mut impl InputLayer,
+    ) {
+        let index = calculate_lower_index(pattern_lines, colors) * NUM_PLAYERS + player_index + Self::START;
+        if self.index[player_index] != index {
+            layer.unset_input(self.index[player_index]);
+            self.index[player_index] = index;
+            layer.set_input(index);
+        }
+    }
 }
 
 #[cfg(test)]

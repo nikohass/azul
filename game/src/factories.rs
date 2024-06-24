@@ -14,7 +14,7 @@ pub type Factory = [u8; NUM_TILE_COLORS];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Factories {
-    factories: [Factory; NUM_FACTORIES],
+    pub factories: [Factory; NUM_FACTORIES],
 }
 
 impl std::ops::Deref for Factories {
