@@ -306,13 +306,13 @@ fn main() {
             increment_milliseconds,
             max_time_milliseconds: base_time_milliseconds,
         });
-        // mcts.set_time(TimeControl::FischerTimingWithMaxTime {
-        //     base_time_milliseconds: 129_000,
-        //     increment_milliseconds: 24_000,
-        //     max_time_milliseconds: 129_000,
-        // });
         players.push(Box::new(mcts));
     }
+    players[0].set_time(TimeControl::FischerTimingWithMaxTime {
+        base_time_milliseconds: 129_000,
+        increment_milliseconds: 24_000,
+        max_time_milliseconds: 129_000,
+    });
 
     let stats = run_match(game_state, &mut players, true).unwrap();
 

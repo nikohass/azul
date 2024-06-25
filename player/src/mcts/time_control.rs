@@ -176,24 +176,27 @@ fn early_stopping_heuristic(statistics: &RootStatistics) -> bool {
     // Certainty based on the win probability
     let value: [f64; NUM_PLAYERS] = statistics.value.into();
     let max_value = value.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-    let certainty_value = 4.0 * (max_value - 0.5).powi(2);
+    let outcome_certainty = 4.0 * (max_value - 0.5).powi(2);
 
-    let certainty_ratio = if statistics.top_two_ratio > 1.05 && statistics.visits > 100_000 {
-        1.0
-    } else {
-        0.0
-    };
+    // let certainty_ratio = if statistics.top_two_ratio > 1.05 && statistics.visits > 100_000 {
+    //     1.0
+    // } else {
+    //     0.0
+    // };
 
     let branching_factor = statistics.branching_factor;
-    let branching_factor_bonus = if branching_factor > 0 && branching_factor < 20 {
-        0.5 * certainty_visits
-    } else {
-        0.0
-    };
+    // let branching_factor_bonus = if branching_factor > 0 && branching_factor < 20 {
+    //     0.5 * certainty_visits
+    // } else {
+    //     0.0
+    // };
+    let branching_factor_bonus = 0.25 - (branching_factor as f64 / 325.).sqrt();
 
     // Combine the certainties
     let combined_certainty =
-        certainty_visits * certainty_value * (1.0 + certainty_ratio) + branching_factor_bonus;
+        certainty_visits * outcome_certainty + branching_factor_bonus + (statistics.top_two_ratio.min(2.0).max(1.0) - 1.0) * 2.0 * certainty_visits;
+    // let combined_certainty =
+    //     certainty_visits * certainty_value * (1.0 + certainty_ratio) + branching_factor_bonus;
 
     combined_certainty >= 0.45
 }
